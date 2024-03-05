@@ -1,0 +1,88 @@
+Pipeline stages:
+
+	F - Fetch
+	D - Decode
+	E - Execute (address generation, ALU)
+	M - Memory accress (load, store; late ALU operations)
+	W - Write Back (register file is written)
+
+A clocked register is named with the stage for which its output is
+valid for. Combinatorial signals become valid during their signal
+stage; that is:
+
+	- Registers inputs should be from a previous stage than the
+	  register is named;
+	- Combinatorial signals carry the same name as the register
+	  outputs that feed hem;
+
+Any other connections are bypasses and should be noted as such.
+
+The valid bit propagates down the pipe and indicates whether the input
+of that pipeline stage represents a valid instruction.
+
+The E stage is the last stage in which an operation can be aborted. An
+instruction allowed to advance to the M stage must complete.
+*Fix this to support memory exceptions.*
+
+Bypasses and latencies:
+
+	E -> E		1 cycle
+	M -> E		2 cycles
+	E -> F		3 cycles
+	M -> F		4 cycles
+
+Penalty cycles:
+
+A jump/branch to a misaligned 32-bit instruction takes a 1-cycle
+penalty.
+
+A misaligned memory operation takes a 1-cycle penalty.
+
+
+Each stage has the following handshaking signals:
+
+output  valid_o
+
+	Assert when a stage presents output signals corresponding to a
+	valid (non-null) datum.
+
+input	valid_i
+
+	Asserted when the inputs to a stage represents a valid datum.
+
+output	busy
+
+	Assert when the stage is doing processing taking more than one cycle.
+	If busy = valid_o = 0, the stage is empty and can accept a
+	datum even if the subsequent pipeline stage is stalled.
+
+	When valid_i = 1 and busy = 0, the stage accepted a datum.
+
+input	stall
+
+	If asserted, the next stage cannot accept input at this time.
+	If valid_o is asserted, the output signals must not change
+	unless killed is asserted; however, a unit is allowed change
+	the outputs (including valid_o) if valid_o is not already
+	asserted. This allows a unit to "catch up".
+
+	If valid_o = 1 and stall = 0, data has been accepted and the
+	unit can produce the next datum or deassert valid_o.
+
+output	kill
+
+	Assert to void the content of the pipeline for all stages prior to
+	this one, and start a new fetch. This stage can produce valid or
+	invalid output to the downstream pipe as indicated by valid_o.
+
+input	killed
+
+	This pipeline stage and all upstream stages are being
+	killed. The output will be ignored, and the stage MUST output
+	valid_o = 0 no later than the next cycle, with the sole
+	exception of the F stage.
+
+	The unit may continue to re-assert busy if already asserted,
+	but after the first cycle with busy = 0, the stage MUST NOT
+	re-assert busy until it has accepted at least one datum
+	(valid_i = 1, busy = 0.)
