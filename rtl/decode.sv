@@ -6,6 +6,8 @@
 // done in this pipeline stage or another one.
 //
 
+`include "config.vh"
+
 typedef enum logic [3:0] {
 	INSN_NULL  = 4'b0000,	// Just zero rd
 	INSN_ALU   = 4'b0001,	// ALU (incl NOP)
@@ -22,14 +24,21 @@ typedef enum logic [3:0] {
 } insn_type_t;
 
 typedef struct packed {
+   logic [4:0]		     r;	// Architectural register number
+`if `CONTEXT_BITS > 0
+   logic [`CONTEXT_BITS-1:0] c;	// Register context
+`endif
+} regnum_t;
+
+typedef struct packed {
    insn_type_t   type,
 
-   logic   [4:0] rd,		// 5-bit register number
+   regnum_t	 rd,		// 5-bit register number
    logic	 rd_e,		// Register written to - ready after E stage
    logic	 rd_m,		// Register written to - ready after M stage
-   logic   [4:0] rs1,		// 5-bit register number or immediate
+   regnum_t	 rs1,		// 5-bit register number or immediate
    logic	 rs1_valid,	// Register number (not immediate)
-   logic   [4:0] rs2,		// 5-bit register number or immediate
+   regnum_t	 rs2,		// 5-bit register number or immediate
    logic	 rs2_valid,	// Register number (not immediate)
    logic signed [20:0] imm,	// Immediate (permuted for U immediate)
    logic	 imm_u,		// U-type immediate
@@ -90,15 +99,24 @@ module decode_comb
    // a net loss??? Experiment.
    wire signed [20:0] u_imm = { 1'bx, i[19:12], i[31:20] };
 
+   wire [`CONTEXT_BITS-1:0] default_context = 'b0;
+
    always @(*)
      begin
 	logic valid;
 
 	op	      = 'bx;
 	op.pc         = d_pc;
-	op.rd	      = i[11:7];  op.rd_e       = 1'b0; op.rd_m      = 1'b0;
-	op.rs1	      = i[19:5];  op.rs1_valid  = 1'b0;
-	op.rs2	      = i[16:12]; op.rs2_valid  = 1'b0;
+	op.rd.r	      = i[11:7];
+	op.rd.c = default_context;
+	op.rd_e       = 1'b0;
+	op.rd_m      = 1'b0;
+	op.rs1.r      = i[19:5];
+	op.rs1.c = default_context;
+	op.rs1_valid  = 1'b0;
+	op.rs2.r      = i[16:12];
+	op.rs2.c = default_context;
+	op.rs2_valid  = 1'b0;
 	op.imm	      = 'bx;      op.imm_u      = 1'b0; op.imm_pc    = 1'b0;
 	op.csrw       = 1'b0;     op.csrr       = 1'b0;
 	op.pred_taken = d_pred_taken;
@@ -186,7 +204,7 @@ module decode_comb
 	     // and funct7 is valid; for others, the full i immediate is
 	     // used and funct7 is considered zero.
 	     if (op.funct3[1:0] == 2'b01) begin
-	       op.imm	  = op.rs2;
+	       op.imm	  = op.rs2.r;
 	     end else begin
 		op.imm	  = i_imm;
 	     end
@@ -214,7 +232,7 @@ module decode_comb
 		  // ECALL, EBREAK
 		  op.type = INSN_ECALL;
 		  valid = !STRICT_VALID ||
-			  (!i[31:21] && !op.rs1 && !op.funct3[2]);
+			  (!i[31:21] && !op.rs1.r && !op.funct3[2]);
 	       end
 	     endcase // unique casez (op.funct3[1:0])
 	  end
@@ -222,7 +240,7 @@ module decode_comb
 	  AUIPC, LUI: begin
 	     valid     = 1'b1;
 	     op.type   = INSN_AGU;
-	     op.rs1    = 5'b0;		// This becomes addend for LUI
+	     op.rs1.r  = 5'b0;		// This becomes addend for LUI
 	     op.rd_e   = 1'b1;
 	     op.imm    = u_imm;
 	     op.imm_u  = 1'b1;
@@ -238,7 +256,7 @@ module decode_comb
 
 	// x0 can never be written, and always is zero (effectively
 	// an immediate.) This enforces that constraint.
-	if (!rd)
+	if (!rd.r)
 	  begin
 	     rd_e = 1'b0;
 	     rd_m = 1'b0;
@@ -248,9 +266,9 @@ module decode_comb
 	if (!valid)
 	  begin
 	     op.type   = INSN_ERR;
-	     op.rd     = 'bx;  op.rd_e       = 1'b0;  op.rd_m       = 1'b0;
-	     op.rs1    = 'bx;  op.rs1_valid  = 1'b0;
-	     op.rs2    = 'bx;  op.rs2_valid  = 1'b0;
+	     op.rd.r     = 'bx;  op.rd_e       = 1'b0;  op.rd_m       = 1'b0;
+	     op.rs1.r    = 'bx;  op.rs1_valid  = 1'b0;
+	     op.rs2.r    = 'bx;  op.rs2_valid  = 1'b0;
 	     op.imm    = 'bx;  op.imm_u      = 1'bx; op.imm_pc      = 1'bx;
 	     op.funct3 = 3'bx;
 	     op.funct7 = 7'bx;
@@ -307,7 +325,7 @@ module decode_fast_mult
 	  if (is_mult)
 	    begin
 	       if (have_mult && !op_i.funct3[1:0] &&
-		 op_i.rs1 == mult_rs1 && op_i.rs2 == mult_rs2) begin
+		 op_i.rs1.r == mult_rs1 && op_i.rs2.r == mult_rs2) begin
 		  // Can forward old multiply result
 		  op_o.type = INSN_MULL;
 	       end else begin
@@ -326,7 +344,7 @@ module decode_fast_mult
 	  else if (is_mult)
 	    have_mult <= rs1 != rd && rs2 != rd;
 	  else if ((op_i.rd_e | op_i.rd_m) &&
-		   (op_i.rd == mult_rs1 || op_i.rd == mult_rs2))
+		   (op_i.rd.r == mult_rs1 || op_i.rd.r == mult_rs2))
 	    have_mult <= 1'b0;	// Input registers clobbered
        end // if (d_clken)
 endmodule // decode_fast_mult

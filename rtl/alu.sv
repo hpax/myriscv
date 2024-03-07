@@ -89,25 +89,25 @@ module alu_decode #(
 		      funct7[5:4] == 2'b11, funct7[5:4] != 2'b10 };
 		 end
 	       { 7'b011_0000, ALU_SLL }: begin
-		  unique casez ({!op.rs2_valid, op.rs2[4:0]})
+		  unique casez ({!op.rs2_valid, op.rs2.r})
 		    6'b1_?00??: begin // CTZ, CLZ, CPOP (+inverses)
 		       if (WITH_extensions ||
-			 (!op.rs2[4] && op.rs2[1:0] != 2'b11) begin
+			 (!op.rs2.r[4] && op.rs2.r[1:0] != 2'b11) begin
 			  ctl.unit = ALUSRC_BITCNT;
-			  ctl.bc_l = ~op.rs2[0];
-			  ctl.bc_t = op.rs2[1] ^ op.rs2[0];
-			  ctl.bc_s = op.rs2[4] ^ op.rs2[1];
+			  ctl.bc_l = ~op.rs2.r[0];
+			  ctl.bc_t = op.rs2.r[1] ^ op.rs2.r[0];
+			  ctl.bc_s = op.rs2.r[4] ^ op.rs2.r[1];
 		       end
 		    end
 		    6'b1_0010?: begin
 		       ctl.unit = ALUSRC_SHIFT;
-		       ctl.shiftop = { 4'b00_11, op.rs2[2:0], 4'b11_1_0 }; // SEXT.B/H
+		       ctl.shiftop = { 4'b00_11, op.rs2.r[2:0], 4'b11_1_0 }; // SEXT.B/H
 		    end
 		    6'b0_?????: begin
 		       ctl.unit = ALUSRC_SHIFT;
 		       ctl.shiftop = 11'b11_xx_000_xx_x_x; // ROL
 		    end
-		  endcase // unique casez ({!op.rs2_valid, op.rs2[4:0]})
+		  endcase // unique casez ({!op.rs2_valid, op.rs2.r})
 	       end // case: { 7'b011_0000, ALU_SLL }
 
 	       { 7'b000_0000, ALU_SRL }: begin
@@ -119,7 +119,7 @@ module alu_decode #(
 		  ctl.shiftop = 11'b10_11_100_11_1_0; // SRA
 	       end
 	       { 7'b001_0100, ALU_SRL }: begin
-		  unique casez ({!op.rs2_valid, op.rs2[4:0]})
+		  unique casez ({!op.rs2_valid, op.rs2.r})
 		    5'b1_00111: begin // ORC.B
 		       // In the future, rs2 might be a control mask for a more
 		       // advanced combination instruction
@@ -136,7 +136,7 @@ module alu_decode #(
 		  ctl.shiftop = 11'b10_xx_000_xx_x_x; // ROR
 	       end
 	       { 7'b011_0100, ALU_SRL }: begin
-		  unique casez ({!op.rs2_valid, op.rs2[4:0]})
+		  unique casez ({!op.rs2_valid, op.rs2.r})
 		    6'b1_11000: begin // REV8
 		       // In the future, rs2 might be a control mask for a more
 		       // advanced bitswap instruction
@@ -157,12 +157,12 @@ module alu_decode #(
 		    ctl.bitop  = op.funct3[1:0];
 		 end
 	       { 7'b0000100, ALU_XOR }: begin
-		  unique casez (op.rs2[4:0])
+		  unique casez (op.rs2.r)
 		    5'b00000: begin
 		       ctl.unit = ALUSRC_SHIFT;
 		       ctl.shiftop = 11'b00_11_101_xx_0_0; // ZEXT.H
 		    end
-		  endcase // unique casez (op.rs2[4:0])
+		  endcase // unique casez (op.rs2.r)
 	       end
 	       { 7'b000_0101, 3'b1?? }: if (WITH_minmax) begin
 		  ctl.unit = ALUSRC_MINMAX;

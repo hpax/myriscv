@@ -127,7 +127,7 @@ module execute
    logic [31:0]	e_src1;
    always @(*)
      if (!e_op.rs1_valid)
-       e_src1 = e_op.rs1;	// rs1 is uimm5 or void
+       e_src1 = e_op.rs1.r;	// rs1 is uimm5 or void
      else if (e_rs1_m)
        e_src1 = m_din;		// Data now in M stage
      else if (e_rs1_w)

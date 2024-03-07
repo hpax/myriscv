@@ -2,12 +2,9 @@
 // Pipeline control
 //
 
-module pipe_ctl  #(
-  parameter	contexts = 1,
-  parameter	ctx_bits = $min($clog2(contexts), 1),
-  parameter	reg_bits = ctx_bits+5,
-  parameter bit	bypass_ctx = contexts > 1
-		) (
+module pipe_ctl #(
+  parameter bit bypass_ctx = 1'b1
+) (
   input			    rst_n,
   input			    clk,
 
@@ -20,17 +17,14 @@ module pipe_ctl  #(
   output reg		    e_valid_in,
   output reg		    m_valid_in,
 
-  input [4:0]		    d_rs1,
+  regnum_t		    d_rs1,
   input			    d_rs1_valid,
-  input [ctx_bits-1:0]	    d_rs1_ctx,
 
-  input [4:0]		    d_rs2, // Only the register part
+  regnum_t		    d_rs2, // Only the register part
   input			    d_rs2_valid,
-  input [ctx_bits-1:0]	    d_rs2_ctx,
 
-  input [4:0]		    d_rd,
+  regnum_t		    d_rd,
   input			    d_rd_valid,
-  input [ctx_bits-1:0]	    d_rd_ctx,
   input			    d_rd_e, // rd data ready from E stage output
   input			    d_rd_m, // rd data ready from M stage output
 
@@ -56,17 +50,15 @@ module pipe_ctl  #(
   output reg		    e_rs2_m, // E stage get rs2 from M stage input
   output reg		    e_rs2_w, // E stage get rs2 from W stage input
 
-  output reg [4:0]	    e_rd,
+  output regnum_t	    e_rd,
   output reg		    e_rd_valid,
-  output reg [ctx_bits-1:0] e_rd_ctx,
-  output reg [4:0]	    m_d,
-  output reg		    m_rd_valid,
-  output reg [4:0]	    m_rd_ctx
+  output regnum_t	    m_d,
+  output reg		    m_rd_valid
  );
 
-   function logic regeq (input v1, input [4:0] r1, input [ctx_bits-1:0] c1,
-			 input v2, input [4:0] r2, input [ctx_bits-1:0] c2);
-      regeq = (v1 & v2) && (r1 == r2) && (!bypass_ctx || (c1 == c2));
+   function logic regeq (input v1, regnum_t r1,
+			 input v2, regnum_t r2)
+      regeq = (v1 & v2) && (r1.r == r2.r) && (!bypass_ctx || (r1.c == r2.c));
    endfunction
 
    // Bubble due to W -> E forwarding hazard when the output will
@@ -74,10 +66,8 @@ module pipe_ctl  #(
    logic	      w_to_e_hazard;
    always @(*)
      begin
-	w_to_e_hazard = regeq(e_rd_m,      e_rd,  e_rd_ctx,
-			      d_rs1_valid, d_rd1, d_rs1_ctx) |
-			regeq(e_rd_m,      e_rd,  e_rd_ctx,
-			      d_rs2_valid, d_rs2, d_rs2_ctx);
+	w_to_e_hazard = regeq(e_rd_m, e_rd, d_rs1_valid, d_rd1) |
+			regeq(e_rd_m, e_rd, d_rs2_valid, d_rs2);
      end
 
    assign f_stall    = ~d_ready | ~m_ready;
@@ -90,7 +80,6 @@ module pipe_ctl  #(
      if (~rst_n)
        begin
 	  e_rd     <=  'bx;
-	  e_rd_ctx <= 1'b0;
 	  e_rd_e   <= 1'b0;
 	  e_rd_m   <= 1'b0;
 	  m_rd     <=  'bx;
@@ -109,25 +98,19 @@ module pipe_ctl  #(
 	  if (~e_stall)
 	    begin
 	       e_rd     <= d_rd;
-	       e_rd_ctx <= d_rd_ctx;
 	       e_rd_e   <= d_rd_e & ~d_stall & ~e_kill;
 	       e_rd_m   <= d_rd_m & ~d_stall & ~e_kill;
 	    end
 	  if (m_ready)
 	    begin
 	       m_rd     <= e_rd;
-	       m_rd_ctx <= e_rd_ctx;
 	       m_rd_m   <= e_rd_m;
 	    end
 
 	  // Bypass control
-	  e_rs1_m <= regeq(e_rd_e,      e_rd,  e_rd_ctx,
-			   d_rs1_valid, d_rs1, d_rs1_ctx);
-	  e_rs1_w <= regeq(m_rd_m,      m_rd,  m_rd_ctx,
-			   d_rs1_valid, d_rs1, d_rs1_ctx);
-	  e_rs2_m <= regeq(e_rd_e,      e_rd,  e_rd_ctx,
-			   d_rs2_valid, d_rs2, d_rs2_ctx);
-	  e_rs2_w <= regeq(m_rd_m,      m_rd,  m_rd_ctx,
-			   d_rs2_valid, d_rs2, d_rs2_ctx);
+	  e_rs1_m <= regeq(e_rd_e, e_rd, d_rs1_valid, d_rs1);
+	  e_rs1_w <= regeq(m_rd_m, e_rd, d_rs1_valid, d_rs1);
+	  e_rs2_m <= regeq(e_rd_e, e_rd, d_rs2_valid, d_rs2);
+	  e_rs2_w <= regeq(m_rd_m, e_rd, d_rs2_valid, d_rs2);
        end // else: !if(~rst_n)
 endmodule
