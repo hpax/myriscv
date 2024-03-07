@@ -2,135 +2,89 @@
 // Multiplier
 //
 
-module mult_comb
+//
+// This is the hardware-dependent module; it can be reimplemented
+// using device-specific idioms if desired. It is expected to present
+// the outputs after one cycle, but is allowed a fairly significant
+// combinatorial latecy after the clock.
+//
+// The clock enable MUST BE HONORED; the outputs MUST NOT CHANGE if the
+// clock enable is disabled.
+//
+module mult
   #(
-    parameter width = 32
+    parameter width = 32,
+    parameter bit mux_late = 1'b1 // High/low as combinatorial MUX
     )
    (
-    input [width-1:0]  d1,
-    input	       ssign1,
-    input [width-1:0]  d2,
-    input	       ssign2,
+  input			 rst_n,
+  input			 clk,
+  input			 clken,
 
-    output [width-1:0] ql,
-    output [width-1:0] qh
+  input [width-1:0]	 src1,
+  input			 ssign1, // src1 is signed
+  input [width-1:0]	 src2,
+  input			 ssign2, // src2 is signed
+  input			 high, // q should contains the high half result
+
+  output	[width-1:0] q,
+  output	[width-1:0] ql
     );
 
-   wire [width:0]      a = { d1[width-1] & ssign1, d1 };
-   wire [width:0]      b = { d2[width-1] & ssign2, d2 };
-   wire [2*width-1:0]  m = a * b;
+   wire signed [width:0]      a = { src1[width-1] & ssign1, src1 };
+   wire signed [width:0]      b = { src2[width-1] & ssign2, src2 };
+   wire signed [2*width-1:0]  m = a * b;
 
-   assign ql = m[width-1:0];
-   assign qh = m[2*width-1:width];
+   reg [width-1:0]	      l_q;
+   reg [width-1:0]	      h_q;
+   reg			      high_q;
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	l_q    <= 'bx;
+	h_q    <= 'bx;
+	high_q <= 1'bx;
+     end else if (clken) begin
+	high_q <= high;
+	l_q <= m[width-1:0];
+	h_q <= (high | mux_late) ? m[2*width-1:width] : m[width-1:0];
+     end
+
+   assign q  = (~high_q & mux_late) ? l_q : h_q;
+   assign ql = l_q;
 endmodule // mult
 
-module mult_sync_rtl
+module multiplier
   #(
         parameter width = 32
     )
    (
-    input	       clk,
+  input		     rst_n,
+  input		     clk,
 
-    input [width-1:0]  d1,
-    input [width-1:0]  d2,
-    input [1:0]	       op, // MULL, MULH, MULHSU, MULHU
-    input	       ssign2,
+  input		     e_valid,	// Start operation and save results
+  input [width-1:0]  e_src1,
+  input [width-1:0]  e_src2,
+  input [1:0]	     e_op,	// MULL, MULH, MULHSU, MULHU
 
-    output [width-1:0] q
-    );
+  output [width-1:0] m_mul_o,	// Main output
+  output [width-1:0] m_mull_o	// Can be forwarded to E on a subsequent MULL
+  );
 
-   localparam	       hw = (width/2) + 1;
+   wire		       e_ssign1 = ~&op;		// MULL, MULH, MULHSU
+   wire		       e_ssign2 = ~op[1];	// MULL, MULH
+   wire		       e_high = |op;		// MULH, MULHSU, MULHU
 
-   reg [width:0]       a;
-   reg [width:0]       b;
-   logic [2*width-1:0] m;
-   reg		       is_high;
-
-   always @(posedge clk)
-     begin
-	a <= { d1[width-1] & (op != 2'b11), d1 };
-	b <= { d2[width-1] & ~op[1], d2 };
-	is_high <= |op;
-
-	m = a * b;
-	q <= is_high ? m[2*width-1:width] : m[width-1:0];
-     end
-endmodule
-
-module mult_sync_late_add
-  #(
-        parameter width = 32
-    )
-   (
-    input	       clk,
-
-    input [width-1:0]  d1,
-    input [width-1:0]  d2,
-    input [1:0]	       op, // MULL, MULH, MULHSU, MULHU
-    input	       ssign2,
-
-    output [width-1:0] q
-    );
-
-   localparam	       hw = (width/2) + 1;
-
-   reg [width:0]       a;
-   reg [width:0]       b;
-   reg [width+1:0]     mp[0:3];
-   reg		       is_high;
-
-   always @(posedge clk)
-     begin
-	a <= { d1[width-1] & (op != 2'b11), d1 };
-	b <= { d2[width-1] & ~op[1], d2 };
-	is_high <= |op;
-
-	mp[0] <= a[hw-1:0] * b[hw-1:0];
-	mp[1] <= a[hw-1:0] * b[width:hw];
-	mp[2] <= a[width:hw] * a[hw-1:0];
-	mp[3] <= a[width:hw] * b[width:hw];
-     end
-
-   wire [2*width-1:0] m = mp[0]
-		      + {mp[1] + mp[2], {hw{1'b0}}}
-		      + {mp[3], {2*hw{1'b0}}};
-
-   assign q = is_high ? m[2*width-1:width] : m[width-1:0];
-endmodule
-
-module mult_sync_alt
-  #(
-        parameter width = 32
-    )
-   (
-    input	       clk,
-
-    input [width-1:0]  d1,
-    input [width-1:0]  d2,
-    input [1:0]	       op, // MULL, MULH, MULHSU, MULHU
-    input	       ssign2,
-
-    output [width-1:0] q
-    );
-
-   localparam	       hw = (width/2) + 1;
-
-   reg [width:0]       a;
-   reg [width:0]       b;
-   logic [2*width-1:0] m;
-   reg		       is_high;
-
-   altmult mult (
-		 .clock0  ( clk ),
-		 .dataa_0 ( d1 ),
-		 .datab_0 ( d2 ),
-		 .signa   ( op != 2'b11 ),
-		 .signb   ( ~op[1] ),
-		 .result ( m )
-		 );
-
-   always @(posedge clk)
-     is_high <= |op;
-
-   assign q = is_high ? m[2*width-1:width] : m[width-1:0];
+   mult mult (
+     .rst_n	( rst_n ),
+     .clk	( clk ),
+     .clken	( e_valid ),
+     .src1	( e_src1 ),
+     .ssign1	( e_ssign1 ),
+     .src2	( e_src2 ),
+     .ssign2	( e_ssign2 ),
+     .high	( e_high ),
+     .q		( m_mul_o ),
+     .qh	( m_mull_o )
+     );
 endmodule

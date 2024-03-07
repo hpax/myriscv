@@ -2,68 +2,66 @@
 // Pipeline control
 //
 
-module pipe_ctl
-  #(
-    parameter	  contexts   = 1,
-    parameter	  ctx_bits   = $min($clog2(contexts), 1),
-    parameter	  reg_bits   = ctx_bits+5,
-    parameter bit bypass_ctx = contexts > 1
-    )
-(
- input			   rst_n,
- input			   clk,
+module pipe_ctl  #(
+  parameter	contexts = 1,
+  parameter	ctx_bits = $min($clog2(contexts), 1),
+  parameter	reg_bits = ctx_bits+5,
+  parameter bit	bypass_ctx = contexts > 1
+		) (
+  input			    rst_n,
+  input			    clk,
 
- input			   f_valid_out,
- input			   d_valid_out,
- input			   e_valid_out,
- input			   m_valid_out,
+  input			    f_valid_out,
+  input			    d_valid_out,
+  input			    e_valid_out,
+  input			    m_valid_out,
 
- output reg		   d_valid_in,
- output reg		   e_valid_in,
- output reg		   m_valid_in,
+  output reg		    d_valid_in,
+  output reg		    e_valid_in,
+  output reg		    m_valid_in,
 
- input [4:0]		   d_rs1,
- input			   d_rs1_valid,
- input [ctx_bits-1:0]	   d_rs1_ctx,
+  input [4:0]		    d_rs1,
+  input			    d_rs1_valid,
+  input [ctx_bits-1:0]	    d_rs1_ctx,
 
- input [4:0]		   d_rs2, // Only the register part
- input			   d_rs2_valid,
- input [ctx_bits-1:0]	   d_rs2_ctx,
+  input [4:0]		    d_rs2, // Only the register part
+  input			    d_rs2_valid,
+  input [ctx_bits-1:0]	    d_rs2_ctx,
 
- input [4:0]		   d_rd,
- input			   d_rd_valid,
- input [ctx_bits-1:0]	   d_rd_ctx,
- input			   d_rd_e, // rd data ready from E stage output
- input			   d_rd_m, // rd data ready from M stage output
+  input [4:0]		    d_rd,
+  input			    d_rd_valid,
+  input [ctx_bits-1:0]	    d_rd_ctx,
+  input			    d_rd_e, // rd data ready from E stage output
+  input			    d_rd_m, // rd data ready from M stage output
 
- input			   d_csrw,
- input			   d_csrr,
- input			   d_jump,
+  input			    d_csrw,
+  input			    d_csrr,
+  input			    d_jump,
 
- input			   d_ready,
- input			   m_ready,
+  input			    d_ready,
+  input			    m_ready,
 
- input			   e_kill, // Instruction killed in the E stage
+  input			    e_kill, // Instruction killed in the E stage
 
- output			   f_restart,
+  output		    f_restart,
 
- output			   f_stall,
- output			   d_stall,
- output			   e_stall,
+  output		    f_stall,
+  output		    d_stall,
+  output		    e_stall,
 
  // Note: this logic may assert _m == _w; in that case the _m bypass
  // should prevail.
- output reg		   e_rs1_m, // E stage get rs1 from M stage input
- output reg		   e_rs1_w, // E stage get rs1 from W stage input
- output reg		   e_rs2_m, // E stage get rs2 from M stage input
- output reg		   e_rs2_w, // E stage get rs2 from W stage input
+  output reg		    e_rs1_m, // E stage get rs1 from M stage input
+  output reg		    e_rs1_w, // E stage get rs1 from W stage input
+  output reg		    e_rs2_m, // E stage get rs2 from M stage input
+  output reg		    e_rs2_w, // E stage get rs2 from W stage input
 
- output reg [4:0]	   e_rd,
- output reg		   e_rd_valid,
- output reg [ctx_bits-1:0] e_rd_ctx,
- output reg [4:0]	   m_d,
- output reg		   m_rd_valid,
- output reg [4:0]	   m_rd_ctx
+  output reg [4:0]	    e_rd,
+  output reg		    e_rd_valid,
+  output reg [ctx_bits-1:0] e_rd_ctx,
+  output reg [4:0]	    m_d,
+  output reg		    m_rd_valid,
+  output reg [4:0]	    m_rd_ctx
  );
 
    function logic regeq (input v1, input [4:0] r1, input [ctx_bits-1:0] c1,

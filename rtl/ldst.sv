@@ -20,17 +20,17 @@ module ldst (
 		input	      clken,
 		input	      valid,
 
-		input [1:0]   memop,
-		input [31:0]  d1,      // rs1 data for address
-		input [31:0]  d2,      // rs2 data for store
-		input [31:0]  offs,    // Memory address offset from instruction
-		input [1:0]   size,    // Data size == 2^x bytes
+		input [1:0]   memop,	// See above
+		input [1:0]   size,	// Data size == 2^x bytes
 
-		output [31:0] q,       // Load data output
+		input [31:0]  addr,	// address
+		input [31:0]  src2,	// store data
 
-		// Set if the pipeline before E should be held
-		// due to misaligned input or waiting for data
-		output	      bubble,
+		output [31:0] dout,	// Load data output
+
+		// Set if the pipeline should be held due to misaligned
+		// input or waiting for data
+		output	      busy,
 		output [3:0]  q_valid, // Load data output strobes
 
 		output [31:0] dbus_a,
@@ -52,9 +52,7 @@ module ldst (
    reg			      ld_uns;
    reg [3:0][1:0]	      ld_src;
 
-   wire [31:0]		      base_addr = d1 + offs;
-
-   assign dbus_a[31:2] = base_addr[31:2] + upper_word;
+   assign dbus_a[31:2] = addr[31:2] + upper_word;
    assign dbus_a[1:0]  = 2'b00;
    assign dbus_valid   = valid & |memop;
    assign dbus_wrq     = valid & memop == 2'b01;
@@ -117,10 +115,10 @@ module ldst (
 	    begin
 	       dbus_wbe <= bytemask;
 	       unique casez (base_addr[1:0])
-		 2'b00: dbus_wdata <= d2;
-		 2'b01: dbus_wdata <= { d2[23:0], d2[7:0] };
-		 2'b10: dbus_wdata <= { d2[15:0], d2[15:8] };
-		 2'b11: dbus_wdata <= { d2[7:0],  d2[31:8] };
+		 2'b00: dbus_wdata <= src2;
+		 2'b01: dbus_wdata <= { src2[23:0], src2[7:0]  };
+		 2'b10: dbus_wdata <= { src2[15:0], src2[15:8] };
+		 2'b11: dbus_wdata <= { src2[7:0],  src2[31:8] };
 	       endcase // unique casez (base_addr[1:0])
 	    end // if (dbus_wrq)
 
