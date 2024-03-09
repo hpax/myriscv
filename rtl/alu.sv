@@ -217,14 +217,12 @@ module bitwise (
 		);
    always @(*)
      begin
-	logic [31:0] src2;
-
 	unique case (op)
 	  2'b01: q = src1 ^ src2;
 	  2'b10: q = src1 | src2;
 	  2'b11: q = src1 & src2;
 	  default: q = 'bx;
-	endcase // unique case (xop[1:0])
+	endcase // unique case (op)
      end
 endmodule // bitwise
 

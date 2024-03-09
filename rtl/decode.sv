@@ -103,21 +103,23 @@ module decode_comb
 	logic valid;
 
 	op	      = 'bx;
+
+	valid         = 1'b0;
+	op.itype      = INSN_ERR;
 	op.pc         = d_pc;
 	op.rd.r	      = i[11:7];
-	op.rd.c = default_context;
+	op.rd.c	      = default_context;
 	op.rd_e       = 1'b0;
-	op.rd_m      = 1'b0;
+	op.rd_m       = 1'b0;
 	op.rs1.r      = i[19:5];
-	op.rs1.c = default_context;
+	op.rs1.c      = default_context;
 	op.rs1_valid  = 1'b0;
 	op.rs2.r      = i[16:12];
-	op.rs2.c = default_context;
+	op.rs2.c      = default_context;
 	op.rs2_valid  = 1'b0;
 	op.imm	      = 'bx;      op.imm_u      = 1'b0; op.imm_pc    = 1'b0;
 	op.csrw       = 1'b0;     op.csrr       = 1'b0;
 	op.pred_taken = d_pred_taken;
-	op.itype       = INSN_ERR;
 
 	op.funct7     = i[31:25];
 	op.funct3     = i[14:12];
@@ -332,10 +334,12 @@ module decode_fast_mult
 
 	  if (d_killed)
 	    have_mult <= 1'b0;	// State rolled back
-	  else if (is_mult)
-	    have_mult <= op_i.rd != op_i.rs1 && op_i.rd != op_i.rs2;
-	  else if ((op_i.rd_e | op_i.rd_m) &&
-		   (op_i.rd == mult_rs1 || op_i.rd == mult_rs2))
+	  else if (is_mult) begin
+	     have_mult <= op_i.rd != op_i.rs1 && op_i.rd != op_i.rs2;
+	     mult_rs1  <= op_i.rs1;
+	     mult_rs2  <= op_i.rs2;
+	  end else if ((op_i.rd_e | op_i.rd_m) &&
+	       (op_i.rd == mult_rs1 || op_i.rd == mult_rs2))
 	    have_mult <= 1'b0;	// Input registers clobbered
        end // if (d_clken)
 endmodule // decode_fast_mult
