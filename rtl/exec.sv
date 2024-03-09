@@ -2,6 +2,8 @@
 // This handles the backend of the pipe; the E, M and W pipeline stages.
 //
 
+`include "config.vh"
+
 // Compute the new value for a register that has both a write mask and
 // a fixed mask (all bits outside the fixed mask are forced to zero.)
 function logic [31:0] rwmz(
@@ -14,13 +16,22 @@ function logic [31:0] rwmz(
    rwmz = ((dst & ~wmask) | (src & wmask)) & fmask;
 endfunction
 
-module execute
+module backend #(
+  parameter int	NUM_IRQS,
+  parameter int	IRQ_BITS,
+  parameter bit	ALU_EARLY_DECODE
+		)
 (
  input		      rst_n,
  input		      clk,
  input		      clken,
 
  input		      decoded_insn_t d_op,
+
+ // IRQ pending bitmask. Note that there is no IRQ 0 since that vector
+ // is reserved for exceptions; e_intack == 0 means no interrupt taken.
+ input  [NUM_IRQS:1]   d_irqs,
+ output [IRQ_BITS-1:0] e_intack,
 
  input		      e_valid_i,
  input		      e_stall,
@@ -40,11 +51,7 @@ module execute
 
  // Data output, unregistered and registered
  output [31:0]	      e_dout,
- output reg [31:0]    m_din,
-
- // IRQ pending bitmask. Note that there is no IRQ 0 since that vector
- // is reserved for exceptions.
- input [core.NUM_IRQS:1]  d_irqs
+ output reg [31:0]    m_din
  );
 
    wire		   e_clken = clken & e_valid_i & ~e_stall;
@@ -55,31 +62,6 @@ module execute
    wire [31:0]	   e_rs2_data;
    wire [31:0]	   m_dout;
    wire [3:0]	   m_out_be = 4'b1111;
-
-   regfile #(.contexts(contexts)) regs
-     (
-     .rst_n    ( rst_n ),
-     .clk      ( clk ),
-     .clken    ( clken ),	// Not w_clken; need to read anyway
-     .rs1      ( d_op.rs1 ),
-     .rs1_data ( e_rs1_data ),
-     .rs2      ( d_op.rs2 ),
-     .rs2_data ( e_rs2_data ),
-     .rd       ( m_op.rd ),
-     .rd_data  ( m_dout ),
-     .rd_wren  ( m_valid_o ),
-     .rd_wbe   ( m_out_be )
-      );
-
-   reg [31:0]	      w_din;
-   always @(posedge clk)
-     if (w_clken)
-	 begin
-	    if (m_out_be[0]) w_din[7:0]   <= m_dout[7:0];
-	    if (m_out_be[1]) w_din[15:8]  <= m_dout[15:8];
-	    if (m_out_be[2]) w_din[23:16] <= m_dout[23:16];
-	    if (m_out_be[3]) w_din[31:24] <= m_dout[31:24];
-	 end
 
    // E-stage pipeline synchronization signals
    assign e_valid_o = e_clken & e_valid_i & ~e_stall & ~e_kill;
@@ -105,8 +87,33 @@ module execute
      if (m_clken)
        m_din <= e_dout;
 
-   // GPR bypass network/operand selection
+   // Register file
+   regfile #(.contexts(1'b1 << `CONTEXT_BITS)) regs
+     (
+     .rst_n    ( rst_n ),
+     .clk      ( clk ),
+     .clken    ( clken ),	// Not w_clken; need to read anyway
+     .rs1      ( d_op.rs1 ),
+     .rs1_data ( e_rs1_data ),
+     .rs2      ( d_op.rs2 ),
+     .rs2_data ( e_rs2_data ),
+     .rd       ( m_op.rd ),
+     .rd_data  ( m_dout ),
+     .rd_wren  ( m_valid_o ),
+     .rd_wbe   ( m_out_be )
+      );
 
+   reg [31:0]	      w_din;
+   always @(posedge clk)
+     if (w_clken)
+	 begin
+	    if (m_out_be[0]) w_din[7:0]   <= m_dout[7:0];
+	    if (m_out_be[1]) w_din[15:8]  <= m_dout[15:8];
+	    if (m_out_be[2]) w_din[23:16] <= m_dout[23:16];
+	    if (m_out_be[3]) w_din[31:24] <= m_dout[31:24];
+	 end
+
+   // GPR bypass network/operand selection
    logic [31:0]	e_src1;
    always @(*)
      if (!e_op.rs1_valid)
@@ -159,7 +166,7 @@ module execute
    wire	       e_cmp_out;
 
    generate
-      if (core.ALU_EARLY_DECODE) begin
+      if (ALU_EARLY_DECODE) begin
 	 aluctl_t d_aluctl;
 	 alu_decode alu_decode (.op(d_op), .ctl(d_aluctl));
 	 always @(negedge rst_n or posedge clk)
@@ -188,14 +195,14 @@ module execute
    //
    reg [31:0] mtvec = core.MTVEC_RESET & core.PC_MASK;
    reg [31:0] mepc  = 32'bx & core.PC_MASK;
-   localparam [31:0] mcause_mask = 32'h8000_0000 | {core.IRQ_BITS{1'b1}};
+   localparam [31:0] mcause_mask = 32'h8000_0000 | {IRQ_BITS{1'b1}};
    reg [31:0] mcause;
 
    reg [63:0] ctr_time	  = 64'b0;
    reg [63:0] ctr_cycle   = 64'b0;
    reg [63:0] ctr_instret = 64'b0;
 
-   wire [63:0] csr_cycle  = CTR_CYCLE_WIDTH ? ctr_cycle : ctr_time;
+   wire [63:0] csr_cycle  = core.CTR_CYCLE_WIDTH ? ctr_cycle : ctr_time;
 
    //
    // CSR read/write logic
@@ -219,9 +226,9 @@ module execute
 
    always @(*)
      unique casez (e_op.funct3)
-       3'b?01:  e_csr_wval  = src1;
-       3'b?10:  e_csr_wval  = e_csr_rval |  src1;
-       3'b?11:  e_csr_wval  = e_csr_rval & ~src1;
+       3'b?01:  e_csr_wval  = e_src1;
+       3'b?10:  e_csr_wval  = e_csr_rval |  e_src1;
+       3'b?11:  e_csr_wval  = e_csr_rval & ~e_src1;
        default: e_csr_wval  = 32'bx;
      endcase
 
@@ -233,9 +240,9 @@ module execute
    // Counters. All counters are read only, even when using the m-
    // CSR numbers.
    //
-   wire [63:0]	ctr_time_mask    = (1'b1 << CTR_TIME_WIDTH)    - 1'b1;
-   wire [63:0]	ctr_cycle_mask   = (1'b1 << CTR_CYCLE_WIDTH)   - 1'b1;
-   wire [63:0]	ctr_instret_mask = (1'b1 << CTR_INSTRET_WIDTH) - 1'b1;
+   wire [63:0]	ctr_time_mask    = (1'b1 << core.CTR_TIME_WIDTH)    - 1'b1;
+   wire [63:0]	ctr_cycle_mask   = (1'b1 << core.CTR_CYCLE_WIDTH)   - 1'b1;
+   wire [63:0]	ctr_instret_mask = (1'b1 << core.CTR_INSTRET_WIDTH) - 1'b1;
    always @(posedge clk)
      begin
 	ctr_time <= (ctr_time + 1'b1) & ctr_time_mask;
@@ -252,8 +259,10 @@ module execute
    //
    // Interrupt recognition
    //
-   reg [core.IRQ_BITS-1:0] e_irq_vector;
+   reg [IRQ_BITS-1:0] e_irq_vector;
    reg		      e_irq;
+
+   assign e_intack = e_irq_vector;
 
    // Note that e_irq_vector must be zero if !e_irq
    always @(negedge rst_n or posedge clk)
@@ -264,7 +273,7 @@ module execute
 	e_irq	     <= |d_irqs;
 	e_irq_vector <= 'b0;
 	// Priority vector encoder
-	for (int i = core.NUM_IRQS; i > 0; i--)
+	for (int i = NUM_IRQS; i > 0; i--)
 	  if (d_irqs[i]) e_irq_vector <= i;
      end
 
@@ -281,6 +290,8 @@ module execute
 
    always @(*)
      begin
+	logic [31:0] new_pc;
+
 	e_kill	    = 1'b0;
 	new_pc	    = e_next_pc;
 	trap_irq    = 1'b0;
@@ -296,18 +307,18 @@ module execute
 	  end
 	  INSN_ECALL: begin	// ECALL, EBREAK
 	     trap_irq	 = 1'b1;
-	     trap_mcause = op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
+	     trap_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
 	  end
 	  INSN_ALU: if (core.TRAP_BADALU) begin
 	     trap_irq    = e_aluctl.unit == ALUSRC_ERR;
 	     trap_mcause = MCAUSE_BADINSN;
 	  end
 	  INSN_JAL: begin
-	     e_kill	 = !op.predict_taken;
+	     e_kill	 = !e_op.pred_taken;
 	     new_pc	 = e_addr;
 	  end
-	  INSN_BRANCH: begin
-	     e_kill	= e_cmp_out != op.predict_taken;
+	  INSN_BR: begin
+	     e_kill	= e_cmp_out != e_op.pred_taken;
 	     if (e_cmp_out)
 	       new_pc   = e_addr;
 	  end
@@ -332,12 +343,12 @@ module execute
    always @(posedge clk)
      if (e_clken) begin
 	if (csrw_mtvec)
-	  mtvec <= rmwz(mtvec,  e_csr_wval, core.MTVEC_WMASK, core.PC_MASK);
+	  mtvec <= rwmz(mtvec,  e_csr_wval, core.MTVEC_WMASK, core.PC_MASK);
 
 	if (trap_irq)
-	  mepc  <= op.pc;
+	  mepc  <= e_op.pc;
 	else if (csrw_mepc)
-	  mepc  <= rmwz(mepc,   e_csr_wval, core.PC_MASK,     core.PC_MASK);
+	  mepc  <= rwmz(mepc,   e_csr_wval, core.PC_MASK,     core.PC_MASK);
 
 	if (trap_irq)
 	  begin
@@ -347,7 +358,7 @@ module execute
 	       mcause	  <= trap_mcause;
 	  end
 	else if (csrw_mcause);
-	  mcause <= rmwz(mcause, e_csr_wval, mcause_mask, mcause_mask);
+	  mcause <= rwmz(mcause, e_csr_wval, mcause_mask, mcause_mask);
      end
 
    //
@@ -356,10 +367,10 @@ module execute
    always @(*)
      unique case (e_op.itype)
        INSN_ALU:  e_dout = e_alu_out;
-       INSN_MULL: e_dout = m_mull_out;
+       INSN_MULL: e_dout = m_mull_o;
        INSN_JAL:  e_dout = e_next_pc;
        INSN_AGU:  e_dout = e_addr;
-       INSN_CSR:  e_dout = e_csr_out;
+       INSN_CSR:  e_dout = e_csr_rval;
        default:   e_dout = 32'bx; // No output, or delivered from M stage
      endcase
 endmodule // execute

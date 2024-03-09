@@ -43,10 +43,10 @@ module alu_decode
 	ctl	     = 'bx;
 	ctl.unit     = ALUSRC_ERR;
 	ctl.shadd    = 2'b00;		// No preshift
-	ctl.cond     = op.funct3;
+	ctl.cond     = cond_t'(op.funct3);
 
 	unique case (op.itype)
-	  INSN_BRANCH: begin
+	  INSN_BR: begin
 	     // A branch is an SET as far as the ALU is
 	     // concerned...
 	     ctl.unit   = ALUSRC_SET;
@@ -236,11 +236,12 @@ module mux2
     parameter width = 1
     )
    (
-    input [width-1:0]  d[0:1],
+    input [width-1:0]  d0,
+    input [width-1:0]  d1,
     output [width-1:0] q,
     input	       sel
     );
-   assign q = d[sel];
+   assign q = sel ? d1 : d0;
 endmodule
 
 //
@@ -285,16 +286,16 @@ module bitcnt #(
 	end
       else
 	begin
-	   wire [hw-1:0]  dl = dd[hw-1:0];
-	   wire [hw-1:0]  dh = dd[width-1:hw];
+	   wire [hw-1:0]  dl = d[hw-1:0];
+	   wire [hw-1:0]  dh = d[width-1:hw];
 	   wire [$clog2(hw):0]  ql;
 	   wire [$clog2(hw):0]  qh;
 
 	   bitcnt #(hw) l (.d(dl), .q(ql), .ones(ones), .cl(cl), .ct(ct));
 	   bitcnt #(hw) h (.d(dh), .q(qh), .ones(ones), .cl(cl), .ct(ct));
 
-	   wire [$clog2(hw):0]	xl = (cl | qh[hw]) ? ql : 'b0;
-	   wire [$clog2(hw):0]	xh = (ch | ql[hw]) ? qh : 'b0;
+	   wire [$clog2(hw):0]	xl = (ct | qh[$clog2(hw)]) ? ql : 'b0;
+	   wire [$clog2(hw):0]	xh = (cl | ql[$clog2(hw)]) ? qh : 'b0;
 
 	   assign q = xl + xh;
 	end
@@ -391,7 +392,7 @@ module alu
    // Minmax (select) unit
    //
    wire [31:0]		  minmax_out;
-   mux2 #(32) minmax (.d({src2, src1}), .q(minmax_out), .sel(cmp_lt));
+   mux2 #(32) minmax (.d0(src2), .d1(src1), .q(minmax_out), .sel(cmp_lt));
 
    //
    // czero (Zicond) unit

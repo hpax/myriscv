@@ -87,8 +87,8 @@ module fetch
    wire		     br_take;
    wire [31:0]	     br_offset;
    // Branch prediction
-   branch_predict pred(.this_insn(this_insn), .next_pc(next_pc),
-		       .take(br_take), .offset(br_offset));
+   predict_branch pred(.this_insn(this_insn), .next_pc(next_pc),
+     .take(br_take), .offset(br_offset));
 
    // Opportunistically skip padding c.nops by treating them as
    // the upper part of a 32-bit instruction for the purpose of

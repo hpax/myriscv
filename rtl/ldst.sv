@@ -73,7 +73,7 @@ module ldst (
 
    logic [3:0] bytemask;
    always @(*)
-     unique casez ({size, base_addr[1:0], upper_word})
+     unique casez ({size, addr[1:0], upper_word})
        5'b00_00_0: bytemask <= 4'b0001;
        5'b00_01_0: bytemask <= 4'b0010;
        5'b00_10_0: bytemask <= 4'b0100;
@@ -94,7 +94,7 @@ module ldst (
        5'b10_11_1: bytemask <= 4'b0111;
 
        default:    bytemask <= 4'bxxxx; // Invalid
-     endcase // unique casez ({size, base_addr[1:0], upper_word})
+     endcase // unique casez ({size, addr[1:0], upper_word})
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
@@ -114,12 +114,12 @@ module ldst (
 	  if (dbus_wrq)
 	    begin
 	       dbus_wbe <= bytemask;
-	       unique casez (base_addr[1:0])
+	       unique casez (addr[1:0])
 		 2'b00: dbus_wdata <= src2;
 		 2'b01: dbus_wdata <= { src2[23:0], src2[7:0]  };
 		 2'b10: dbus_wdata <= { src2[15:0], src2[15:8] };
 		 2'b11: dbus_wdata <= { src2[7:0],  src2[31:8] };
-	       endcase // unique casez (base_addr[1:0])
+	       endcase // unique casez (addr[1:0])
 	    end // if (dbus_wrq)
 
 	  // Set up load MUXes
@@ -132,8 +132,8 @@ module ldst (
 	    default: ld_ext <= 4'bx; // Invalid
 	  endcase // unique casez (size)
 
-	  unique casez ({size, base_addr[1:0]})
-	    4'b00_??: ld_src <= {4{base_addr[1:0]}};
+	  unique casez ({size, addr[1:0]})
+	    4'b00_??: ld_src <= {4{addr[1:0]}};
 	    4'b01_00: ld_src <= 8'b01_01_01_00;
 	    4'b01_01: ld_src <= 8'b10_10_10_01;
 	    4'b01_10: ld_src <= 8'b11_11_11_10;
@@ -143,7 +143,7 @@ module ldst (
 	    4'b10_10: ld_src <= 8'b01_00_11_10;
 	    4'b10_11: ld_src <= 8'b00_11_10_01;
 	    default:  ld_src <= 8'bx; // Invalid
-	  endcase // unique casez ({size, base_addr[1:0]})
+	  endcase // unique casez ({size, addr[1:0]})
        end // else: !if(~rst_n)
 
    // Output MUXes
@@ -162,9 +162,9 @@ module ldst (
 	dperm[2] = din[ld_src[2]];
 	dperm[3] = din[ld_src[3]];
 
-	q[7:0]   = ld_ext[0] ? {8{dperm[0][7] & ~ld_uns}} : dperm[0];
-	q[15:8]  = ld_ext[1] ? {8{dperm[1][7] & ~ld_uns}} : dperm[1];
-	q[23:16] = ld_ext[2] ? {8{dperm[2][7] & ~ld_uns}} : dperm[2];
-	q[31:24] = ld_ext[3] ? {8{dperm[3][7] & ~ld_uns}} : dperm[3];
+	dout[7:0]   = ld_ext[0] ? {8{dperm[0][7] & ~ld_uns}} : dperm[0];
+	dout[15:8]  = ld_ext[1] ? {8{dperm[1][7] & ~ld_uns}} : dperm[1];
+	dout[23:16] = ld_ext[2] ? {8{dperm[2][7] & ~ld_uns}} : dperm[2];
+	dout[31:24] = ld_ext[3] ? {8{dperm[3][7] & ~ld_uns}} : dperm[3];
      end // always @ (*)
 endmodule // addrgen

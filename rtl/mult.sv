@@ -85,6 +85,6 @@ module multiplier
      .ssign2	( e_ssign2 ),
      .high	( e_high ),
      .q		( m_mul_o ),
-     .qh	( m_mull_o )
+     .ql	( m_mull_o )
      );
 endmodule
