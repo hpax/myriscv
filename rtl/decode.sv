@@ -306,12 +306,9 @@ module decode_fast_mult
      else if (d_clken)
        begin
 	  logic is_mult;
-	  logic	do_mult;
 
 	  op_o	  = op_i;
 
-	  do_mult = 1'b0;
-	  is_mult = 1'b0;
 	  is_mult =  op_i.itype == INSN_ALU && op_i.rs2_valid &&
 		     op_i.funct7 == 7'b000_0001 && !op_i.funct3[2];
 
