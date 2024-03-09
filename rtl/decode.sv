@@ -320,7 +320,6 @@ module decode_fast_mult
 		  op_o.itype = INSN_MULL;
 	       end else begin
 		  // Need to actually multiply
-		  do_mult   = 1'b1;
 		  op_o.itype = INSN_MUL;
 		  // Move the output to the M stage. Note that
 		  // using op_i.rd_e here handles the case of rd == x0.
