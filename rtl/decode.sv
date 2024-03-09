@@ -370,7 +370,6 @@ module decode (
    assign d_valid_o = d_clken & d_valid_i;
 
    decoded_insn_t c_op;		// decode_comb op out
-   decoded_insn_t m_op;		// decode_fast_mult op out
 
    decode_comb comb (
      .d_din (d_din), .d_was_16(d_was_16), .d_pred_taken(d_pred_taken),
@@ -379,6 +378,6 @@ module decode (
 
    decode_fast_mult mult (
      .rst_n (rst_n), .clk(clk), .d_clken(d_clken), .d_killed(d_killed),
-     .op_i(c_op), .op_o(m_op)
+     .op_i(c_op), .op_o(d_op)
      );
 endmodule
