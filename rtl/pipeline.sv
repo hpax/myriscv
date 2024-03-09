@@ -17,13 +17,13 @@ module pipe_ctl #(
   output reg		    e_valid_in,
   output reg		    m_valid_in,
 
-  regnum_t		    d_rs1,
+  output regnum_t	    d_rs1,
   input			    d_rs1_valid,
 
-  regnum_t		    d_rs2, // Only the register part
+  output regnum_t	    d_rs2,
   input			    d_rs2_valid,
 
-  regnum_t		    d_rd,
+  output regnum_t	    d_rd,
   input			    d_rd_valid,
   input			    d_rd_e, // rd data ready from E stage output
   input			    d_rd_m, // rd data ready from M stage output
@@ -52,21 +52,24 @@ module pipe_ctl #(
 
   output regnum_t	    e_rd,
   output reg		    e_rd_valid,
-  output regnum_t	    m_d,
+  output regnum_t	    m_rd,
   output reg		    m_rd_valid
  );
 
-   function logic regeq (input v1, regnum_t r1,
-			 input v2, regnum_t r2)
+   function logic regeq (input v1, regnum_t r1, input v2, regnum_t r2);
       regeq = (v1 & v2) && (r1.r == r2.r) && (!bypass_ctx || (r1.c == r2.c));
    endfunction
+
+   reg e_rd_e;
+   reg e_rd_m;
+   reg m_rd_m;
 
    // Bubble due to W -> E forwarding hazard when the output will
    // only have advanced to the M stage
    logic	      w_to_e_hazard;
    always @(*)
      begin
-	w_to_e_hazard = regeq(e_rd_m, e_rd, d_rs1_valid, d_rd1) |
+	w_to_e_hazard = regeq(e_rd_m, e_rd, d_rs1_valid, d_rs1) |
 			regeq(e_rd_m, e_rd, d_rs2_valid, d_rs2);
      end
 

@@ -71,9 +71,9 @@ module multiplier
   output [width-1:0] m_mull_o	// Can be forwarded to E on a subsequent MULL
   );
 
-   wire		       e_ssign1 = ~&op;		// MULL, MULH, MULHSU
-   wire		       e_ssign2 = ~op[1];	// MULL, MULH
-   wire		       e_high = |op;		// MULH, MULHSU, MULHU
+   wire		       e_ssign1 = ~&e_op;	// MULL, MULH, MULHSU
+   wire		       e_ssign2 = ~e_op[1];	// MULL, MULH
+   wire		       e_high = |e_op;		// MULH, MULHSU, MULHU
 
    mult mult (
      .rst_n	( rst_n ),

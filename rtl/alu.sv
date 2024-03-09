@@ -32,12 +32,7 @@ typedef struct packed {
    cond_t      cond;
 } aluctl_t;
 
-module alu_decode #(
-  parameter bit	WITH_Zba        = 1'b1,
-  parameter bit	WITH_Zicond     = 1'b1,
-  parameter bit	WITH_minmax     = 1'b1,
-  parameter bit WITH_extensions = 1'b1 // Extensions that fall out naturally
-    )
+module alu_decode
 (
     input  decoded_insn_t op,
     output aluctl_t ctl
@@ -50,7 +45,7 @@ module alu_decode #(
 	ctl.shadd    = 2'b00;		// No preshift
 	ctl.cond     = op.funct3;
 
-	unique case (op.type)
+	unique case (op.itype)
 	  INSN_BRANCH: begin
 	     // A branch is an SET as far as the ALU is
 	     // concerned...
@@ -72,7 +67,7 @@ module alu_decode #(
 		  ctl.invert = funct7[5];
 	       end
 	       { 7'b0?1_0000, 3'b??0 }: begin // shXadd, shXsub
-		  if (WITH_Zba && (WITH_extensions || !funct7[5])) begin
+		  if (core.WITH_Zba && (core.WITH_extensions || !funct7[5])) begin
 		     ctl.unit   = ALUSRC_ADD;
 		     ctl.shadd  = op.funct3[2:1];
 		     ctl.invert = funct7[5];
@@ -91,8 +86,8 @@ module alu_decode #(
 	       { 7'b011_0000, ALU_SLL }: begin
 		  unique casez ({!op.rs2_valid, op.rs2.r})
 		    6'b1_?00??: begin // CTZ, CLZ, CPOP (+inverses)
-		       if (WITH_extensions ||
-			 (!op.rs2.r[4] && op.rs2.r[1:0] != 2'b11) begin
+		       if (core.WITH_extensions ||
+			 (!op.rs2.r[4] && op.rs2.r[1:0] != 2'b11)) begin
 			  ctl.unit = ALUSRC_BITCNT;
 			  ctl.bc_l = ~op.rs2.r[0];
 			  ctl.bc_t = op.rs2.r[1] ^ op.rs2.r[0];
@@ -119,8 +114,8 @@ module alu_decode #(
 		  ctl.shiftop = 11'b10_11_100_11_1_0; // SRA
 	       end
 	       { 7'b001_0100, ALU_SRL }: begin
-		  unique casez ({!op.rs2_valid, op.rs2.r})
-		    5'b1_00111: begin // ORC.B
+		  unique casez ({~op.rs2_valid, op.rs2.r})
+		    6'b1_00111: begin // ORC.B
 		       // In the future, rs2 might be a control mask for a more
 		       // advanced combination instruction
 		       ctl.unit = ALUSRC_ORC;
@@ -136,13 +131,13 @@ module alu_decode #(
 		  ctl.shiftop = 11'b10_xx_000_xx_x_x; // ROR
 	       end
 	       { 7'b011_0100, ALU_SRL }: begin
-		  unique casez ({!op.rs2_valid, op.rs2.r})
+		  unique casez ({~op.rs2_valid, op.rs2.r})
 		    6'b1_11000: begin // REV8
 		       // In the future, rs2 might be a control mask for a more
 		       // advanced bitswap instruction
 		       ctl.unit = ALUSRC_REV;
 		    end
-		  endcase // unique casez ({!op.rs2_valid, rs2[4:0]})
+		  endcase
 	       end
 	       { 7'b000_0000, ALU_SLT },
 		 { 7'b000_0000, ALU_SLTU }: begin
@@ -164,11 +159,11 @@ module alu_decode #(
 		    end
 		  endcase // unique casez (op.rs2.r)
 	       end
-	       { 7'b000_0101, 3'b1?? }: if (WITH_minmax) begin
+	       { 7'b000_0101, 3'b1?? }: if (core.WITH_minmax) begin
 		  ctl.unit = ALUSRC_MINMAX;
 		  ctl.invert = 1'b1;		// Compare: always subtract
 	       end
-	       { 7'b000_0111, 3'b1?1 }: if (WITH_Zicond) begin
+	       { 7'b000_0111, 3'b1?1 }: if (core.WITH_Zicond) begin
 		  ctl.unit = ALUSRC_ZICOND;
 	       end
 	     endcase // unique casez ({funct7, op.funct3})
@@ -177,6 +172,7 @@ module alu_decode #(
 	  default: begin
 	     // Not an ALU instruction
 	  end
+	endcase
      end // always @ (*)
 endmodule // alu_decode
 
@@ -356,11 +352,6 @@ endmodule
 // from the M stage.)
 //
 module alu
-  #(
-    parameter bit WITH_Zba    = 1'b1, // Adds ~88 LE
-    parameter bit WITH_minmax = 1'b1, // Adds ~59 LE
-    parameter bit WITH_Zicond = 1'b1
-    )
    (
     output reg [31:0] dst,
     output reg	      cmp_out,	// Comparator output bypassing output MUX
@@ -377,7 +368,7 @@ module alu
    wire			  add_scarry;
 
    adder add (.src1(src1), .src2(invsrc2), .sub(ctl.invert),
-     .src1shift(WITH_Zba ? ctl.shadd : 2'b00),
+     .src1shift(core.WITH_Zba ? ctl.shadd : 2'b00),
      .q (add_out), .ucout(add_ucarry), .scout(add_scarry));
 
    //
@@ -449,12 +440,12 @@ module alu
 	  ALUSRC_ADD:    dst = add_out;
 	  ALUSRC_LOGIC:  dst = bit_out;
 	  ALUSRC_SET:    dst = cmp_out;
-	  ALUSRC_MINMAX: if (WITH_minmax) dst = minmax_out;
+	  ALUSRC_MINMAX: if (core.WITH_minmax) dst = minmax_out;
 	  ALUSRC_SHIFT:  dst = shift_out;
 	  ALUSRC_BITCNT: dst = bitcnt_out;
 	  ALUSRC_ORC:    dst = orc_out;
 	  ALUSRC_REV:    dst = rev_out;
-	  ALUSRC_ZICOND: if (WITH_Zicond) dst = zicond_out;
+	  ALUSRC_ZICOND: if (core.WITH_Zicond) dst = zicond_out;
 	endcase // unique case (alusrc)
      end
 endmodule // alu

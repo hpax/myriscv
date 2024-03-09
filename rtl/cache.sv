@@ -368,7 +368,7 @@ module cache #(
 				     = cpu_a[i][addr_bits-1:crow_bits+line_bits];
 				   tag_in[i].valid = 1'b0;
 				       cpu_ready[i] = is_prefrq[i];
-				       
+
 				end // else: !if(dirty[i] & ~inval_only)
 			      tag_wrq[i] = 1'b1;
 			   end
@@ -385,7 +385,7 @@ module cache #(
 			      ram_valid      <= 1'b1;
 			      ram_wrq        <= is_wrq[i] | dirty[i];
 			      ram_wbe        <= is_wrq[i] | dirty[i]4'b1111;
-				    raw_wdata <= 
+				    raw_wdata <=
 			      dstate        a<= is_wrq[i] ? ds_ready  : ds_rrq;
 			      tag_in[i].valid = match[i] & ~cpu_a[i][inval_bit];
 			      tag_in[i].dirty = 1'b0;

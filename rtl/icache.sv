@@ -12,5 +12,3 @@ module icache
     output [31:0] ibus_rdata,
     output ibus_ready
     );
-
-   

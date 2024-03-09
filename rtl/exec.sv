@@ -11,33 +11,10 @@ function logic [31:0] rwmz(
   input [31:0] fmask
   );
 
-   rwm = ((dst & ~wmask) | (src & wmask)) & fmask;
+   rwmz = ((dst & ~wmask) | (src & wmask)) & fmask;
 endfunction
 
 module execute
-  #(
-  parameter logic [31:0] PC_MASK = 32'hffff_fffe,
-  parameter		 contexts = 1,
-  parameter		 ctx_bits = $clog2(contexts),
-  parameter		 reg_bits = ctx_bits+5,
-
-  parameter		 NUM_IRQS = 31,
-  parameter		 IRQ_BITS = $clog2(NUM_IRQS+1),
-
-  parameter logic [31:0] MTVEC_RESET = 32'h0000_1000,
-  parameter logic [31:0] MTVEC_WMASK = 32'b0,
-
-  parameter bit		 ALU_EARLY_DECODE = 1'b0, // ALU op decode in D stage
-  parameter bit		 TRAP_BADINSN = 1'b1, // Trap on invalid opcode
-  parameter bit		 TRAP_BADALU = TRAP_BADINSN, // Trap on invalid ALU insn
-
-  // These can be any value from 0 (disabled) to 64 (full architectural width.)
-  // If CTR_CYCLE_WIDTH == 0 and CTR_TIME_WIDTH > 0, then the [m]cycle[h]
-  // CSRs are treated as aliases of the time[h] CSR.
-  parameter		 CTR_TIME_WIDTH = 40,
-  parameter		 CTR_CYCLE_WIDTH = 0,
-  parameter		 CTR_INSTRET_WIDTH = 40
-    )
 (
  input		      rst_n,
  input		      clk,
@@ -67,10 +44,7 @@ module execute
 
  // IRQ pending bitmask. Note that there is no IRQ 0 since that vector
  // is reserved for exceptions.
- input [NUM_IRQS:1]  d_irqs,
-
- // These may be constants or not
- input [31:0]	     mtvec
+ input [core.NUM_IRQS:1]  d_irqs
  );
 
    wire		   e_clken = clken & e_valid_i & ~e_stall;
@@ -80,17 +54,18 @@ module execute
    wire [31:0]	   e_rs1_data;
    wire [31:0]	   e_rs2_data;
    wire [31:0]	   m_dout;
+   wire [3:0]	   m_out_be = 4'b1111;
 
    regfile #(.contexts(contexts)) regs
      (
      .rst_n    ( rst_n ),
      .clk      ( clk ),
      .clken    ( clken ),	// Not w_clken; need to read anyway
-     .rs1      ( d_rs1 ),
+     .rs1      ( d_op.rs1 ),
      .rs1_data ( e_rs1_data ),
-     .rs2      ( d_rs2 ),
+     .rs2      ( d_op.rs2 ),
      .rs2_data ( e_rs2_data ),
-     .rd       ( m_rd ),
+     .rd       ( m_op.rd ),
      .rd_data  ( m_dout ),
      .rd_wren  ( m_valid_o ),
      .rd_wbe   ( m_out_be )
@@ -106,7 +81,7 @@ module execute
 	    if (m_out_be[3]) w_din[31:24] <= m_dout[31:24];
 	 end
 
-   // Pipeline synchronization signals
+   // E-stage pipeline synchronization signals
    assign e_valid_o = e_clken & e_valid_i & ~e_stall & ~e_kill;
    assign e_busy    = 1'b0;
 
@@ -116,8 +91,16 @@ module execute
      if (e_clken)
        e_op <= d_op;
 
+   // M-stage pipeline synchronization signals
+   assign m_valid_o = m_clken & m_valid_i & ~m_stall;
+
+   // M-stage instruction
+   decoded_insn_t m_op;
+   always @(posedge clk)
+     if (m_clken)
+       m_op <= e_op;
+
    // Latched output to M stage; also used by the bypass network
-   reg [31:0] m_din;
    always @(posedge clk)
      if (m_clken)
        m_din <= e_dout;
@@ -176,7 +159,7 @@ module execute
    wire	       e_cmp_out;
 
    generate
-      if (ALU_EARLY_DECODE) begin
+      if (core.ALU_EARLY_DECODE) begin
 	 aluctl_t d_aluctl;
 	 alu_decode alu_decode (.op(d_op), .ctl(d_aluctl));
 	 always @(negedge rst_n or posedge clk)
@@ -196,16 +179,16 @@ module execute
    wire [31:0] m_mul_o;
    wire [31:0] m_mull_o;
    multiplier mult (.rst_n(rst_n), .clk(clk),
-     .e_valid(e_clken && e_op.type == INSN_MUL),
+     .e_valid(e_clken && e_op.itype == INSN_MUL),
      .e_op(e_op.funct3[1:0]),
      .m_mul_o(m_mul_o), .m_mull_o(m_mull_o));
 
    //
    // CSR registers
    //
-   reg [31:0] mtvec = MTVEC_RESET & PC_MASK;
-   reg [31:0] mepc  = 32'bx & PC_MASK;
-   localparam [31:0] mcause_mask = 32'h8000_0000 | {IRQ_BITS{1'b1}};
+   reg [31:0] mtvec = core.MTVEC_RESET & core.PC_MASK;
+   reg [31:0] mepc  = 32'bx & core.PC_MASK;
+   localparam [31:0] mcause_mask = 32'h8000_0000 | {core.IRQ_BITS{1'b1}};
    reg [31:0] mcause;
 
    reg [63:0] ctr_time	  = 64'b0;
@@ -264,13 +247,12 @@ module execute
 	// accepted by the W stage.
 	if (w_clken)
 	   ctr_instret <= (ctr_instret + 1'b1) & ctr_instret_mask;
-	end
      end
 
    //
    // Interrupt recognition
    //
-   reg [IRQ_BITS-1:0] e_irq_vector;
+   reg [core.IRQ_BITS-1:0] e_irq_vector;
    reg		      e_irq;
 
    // Note that e_irq_vector must be zero if !e_irq
@@ -282,7 +264,7 @@ module execute
 	e_irq	     <= |d_irqs;
 	e_irq_vector <= 'b0;
 	// Priority vector encoder
-	for (int i = NUM_IRQS; i > 0; i--)
+	for (int i = core.NUM_IRQS; i > 0; i--)
 	  if (d_irqs[i]) e_irq_vector <= i;
      end
 
@@ -307,8 +289,8 @@ module execute
 	if (e_irq) begin
 	   trap_irq	 = 1'b1;
 	   trap_mcause   = MCAUSE_IRQ | e_irq_vector;
-	end else unique case (e_op.type)
-	  INSN_ERR: if (TRAP_BADINSN) begin
+	end else unique case (e_op.itype)
+	  INSN_ERR: if (core.TRAP_BADINSN) begin
 	     trap_irq    = 1'b1;
 	     trap_mcause = MCAUSE_BADINSN;
 	  end
@@ -316,7 +298,7 @@ module execute
 	     trap_irq	 = 1'b1;
 	     trap_mcause = op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
 	  end
-	  INSN_ALU: if (TRAP_BADALU) begin
+	  INSN_ALU: if (core.TRAP_BADALU) begin
 	     trap_irq    = e_aluctl.unit == ALUSRC_ERR;
 	     trap_mcause = MCAUSE_BADINSN;
 	  end
@@ -334,7 +316,7 @@ module execute
 	  end
 	endcase
 
-	if ((new_pc & ~PC_MASK) && !trap_irq) begin
+	if ((new_pc & ~core.PC_MASK) && !trap_irq) begin
 	   trap_irq    = 1'b1;	// PC out of bounds
 	   trap_mcause = MCAUSE_BADPC;
 	end
@@ -344,24 +326,25 @@ module execute
 	   new_pc = mtvec + (e_irq_vector << 2);
 	end
 
-	e_restartpc = new_pc & PC_MASK;
+	e_restartpc = new_pc & core.PC_MASK;
      end
 
    always @(posedge clk)
      if (e_clken) begin
 	if (csrw_mtvec)
-	  mtvec <= rmwz(mtvec,  e_csr_wval, MTVEC_WMASK, PC_MASK);
+	  mtvec <= rmwz(mtvec,  e_csr_wval, core.MTVEC_WMASK, core.PC_MASK);
 
 	if (trap_irq)
 	  mepc  <= op.pc;
 	else if (csrw_mepc)
-	  mepc  <= rmwz(mepc,   e_csr_wval, PC_MASK,     PC_MASK);
+	  mepc  <= rmwz(mepc,   e_csr_wval, core.PC_MASK,     core.PC_MASK);
 
 	if (trap_irq)
 	  begin
-	     mcause		  <= 32'b0;
-	     mcause[31]		  <= e_irq;
-	     mcause[IRQ_BITS-1:0] <= e_irq_vector;
+	     if (e_irq)
+	       mcause	  <= MCAUSE_IRQ | e_irq_vector;
+	     else
+	       mcause	  <= trap_mcause;
 	  end
 	else if (csrw_mcause);
 	  mcause <= rmwz(mcause, e_csr_wval, mcause_mask, mcause_mask);
@@ -371,7 +354,7 @@ module execute
    // Output data MUX
    //
    always @(*)
-     unique case (e_op.type)
+     unique case (e_op.itype)
        INSN_ALU:  e_dout = e_alu_out;
        INSN_MULL: e_dout = m_mull_out;
        INSN_JAL:  e_dout = e_next_pc;

@@ -103,7 +103,7 @@ typedef enum logic [11:0] {
 	     CSR_DSCRATCH1 = 12'h7b3
 } csr_t;
 
-typedef enum logic [32:0] {
+typedef enum logic [31:0] {
 	     MCAUSE_BADPC   = 32'd0,
 	     MCAUSE_IBUSERR = 32'd1,
 	     MCAUSE_BADINSN = 32'd2,
@@ -127,4 +127,4 @@ typedef enum logic [32:0] {
 	     // 48-63 custom
 
 	     MCAUSE_IRQ     = 32'h8000_0000
-};
+} csr_mcause_t;

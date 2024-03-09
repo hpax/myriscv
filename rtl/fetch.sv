@@ -51,14 +51,11 @@ module predict_branch
 	     take   = 1'b0;
 	     offset = 32'bx;
 	  end
-	end // always @ (*)
+	endcase
+     end
 endmodule
 
 module fetch
-  #(
-    parameter logic [31:0] PC_MASK  = 32'hffff_fffe,
-    parameter logic [31:0] RESET_PC = 32'h0000_0010
-    )
   (
    input	 clk,
    input	 clken,
@@ -86,8 +83,6 @@ module fetch
    logic	 have_16;
    logic	 have_32;
    logic	 is_16;
-
-   localparam [31:0] real_pc_mask = PC_MASK & ~32'b1;
 
    wire		     br_take;
    wire [31:0]	     br_offset;
@@ -132,10 +127,10 @@ module fetch
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
-	  ibus_a          <= RESET_PC & real_pc_mask & ~32'b11;
-	  insn_pc         <= RESET_PC & real_pc_mask;
-	  next_pc         <= RESET_PC & real_pc_mask;
-	  insn_valid      <= 1'b0;
+	  ibus_a          <= core.RESET_PC & core.PC_MASK & ~32'b11;
+	  insn_pc         <= core.RESET_PC & core.PC_MASK;
+	  next_pc         <= core.RESET_PC & core.PC_MASK;
+	  valid_o      <= 1'b0;
 	  insn_pred_taken <= 1'bx;
 	  insn            <= 32'bx;
 	  pref_valid      <= 1'b0;
@@ -146,10 +141,10 @@ module fetch
        begin
 	  if (restart)
 	    begin
-	       ibus_a     <= restart_pc & real_pc_mask & ~32'b11;
-	       insn_pc    <= restart_pc & real_pc_mask;
-	       next_pc    <= restart_pc & real_pc_mask;
-	       insn_valid <= 1'b0;
+	       ibus_a     <= restart_pc & core.PC_MASK & ~32'b11;
+	       insn_pc    <= restart_pc & core.PC_MASK;
+	       next_pc    <= restart_pc & core.PC_MASK;
+	       valid_o <= 1'b0;
 	       insn_pred_taken <= 1'bx;
 	       insn       <= 32'bx;
 	       pref_valid <= 1'b0;
@@ -169,7 +164,7 @@ module fetch
 		 begin
 		    insn            <= this_insn;
 		    insn_pc         <= next_pc;
-		    insn_valid      <= 1'b1;
+		    valid_o      <= 1'b1;
 		    insn_pred_taken <= br_take;
 		    if (br_take)
 		      pc_incr = br_offset;
@@ -180,13 +175,13 @@ module fetch
 		 end
 	       else if (!stall)
 		 begin
-		    insn_valid <= 1'b0; // Consumed instruction but queue empty
+		    valid_o <= 1'b0; // Consumed instruction but queue empty
 		    insn <= 32'bx;
 		    insn_pred_taken <= 1'bx;
 		 end
 
-	       pc_updated = (pc_next + pc_incr) & real_pc_mask;
-	       pc_next   <= pc_updated;
+	       pc_updated = (next_pc + pc_incr) & core.PC_MASK;
+	       next_pc   <= pc_updated;
 
 	       if (advance & br_take)
 		 begin
@@ -199,7 +194,7 @@ module fetch
 		 begin
 		    pref_16    <= ibus_rdata[31:16];
 		    pref_valid <= is_16 | next_pc[1];
-		    ibus_a     <= (ibus_a + 3'd4) & real_pc_mask;
+		    ibus_a     <= (ibus_a + 3'd4) & core.PC_MASK;
 		    ibus_valid <= 1'b1;
 		 end
 	       else if (pref_valid & is_16 & !next_pc[0])

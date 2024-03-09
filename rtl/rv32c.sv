@@ -9,23 +9,14 @@
 //
 
 module rv32c_comb
-  #(
-    parameter logic [31:0] INVALID = { 31'bx, 1'b0 },
-    parameter bit	   STRICT_UNDEFINED = 1'b0,
-    parameter bit	   MATCH_BINUTILS = 1'b0,
-    parameter bit	   WITH_Zcb = 1'b1,
-    parameter bit	   WITH_Zcf = 1'b1,
-    parameter bit	   WITH_Zcd = 1'b1,
-    // Some subsets of Zcb depend on other extensions
-    parameter bit	   WITH_Zbb = 1'b1,
-    parameter bit	   WITH_Zmmul = 1'b1
-    )
    (
     input [31:0]  d,		// Input; [31:16] used only for passthrough
     output [31:0] q,
     output reg	  is_16		// Advance PC with 2 not 4
     );
 
+   parameter logic [31:0] INVALID = { 31'bx, 1'b0 };
+   parameter bit	  MATCH_BINUTILS = 1'b0;
 
    localparam [4:0] R_ZERO = 5'd0;
    localparam [4:0] R_RA   = 5'd1;
@@ -118,29 +109,29 @@ module rv32c_comb
 			    {2'b00, i[10:7], i[12:11], i[5], i[6], 2'b00});
 
 	       3'b001:		// C.FLD
-		 if (WITH_Zcd)
+		 if (core.WITH_Zcd)
 		   o = insn_i(p2, p1, {i[6:5], i[12:10], 3'b0}, 3'b011, LOAD_FP);
 
 	       3'b010:		// C.LW
 		 o = insn_i(p2, p1, {i[5], i[12:10], i[6], 2'b0}, 3'b010, LOAD);
 
 	       3'b011:		// C.FLW
-		 if (WITH_Zcf)
+		 if (core.WITH_Zcf)
 		   o = insn_i(p2, p1, {i[5], i[12:10], i[6], 2'b0}, 3'b010, LOAD_FP);
 
 	       3'b100: begin
 		  unique casez ({i[12:10], i[6]})
 		    4'b000_?:	// C.LBU
-		      if (WITH_Zcb)
+		      if (core.WITH_Zcb)
 			o = insn_i(p2, p1, {i[5], i[6]}, 3'b100, LOAD);
 		    4'b001_?:	// C.LHU, C.LH
-		      if (WITH_Zcb)
+		      if (core.WITH_Zcb)
 			o = insn_i(p2, p1, {i[5], 1'b0}, {~i[6], 2'b01}, LOAD);
 		    4'b010_?:	// C.SB
-		      if (WITH_Zcb)
+		      if (core.WITH_Zcb)
 			o = insn_s(p1, p2, {i[5], i[6]}, 3'b000, STORE);
 		    4'b011_0:	// C.SH
-		      if (WITH_Zcb)
+		      if (core.WITH_Zcb)
 			o = insn_s(p1, p2, {i[5], 1'b0}, 3'b001, STORE);
 		    default:
 		      o = INVALID;
@@ -148,14 +139,14 @@ module rv32c_comb
 	       end
 
 	       3'b101:		// C.FSD
-		 if (WITH_Zcd)
+		 if (core.WITH_Zcd)
 		   o = insn_s(p1, p2, {i[6:5], i[12:10], 3'b0}, 3'b011, STORE_FP);
 
 	       3'b110:		// C.SW
 		 o = insn_s(p1, p2, {i[5], i[12:10], i[6], 2'b0}, 3'b010, STORE);
 
 	       3'b111:		// C.FSW
-		 if (WITH_Zcf)
+		 if (core.WITH_Zcf)
 		   o = insn_s(p1, p2, {i[5], i[12:10], i[6], 2'b0}, 3'b010, STORE_FP);
 
 	     endcase // unique case (i[15:13])
@@ -191,13 +182,13 @@ module rv32c_comb
 		       // C.ADDI16SP
 		       logic signed [9:0] addi16sp_imm;
 		       addi16sp_imm = {i[12], i[4:3], i[5], i[2], i[6], 4'b0};
-		       if (!STRICT_UNDEFINED || MATCH_BINUTILS || ci_imm)
+		       if (!core.STRICT_UNDEFINED || MATCH_BINUTILS || ci_imm)
 			 o = addi(R_SP, R_SP, addi16sp_imm);
 		    end
 		  else
 		    begin
 		       // C.LUI
-		       if (!STRICT_UNDEFINED || ci_imm)
+		       if (!core.STRICT_UNDEFINED || ci_imm)
 			 o = insn_u(r1, ci_imm, LUI);
 		    end
 	       end
@@ -218,21 +209,21 @@ module rv32c_comb
 		    5'b0_11_11: // C.AND
 		      o = insn_r(p1, p1, p2, 7'b0000000, 3'b111, OP);
 		    5'b1_11_10:	// C.MUL
-		      if (WITH_Zcb && WITH_Zmmul)
+		      if (core.WITH_Zcb && core.WITH_Zmmul)
 			o = insn_r(p1, p1, p2, 7'b0000001, 3'b000, OP);
 		    5'b1_11_11:
-		      if (WITH_Zcb)
+		      if (core.WITH_Zcb)
 			unique casez (i[4:2])
 			  3'b000: // C.ZEXT.B
 			    o = andi(p1, p1, 8'hff);
 			  3'b001: // C.SEXT.B (-> SEXT.B from Zbb)
-			    if (WITH_Zbb)
+			    if (core.WITH_Zbb)
 			      o = insn_i(p1, p1, 12'b0110000_00100, 3'b001, OP_IMM);
 			  3'b010: // C.ZEXT.H (-> ZEXT.H from Zbb)
-			    if (WITH_Zbb)
+			    if (core.WITH_Zbb)
 			      o = insn_i(p1, p1, 12'b0000100_00000, 3'b100, OP);
 			  3'b011: // C.SEXT.H (-> SEXT.H from Zbb)
-			    if (WITH_Zbb)
+			    if (core.WITH_Zbb)
 			      o = insn_i(p1, p1, 12'b0110000_00101, 3'b001, OP_IMM);
 			  3'b101: // C.NOT
 			    o = insn_i(p1, p1, ~12'sb0, 3'b100, OP_IMM);
@@ -257,13 +248,13 @@ module rv32c_comb
 	       3'b000:	// C.SLLI (including 63-32)
 		 o = insn_i(r1, r1, {6'b0, ci_imm}, 3'b001, OP_IMM);
 	       3'b001:	// C.FLDSP
-		 if (WITH_Zcd)
+		 if (core.WITH_Zcd)
 		   o = insn_i(r1, R_SP, {i[4:2], i[12], i[6:5], 3'b0}, 3'b011, LOAD_FP);
 	       3'b010:	// C.LWSP
-		 if (!STRICT_UNDEFINED || r1)
+		 if (!core.STRICT_UNDEFINED || r1)
 		   o = insn_i(r1, R_SP, {i[3:2], i[12], i[6:4], 2'b0}, 3'b010, LOAD);
 	       3'b011:	// C.FLWSP
-		 if (WITH_Zcd)
+		 if (core.WITH_Zcd)
 		   o = insn_i(r1, R_SP, {i[3:2], i[12], i[6:4], 2'b0}, 3'b010, LOAD_FP);
 
 	       3'b100:
@@ -271,7 +262,7 @@ module rv32c_comb
 		   if (!r1)	// C.ECALL, C.EBREAK
 		     begin
 			// C.ECALL is not officially defined
-			if (!STRICT_UNDEFINED || i[12])
+			if (!core.STRICT_UNDEFINED || i[12])
 			  o = insn_i(R_ZERO, R_ZERO, i[12], 3'b000, SYSTEM);
 		     end
 		   else		// C.JR, C.JALR
@@ -280,12 +271,12 @@ module rv32c_comb
 		   o = insn_r(r1, r1 & {5{i[12]}}, r2, 7'b0000000, 3'b000, OP);
 
 	       3'b101:	// C.FSDSP
-		 if (WITH_Zcd)
+		 if (core.WITH_Zcd)
 		   o = insn_s(R_SP, r2, {i[9:7], i[12:10], 3'b0}, 3'b011, STORE_FP);
 	       3'b110:	// C.SWSP
 		 o = insn_s(R_SP, r2, {i[8:7], i[12:9], 2'b0}, 3'b010, STORE);
 	       3'b111:	// C.FLWSP
-		 if (WITH_Zcd)
+		 if (core.WITH_Zcd)
 		   o = insn_s(R_SP, r2, {i[8:7], i[12:9], 2'b0}, 3'b010, STORE_FP);
 	     endcase
 	  end
