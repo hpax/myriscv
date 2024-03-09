@@ -1,76 +1,57 @@
 //
-// Pipeline control
+// Pipeline control/hazard avoidance
 //
 
 module pipe_ctl #(
   parameter bit bypass_ctx = 1'b1
 ) (
-  input			    rst_n,
-  input			    clk,
+  input	     rst_n,
+  input	     clk,
+  input	     clken,
 
-  input			    f_valid_out,
-  input			    d_valid_out,
-  input			    e_valid_out,
-  input			    m_valid_out,
+  input	     f_valid_o,
+  input	     d_valid_o,
+  input	     e_valid_o,
+  input	     m_valid_o,
 
-  output reg		    d_valid_in,
-  output reg		    e_valid_in,
-  output reg		    m_valid_in,
+  output reg d_valid_i,
+  output reg e_valid_i,
+  output reg m_valid_i,
 
-  output regnum_t	    d_rs1,
-  input			    d_rs1_valid,
+  input	     decoded_insn_t d_op,
+  output     decoded_insn_t e_op,
+  output     decoded_insn_t m_op,
 
-  output regnum_t	    d_rs2,
-  input			    d_rs2_valid,
+  input	     e_ready,
+  input	     d_ready,
+  input	     m_ready,
 
-  output regnum_t	    d_rd,
-  input			    d_rd_valid,
-  input			    d_rd_e, // rd data ready from E stage output
-  input			    d_rd_m, // rd data ready from M stage output
+  input	     e_kill, // Instruction killed in the E stage
 
-  input			    d_csrw,
-  input			    d_csrr,
-  input			    d_jump,
+  output     f_restart,
 
-  input			    d_ready,
-  input			    m_ready,
+  output     f_stall,
+  output     d_stall,
+  output     e_stall,
 
-  input			    e_kill, // Instruction killed in the E stage
-
-  output		    f_restart,
-
-  output		    f_stall,
-  output		    d_stall,
-  output		    e_stall,
-
- // Note: this logic may assert _m == _w; in that case the _m bypass
- // should prevail.
-  output reg		    e_rs1_m, // E stage get rs1 from M stage input
-  output reg		    e_rs1_w, // E stage get rs1 from W stage input
-  output reg		    e_rs2_m, // E stage get rs2 from M stage input
-  output reg		    e_rs2_w, // E stage get rs2 from W stage input
-
-  output regnum_t	    e_rd,
-  output reg		    e_rd_valid,
-  output regnum_t	    m_rd,
-  output reg		    m_rd_valid
+  // Bypass control
+  output reg e_rs1_m,
+  output reg e_rs1_w,
+  output reg e_rs2_m,
+  output reg e_rs2_w
  );
 
    function logic regeq (input v1, regnum_t r1, input v2, regnum_t r2);
       regeq = (v1 & v2) && (r1.r == r2.r) && (!bypass_ctx || (r1.c == r2.c));
    endfunction
 
-   reg e_rd_e;
-   reg e_rd_m;
-   reg m_rd_m;
-
    // Bubble due to W -> E forwarding hazard when the output will
    // only have advanced to the M stage
    logic	      w_to_e_hazard;
    always @(*)
      begin
-	w_to_e_hazard = regeq(e_rd_m, e_rd, d_rs1_valid, d_rs1) |
-			regeq(e_rd_m, e_rd, d_rs2_valid, d_rs2);
+	w_to_e_hazard = regeq(e_op.rd_m, e_op.rd, d_op.rs1_valid, d_op.rs1) |
+			regeq(e_op.rd_m, e_op.rd, d_op.rs2_valid, d_op.rs2);
      end
 
    assign f_stall    = ~d_ready | ~m_ready;
@@ -82,38 +63,35 @@ module pipe_ctl #(
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
-	  e_rd     <=  'bx;
-	  e_rd_e   <= 1'b0;
-	  e_rd_m   <= 1'b0;
-	  m_rd     <=  'bx;
-	  m_rd_m   <= 1'b0;
-	  e_rs1_m  <= 1'b0;
-	  e_rs1_w  <= 1'b0;
-	  e_rs2_m  <= 1'b0;
-	  e_rs2_w  <= 1'b0;
+	  d_valid_i <= 1'b0;
+	  e_op	    <= 'bx;
+	  e_op.rd_e <= 1'b0;
+	  e_op.rd_m <= 1'b0;
+	  e_valid_i <= 1'b0;
+	  m_op	    <= 'bx;
+	  m_op.rd_m <= 1'b0;
+	  m_valid_i <= 1'b0;
+	  e_rs1_m   <= 1'b0;
+	  e_rs1_w   <= 1'b0;
+	  e_rs2_m   <= 1'b0;
+	  e_rs2_w   <= 1'b0;
        end
-     else
+     else if (clken)
        begin
-	  d_valid_in <= f_valid_out & ~f_stall & ~e_kill;
-	  e_valid_in <= d_valid_out & ~d_stall & ~e_kill;
-	  m_valid_in <= e_valid_out & ~e_stall & ~e_kill;
+	  d_valid_i <= f_valid_o & ~f_stall & ~e_kill;
+	  e_valid_i <= d_valid_o & ~d_stall & ~e_kill;
+	  m_valid_i <= e_valid_o & ~e_stall & ~e_kill;
 
 	  if (~e_stall)
-	    begin
-	       e_rd     <= d_rd;
-	       e_rd_e   <= d_rd_e & ~d_stall & ~e_kill;
-	       e_rd_m   <= d_rd_m & ~d_stall & ~e_kill;
-	    end
+	    e_op     <= d_op;
+
 	  if (m_ready)
-	    begin
-	       m_rd     <= e_rd;
-	       m_rd_m   <= e_rd_m;
-	    end
+	    m_op     <= e_op;
 
 	  // Bypass control
-	  e_rs1_m <= regeq(e_rd_e, e_rd, d_rs1_valid, d_rs1);
-	  e_rs1_w <= regeq(m_rd_m, e_rd, d_rs1_valid, d_rs1);
-	  e_rs2_m <= regeq(e_rd_e, e_rd, d_rs2_valid, d_rs2);
-	  e_rs2_w <= regeq(m_rd_m, e_rd, d_rs2_valid, d_rs2);
+	  e_rs1_m <= regeq(e_op.rd_e, e_op.rd, d_op.rs1_valid, d_op.rs1);
+	  e_rs1_w <= regeq(m_op.rd_m, m_op.rd, d_op.rs1_valid, d_op.rs1);
+	  e_rs2_m <= regeq(e_op.rd_e, e_op.rd, d_op.rs2_valid, d_op.rs2);
+	  e_rs2_w <= regeq(m_op.rd_m, m_op.rd, d_op.rs2_valid, d_op.rs2);
        end // else: !if(~rst_n)
 endmodule
