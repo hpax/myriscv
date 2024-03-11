@@ -2,6 +2,8 @@
 // Pipeline control/hazard avoidance
 //
 
+`include "myriscv.vh"
+
 module pipe_ctl #(
   parameter bit bypass_ctx = 1'b1
 ) (
@@ -9,12 +11,11 @@ module pipe_ctl #(
   input	     clk,
   input	     clken,
 
-  input	     f_valid_o,
+  input	     d_valid_i,		// Actually output from the fetch unit
   input	     d_valid_o,
   input	     e_valid_o,
   input	     m_valid_o,
 
-  output reg d_valid_i,
   output reg e_valid_i,
   output reg m_valid_i,
 
@@ -22,17 +23,17 @@ module pipe_ctl #(
   output     decoded_insn_t e_op,
   output     decoded_insn_t m_op,
 
-  input	     e_ready,
   input	     d_ready,
+  input	     e_ready,
   input	     m_ready,
 
   input	     e_kill, // Instruction killed in the E stage
-
   output     f_restart,
 
   output     f_stall,
   output     d_stall,
   output     e_stall,
+  output     m_stall,
 
   // Bypass control
   output reg e_rs1_m,
@@ -54,22 +55,19 @@ module pipe_ctl #(
 			regeq(e_op.rd_m, e_op.rd, d_op.rs2_valid, d_op.rs2);
      end
 
-   assign f_stall    = ~d_ready | ~m_ready;
-   assign d_stall    = ~m_ready;
-   assign e_stall    = ~m_ready | w_to_e_hazard;
+   assign f_stall	= ~d_ready | ~m_ready;
+   assign d_stall	= ~m_ready;
+   assign e_stall	= ~m_ready | w_to_e_hazard;
+   assign m_stall	= 1'b0;
 
-   assign f_restart  = e_kill;
+   assign f_restart	= e_kill;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
-	  d_valid_i <= 1'b0;
-	  e_op	    <= 'bx;
-	  e_op.rd_e <= 1'b0;
-	  e_op.rd_m <= 1'b0;
+	  e_op	    <= reset_op(core.RESET_PC);
 	  e_valid_i <= 1'b0;
-	  m_op	    <= 'bx;
-	  m_op.rd_m <= 1'b0;
+	  m_op	    <= reset_op(core.RESET_PC);
 	  m_valid_i <= 1'b0;
 	  e_rs1_m   <= 1'b0;
 	  e_rs1_w   <= 1'b0;
@@ -78,7 +76,6 @@ module pipe_ctl #(
        end
      else if (clken)
        begin
-	  d_valid_i <= f_valid_o & ~f_stall & ~e_kill;
 	  e_valid_i <= d_valid_o & ~d_stall & ~e_kill;
 	  m_valid_i <= e_valid_o & ~e_stall & ~e_kill;
 

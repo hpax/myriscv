@@ -13,6 +13,8 @@
 // Width must be a power of 2.
 //
 
+`include "myriscv.vh"
+
 module rotate
   #(
     parameter width = 32
@@ -20,7 +22,7 @@ module rotate
    (
     input  [$clog2(width)-1:0] cnt,
     input  [width-1:0] d,
-    output [width-1:0] q
+    output logic [width-1:0] q
     );
 // *** Variant 1
 //   wire [2*width-1:0]  in = { d, {width{1'b0}} };
@@ -73,7 +75,7 @@ module maskgen
    (
     input [$clog2(width)-1:0] cnt,
     input [$clog2(width)-1:0] pos,
-    output [width-1:0] q
+    output reg [width-1:0] q
     );
 
    // *** Variant 1
@@ -165,7 +167,7 @@ module sign_mux
     input sand,
     input sxor,
     input [width-1:0] d,
-    output q
+    output reg q
     );
 
    always @(*)
@@ -208,41 +210,6 @@ module shifter_core
 
    assign q = (d_rot & mask) | ({width{sign_bit}} & ~mask);
 endmodule // shifter
-
-// Input mangling. The control bits are:
-//  10:9 - rcnt
-//          00 = 0
-//          10 = shamt
-//          11 = -shamt
-//   8:7 - mpos
-//          00 = 0
-//          01 = 1
-//          10 = shamt
-//          11 = -mcnt
-//   6:4 - mcnt:
-//         000 =  0
-//         001 =  1
-//         011 = -1
-//         100 = -8
-//         101 = -16
-//         100 = shamt
-//         111 = -shamt
-//   3:2 - spos:
-//          00 =   0
-//          01 =  -1
-//          10 = shamt
-//          11 = -mcnt-1
-//     1 - sand
-//     0 - sxor
-
-typedef struct packed {
-   logic [1:0] rcnt;
-   logic [2:0] mpos;
-   logic [2:0] mcnt;
-   logic [1:0] spos;
-   logic       sand;
-   logic       sxor;
-} shiftop_t;
 
 module shifter
   #(

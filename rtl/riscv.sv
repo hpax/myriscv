@@ -2,6 +2,9 @@
 // Common RISC-V definitions
 //
 
+`ifndef _RISCV_SV
+`define _RISCV_SV 1
+
 // Base opcode spaces
 typedef enum logic [6:0] {
 	LOAD     = 7'b0000011,
@@ -128,3 +131,5 @@ typedef enum logic [31:0] {
 
 	     MCAUSE_IRQ     = 32'h8000_0000
 } csr_mcause_t;
+
+`endif

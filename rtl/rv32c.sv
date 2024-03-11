@@ -8,6 +8,8 @@
 // an attempt at expanding relative fields.
 //
 
+`include "myriscv.vh"
+
 module rv32c_comb
    (
     input [31:0]  d,		// Input; [31:16] used only for passthrough

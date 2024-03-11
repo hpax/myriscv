@@ -8,8 +8,8 @@
 // memop is encoded as:
 // 00 - not memop
 // 01 - store
-// 10 - signed load
-// 11 - unsigned load
+// 10 - unsigned load
+// 11 - signed load
 //
 // This unit supports misaligned accesses by breaking them into two if they
 // cross a word boundary.
@@ -26,24 +26,23 @@ module ldst (
 		input [31:0]  addr,	// address
 		input [31:0]  src2,	// store data
 
-		output [31:0] dout,	// Load data output
+		output reg [31:0] dout,	// Load data output
+		output reg [3:0]  dout_wbe, // Load data output enables
 
 		// Set if the pipeline should be held due to misaligned
 		// input or waiting for data
 		output	      busy,
-		output [3:0]  q_valid, // Load data output strobes
 
 		output [31:0] dbus_a,
 		output	      dbus_valid,
 		output	      dbus_wrq,
-		output [3:0]  dbus_wbe,
-		output [31:0] dbus_wdata,
+		output reg [3:0]  dbus_wbe,
+		output reg [31:0] dbus_wdata,
 		input [31:0]  dbus_rdata,
 		input	      dbus_ready
 		);
 
-   // If we are handling the upper word, this is the starting byte
-   // of the lower word.
+   // Handling the upper word of a misaligned operation?
    reg			      upper_word;
 
    // Each of the load byte MUXes can take data from any byte,
@@ -71,6 +70,15 @@ module ldst (
 	endcase // priority casez ({dbus_valid, size, lower_byte})
      end
 
+   assign busy = !dbus_ready | (misaligned & ~upper_word);
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+       upper_word <= 1'b0;
+     end else if (clken) begin
+	upper_word <= dbus_valid & dbus_ready & misaligned & ~upper_word;
+     end
+
    logic [3:0] bytemask;
    always @(*)
      unique casez ({size, addr[1:0], upper_word})
@@ -96,12 +104,14 @@ module ldst (
        default:    bytemask <= 4'bxxxx; // Invalid
      endcase // unique casez ({size, addr[1:0], upper_word})
 
+   // XXX: this is wrong for a misaligned load
+   assign dout_wbe = 4'b1111;
+
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
 	  dbus_wdata   <= 32'bx;
 	  dbus_wbe     <= 4'b0;
-	  upper_word   <= 1'b0;
 	  ld_ext       <= 4'bx;
 	  ld_uns       <= 1'bx;
 	  ld_src       <= 8'bx;
@@ -123,7 +133,7 @@ module ldst (
 	    end // if (dbus_wrq)
 
 	  // Set up load MUXes
-	  ld_uns <= memop[1];
+	  ld_uns <= ~memop[1];
 
 	  unique casez (size)
 	    2'b00:   ld_ext <= 4'b1110;

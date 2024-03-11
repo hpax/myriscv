@@ -5,32 +5,8 @@
 //
 // Note: M/Zmmul is done separately due to timing.
 //
-typedef enum logic [4:0] {
-	ALUSRC_ERR,		// Invalid instruction
-	ALUSRC_ADD,
-	ALUSRC_LOGIC,
-	ALUSRC_SET,		// Set to result of compare
-	ALUSRC_MINMAX,		// compare ? src1 : src2
-        ALUSRC_BITCNT,
-        ALUSRC_ORC,
-	ALUSRC_REV,
-	ALUSRC_ZICOND,
-	// These units need to get MUXed in as late as possible
-	ALUSRC_SHIFT = 5'b10000
-} alusrc_t;
 
-typedef struct packed {
-   alusrc_t    unit;
-   logic       invert;
-   logic [1:0] shadd;
-   logic [1:0] bitop;
-   logic	bc_l;		// bitcnt count leading
-   logic	bc_t;		// bitcnt count trailing
-   logic	bc_s;		// bitcnt count set
-   logic [1:0] msign;
-   shiftop_t   shiftop;
-   cond_t      cond;
-} aluctl_t;
+`include "myriscv.vh"
 
 module alu_decode
 (
@@ -185,9 +161,9 @@ module adder (
 	      input [31:0] src2,
 	      input [1:0]  src1shift,
 	      input        sub,
-	      output [31:0] q,
-	      output       ucout, // Unsigned (true) carry
-	      output       scout  // Signed carry (for signed comparison)
+	      output reg [31:0] q,
+	      output reg   ucout, // Unsigned (true) carry
+	      output reg   scout  // Signed carry (for signed comparison)
 	      );
    always @(*)
      begin
@@ -213,7 +189,7 @@ module bitwise (
 		input [31:0]  src1,
 		input [31:0]  src2,
 		input [1:0]   op,
-		output [31:0] q
+		output reg [31:0] q
 		);
    always @(*)
      begin
@@ -376,9 +352,12 @@ module alu
    // but doing so (in the adder unit) *might* optimize the generation
    // of add_scarry. Experiment.
    //
+   // XXX: it seems combining this with the adder is really slow.
+   // Is this better?
+   //
    wire			  cmp_eq  = (src1 == src2);
-   wire			  cmp_lts = ~add_scarry;
-   wire			  cmp_ltu = ~add_ucarry;
+   wire			  cmp_lts = $signed(src1) < $signed(src2);
+   wire			  cmp_ltu = src1 < src2;
    logic		  cmp_lt;
 
    always @(*) begin
@@ -441,7 +420,7 @@ module alu
 	  ALUSRC_SET:    dst = cmp_out;
 	  ALUSRC_MINMAX: if (core.WITH_minmax) dst = minmax_out;
 	  ALUSRC_SHIFT:  dst = shift_out;
-	  ALUSRC_BITCNT: dst = bitcnt_out;
+	  //ALUSRC_BITCNT: if (core.WITH_bitcnt) dst = bitcnt_out;
 	  ALUSRC_ORC:    dst = orc_out;
 	  ALUSRC_REV:    dst = rev_out;
 	  ALUSRC_ZICOND: if (core.WITH_Zicond) dst = zicond_out;

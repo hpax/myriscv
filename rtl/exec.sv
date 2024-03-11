@@ -2,7 +2,7 @@
 // This handles the backend of the pipe; the E, M and W pipeline stages.
 //
 
-`include "config.vh"
+`include "myriscv.vh"
 
 // Compute the new value for a register that has both a write mask and
 // a fixed mask (all bits outside the fixed mask are forced to zero.)
@@ -22,36 +22,45 @@ module backend #(
   parameter bit	ALU_EARLY_DECODE
 		)
 (
- input		      rst_n,
- input		      clk,
- input		      clken,
+ input		       rst_n,
+ input		       clk,
+ input		       clken,
 
- input		      decoded_insn_t d_op,
+ input		       decoded_insn_t d_op,
 
  // IRQ pending bitmask. Note that there is no IRQ 0 since that vector
  // is reserved for exceptions; e_intack == 0 means no interrupt taken.
- input  [NUM_IRQS:1]   d_irqs,
+ input [NUM_IRQS:1]    d_irqs,
  output [IRQ_BITS-1:0] e_intack,
 
- input		      e_valid_i,
- input		      e_stall,
- output		      e_valid_o,
- output		      e_kill,
- output [31:0]	      e_restartpc, // Address for the front end after kill
- output		      e_busy,
- input		      e_rs1_m,
- input		      e_rs1_w,
- input		      e_rs2_m,
- input		      e_rs2_w,
+ input		       e_valid_i,
+ input		       e_stall,
+ output reg	       e_valid_o,
+ output	reg	       e_kill,
+ output reg [31:0]     e_restartpc, // Address for the front end after kill
+ output	reg	       e_busy,
+ input		       e_rs1_m,
+ input		       e_rs1_w,
+ input		       e_rs2_m,
+ input		       e_rs2_w,
 
- input		      m_valid_i,
- input		      m_stall,
- output		      m_valid_o,
- output		      m_busy,
+ input		       m_valid_i,
+ input		       m_stall,
+ output	reg	       m_valid_o,
+ output	reg	       m_busy,
 
  // Data output, unregistered and registered
- output [31:0]	      e_dout,
- output reg [31:0]    m_din
+ output reg [31:0]     e_dout,
+ output reg [31:0]     m_din,
+
+ // Data bus from ldst unit
+ output reg [31:0]     dbus_a,
+ output reg	       dbus_valid,
+ output	reg	       dbus_wrq,
+ output reg [3:0]      dbus_wbe,
+ output reg [31:0]     dbus_wdata,
+ input [31:0]	       dbus_rdata,
+ input		       dbus_ready
  );
 
    wire		   e_clken = clken & e_valid_i & ~e_stall;
@@ -60,17 +69,19 @@ module backend #(
 
    wire [31:0]	   e_rs1_data;
    wire [31:0]	   e_rs2_data;
-   wire [31:0]	   m_dout;
-   wire [3:0]	   m_out_be = 4'b1111;
+   reg [31:0]	   m_dout;
+   reg [3:0]	   m_dout_be;
 
    // E-stage pipeline synchronization signals
    assign e_valid_o = e_clken & e_valid_i & ~e_stall & ~e_kill;
    assign e_busy    = 1'b0;
 
-   // E-stage instruction
+   // E-stage instruction -- duplicates pipeline.sv, fix
    decoded_insn_t e_op;
-   always @(posedge clk)
-     if (e_clken)
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n)
+       e_op <= reset_op(core.RESET_PC);
+     else if (e_clken)
        e_op <= d_op;
 
    // M-stage pipeline synchronization signals
@@ -79,7 +90,9 @@ module backend #(
    // M-stage instruction
    decoded_insn_t m_op;
    always @(posedge clk)
-     if (m_clken)
+     if (~rst_n)
+       m_op <= reset_op(core.RESET_PC);
+     else if (m_clken)
        m_op <= e_op;
 
    // Latched output to M stage; also used by the bypass network
@@ -100,17 +113,17 @@ module backend #(
      .rd       ( m_op.rd ),
      .rd_data  ( m_dout ),
      .rd_wren  ( m_valid_o ),
-     .rd_wbe   ( m_out_be )
+     .rd_wbe   ( m_dout_be )
       );
 
    reg [31:0]	      w_din;
    always @(posedge clk)
      if (w_clken)
 	 begin
-	    if (m_out_be[0]) w_din[7:0]   <= m_dout[7:0];
-	    if (m_out_be[1]) w_din[15:8]  <= m_dout[15:8];
-	    if (m_out_be[2]) w_din[23:16] <= m_dout[23:16];
-	    if (m_out_be[3]) w_din[31:24] <= m_dout[31:24];
+	    if (m_dout_be[0]) w_din[7:0]   <= m_dout[7:0];
+	    if (m_dout_be[1]) w_din[15:8]  <= m_dout[15:8];
+	    if (m_dout_be[2]) w_din[23:16] <= m_dout[23:16];
+	    if (m_dout_be[3]) w_din[31:24] <= m_dout[31:24];
 	 end
 
    // GPR bypass network/operand selection
@@ -188,6 +201,7 @@ module backend #(
    multiplier mult (.rst_n(rst_n), .clk(clk),
      .e_valid(e_clken && e_op.itype == INSN_MUL),
      .e_op(e_op.funct3[1:0]),
+     .e_src1(e_src1), .e_src2(e_src2),
      .m_mul_o(m_mul_o), .m_mull_o(m_mull_o));
 
    //
@@ -327,7 +341,7 @@ module backend #(
 	  end
 	endcase
 
-	if ((new_pc & ~core.PC_MASK) && !trap_irq) begin
+	if (core.TRAP_BADPC && (new_pc & ~core.PC_MASK) && !trap_irq) begin
 	   trap_irq    = 1'b1;	// PC out of bounds
 	   trap_mcause = MCAUSE_BADPC;
 	end
@@ -346,7 +360,7 @@ module backend #(
 	  mtvec <= rwmz(mtvec,  e_csr_wval, core.MTVEC_WMASK, core.PC_MASK);
 
 	if (trap_irq)
-	  mepc  <= e_op.pc;
+	  mepc  <= e_op.pc & core.PC_MASK;
 	else if (csrw_mepc)
 	  mepc  <= rwmz(mepc,   e_csr_wval, core.PC_MASK,     core.PC_MASK);
 
@@ -362,7 +376,7 @@ module backend #(
      end
 
    //
-   // Output data MUX
+   // E stage output data MUX
    //
    always @(*)
      unique case (e_op.itype)
@@ -372,5 +386,57 @@ module backend #(
        INSN_AGU:  e_dout = e_addr;
        INSN_CSR:  e_dout = e_csr_rval;
        default:   e_dout = 32'bx; // No output, or delivered from M stage
+     endcase
+
+   //
+   // Load/store unit
+   //
+   wire ldst_valid = e_valid_i &&
+	(e_op.itype == INSN_LD || e_op.itype == INSN_ST);
+
+   wire [31:0] ldst_dout;
+   wire [3:0]  ldst_dout_wbe;
+   wire	       ldst_busy;
+
+   ldst ldst (
+     .rst_n		(rst_n),
+     .clk		(clk),
+     .clken		(clken),
+     .valid		(ldst_valid),
+     .memop		({~e_op.itype[0], e_op.funct3[2]}),
+     .size		(e_op.funct3[1:0]),
+     .addr		(e_addr),
+     .src2		(e_src2),
+     .dout		(ldst_dout),
+     .dout_wbe		(ldst_dout_wbe),
+     .busy		(ldst_busy),
+     .dbus_a		(dbus_a),
+     .dbus_valid	(dbus_valid),
+     .dbus_wrq		(dbus_wrq),
+     .dbus_wbe		(dbus_wbe),
+     .dbus_wdata	(dbus_wdata),
+     .dbus_rdata	(dbus_rdata),
+     .dbus_ready	(dbus_ready)
+     );
+
+   assign m_busy = ldst_busy;
+
+   //
+   // M stage output MUX
+   //
+   always @(*)
+     unique casez (m_op.itype)
+       INSN_LD: begin
+	  m_dout    = ldst_dout;
+	  m_dout_be = ldst_dout_wbe;
+       end
+       INSN_MUL: begin
+	  m_dout    = m_mul_o;
+	  m_dout_be = 4'b1111;
+       end
+       default: begin
+	  m_dout    = m_din;
+	  m_dout_be = 4'b1111;
+       end
      endcase
 endmodule // execute

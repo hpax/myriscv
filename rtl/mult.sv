@@ -11,6 +11,9 @@
 // The clock enable MUST BE HONORED; the outputs MUST NOT CHANGE if the
 // clock enable is disabled.
 //
+`define RAW
+
+`ifdef RAW
 module mult
   #(
     parameter width = 32,
@@ -53,6 +56,48 @@ module mult
    assign q  = (~high_q & mux_late) ? l_q : h_q;
    assign ql = l_q;
 endmodule // mult
+`else
+module mult
+  #(
+    parameter width = 32,
+    parameter bit mux_late = 1'b1 // High/low as combinatorial MUX
+    )
+   (
+  input			 rst_n,
+  input			 clk,
+  input			 clken,
+
+  input [width-1:0]	 src1,
+  input			 ssign1, // src1 is signed
+  input [width-1:0]	 src2,
+  input			 ssign2, // src2 is signed
+  input			 high, // q should contains the high half result
+
+  output	[width-1:0] q,
+  output	[width-1:0] ql
+    );
+
+   wire [width-1:0]	      l_q;
+   wire [width-1:0]	      h_q;
+   reg			      high_q;
+
+   altmult am (
+     .clock0  ( clk ),
+     .ena0    ( clken ),
+     .dataa_0 ( src1 ),
+     .datab_0 ( src2 ),
+     .signa   ( ssign1 ),
+     .signb   ( ssign2 ),
+     .result  ( {h_q, l_q} )
+     );
+
+   always @(posedge clk)
+     high_q <= high;
+
+   assign q  = ~high_q ? l_q : h_q;
+   assign ql = l_q;
+endmodule // mult
+`endif
 
 module multiplier
   #(

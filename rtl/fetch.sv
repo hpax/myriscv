@@ -57,27 +57,30 @@ endmodule
 
 module fetch
   (
-   input	 clk,
-   input	 clken,
-   input	 rst_n,
+   input	     clk,
+   input	     clken,
+   input	     rst_n,
 
-   input	 restart,	// Killed in the E stage
-   input  [31:0] restart_pc,	// PC to restart from
-   output [31:0] ibus_a,
-   input  [31:0] ibus_rdata,
-   output	 ibus_valid,
-   input	 ibus_ready,
+   input	     restart, // Killed in the E stage
+   input [31:0]	     restart_pc, // PC to restart from
+   output reg [31:0] ibus_a,
+   input [31:0]	     ibus_rdata,
+   output reg	     ibus_valid,
+   input	     ibus_ready,
 
-   input	 stall,
-   output [31:0] insn,
-   output	 valid_o,
-   output	 insn_pred_taken,
-   output [31:0] insn_pc
+   input	     stall,
+   output reg [31:0] insn, // Actually d_din
+   output reg	     valid_o, // Actually d_valid_i
+   output reg	     insn_pred_taken,
+   output reg [31:0] insn_pc
    );
 
    reg [31:0]	 next_pc;
    reg [15:0]	 pref_16;
    reg		 pref_valid;
+
+   reg [31:0]	 this_pc;
+   reg		 this_valid;
 
    logic [31:0]	 this_insn;
    logic	 have_16;
@@ -127,29 +130,33 @@ module fetch
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
-	  ibus_a          <= core.RESET_PC & core.PC_MASK & ~32'b11;
-	  insn_pc         <= core.RESET_PC & core.PC_MASK;
-	  next_pc         <= core.RESET_PC & core.PC_MASK;
-	  valid_o      <= 1'b0;
-	  insn_pred_taken <= 1'bx;
-	  insn            <= 32'bx;
-	  pref_valid      <= 1'b0;
-	  pref_16         <= 16'bx;
-	  ibus_valid      <= 1'b0;
+	  ibus_a 	  <= core.RESET_PC & core.PC_MASK & ~32'b11;
+	  insn_pc 	  <= core.RESET_PC & core.PC_MASK;
+	  next_pc 	  <= core.RESET_PC & core.PC_MASK;
+	  this_pc 	  <= core.RESET_PC & core.PC_MASK;
+	  valid_o 	  <= 1'b0;
+	  this_valid      <= 1'b0;
+	  insn_pred_taken <= 1'b0;
+	  insn 		  <= 32'bx;
+	  pref_valid 	  <= 1'b0;
+	  pref_16 	  <= 16'bx;
+	  ibus_valid 	  <= 1'b0;
        end
      else if (clken)
        begin
 	  if (restart)
 	    begin
-	       ibus_a     <= restart_pc & core.PC_MASK & ~32'b11;
-	       insn_pc    <= restart_pc & core.PC_MASK;
-	       next_pc    <= restart_pc & core.PC_MASK;
-	       valid_o <= 1'b0;
-	       insn_pred_taken <= 1'bx;
-	       insn       <= 32'bx;
-	       pref_valid <= 1'b0;
-	       pref_16    <= 16'bx;
-	       ibus_valid <= 1'b1;
+	       ibus_a 	       <= restart_pc & core.PC_MASK & ~32'b11;
+	       insn_pc 	       <= restart_pc & core.PC_MASK;
+	       next_pc 	       <= restart_pc & core.PC_MASK;
+	       this_pc 	       <= restart_pc & core.PC_MASK;
+	       this_valid      <= 1'b0;
+	       valid_o 	       <= 1'b0;
+	       insn_pred_taken <= 1'b0;
+	       insn 	       <= 32'bx;
+	       pref_valid      <= 1'b0;
+	       pref_16 	       <= 16'bx;
+	       ibus_valid      <= 1'b1;
 	    end
 	  else
 	    begin
@@ -162,10 +169,11 @@ module fetch
 
 	       if (advance)
 		 begin
-		    insn            <= this_insn;
-		    insn_pc         <= next_pc;
-		    valid_o      <= 1'b1;
-		    insn_pred_taken <= br_take;
+		    insn	    <= this_insn;
+		    insn_pc	    <= this_pc;
+		    valid_o	    <= this_valid;
+		    this_pc         <= next_pc;
+		    insn_pred_taken <= br_take; // Should this be latched?
 		    if (br_take)
 		      pc_incr = br_offset;
 		    else if (is_16)
@@ -175,8 +183,10 @@ module fetch
 		 end
 	       else if (!stall)
 		 begin
-		    valid_o <= 1'b0; // Consumed instruction but queue empty
-		    insn <= 32'bx;
+		    // Consumed instruction but queue empty
+		    insn	    <= this_insn;
+		    insn_pc         <= this_pc;
+		    valid_o	    <= 1'b0;
 		    insn_pred_taken <= 1'bx;
 		 end
 
@@ -200,6 +210,10 @@ module fetch
 	       else if (pref_valid & is_16 & !next_pc[0])
 		 begin
 		    ibus_valid <= 1'b0;
+		 end
+	       else
+		 begin
+		    ibus_valid <= 1'b1;
 		 end
 	    end
        end // if (clken)
