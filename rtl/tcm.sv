@@ -15,6 +15,7 @@ module tcm
    (
     input		 rst_n,
     input		 clk,
+    input		 clken,
 
     input [sizebits-1:0] ibus_a,
     input		 ibus_valid,
@@ -44,11 +45,13 @@ module tcm
        $readmemh({init_file}, mem);
    end
 
+   // XXX: clken on the reads breaks something; figure that out
+   // later...
    always @(posedge clk) begin
       ibus_rdata <= mem[ia];
       dbus_rdata <= mem[da];
 
-      if (wren) begin
+      if (clken & wren) begin
 	 if (dbus_wbe[0]) mem[da][0] <= dbus_wdata[7:0];
 	 if (dbus_wbe[1]) mem[da][1] <= dbus_wdata[15:8];
 	 if (dbus_wbe[2]) mem[da][2] <= dbus_wdata[23:16];
@@ -60,7 +63,7 @@ module tcm
      if (~rst_n) begin
 	ibus_ready <= 1'b0;
 	dbus_ready <= 1'b0;
-     end else begin
+     end else if (clken) begin
 	ibus_ready <= ibus_valid;
 	dbus_ready <= dbus_valid;
      end
@@ -74,6 +77,7 @@ module tcm
    (
     input		 rst_n,
     input		 clk,
+    input		 clken,
 
     input [sizebits-1:0] ibus_a,
     input		 ibus_valid,
@@ -89,8 +93,14 @@ module tcm
     output reg		 dbus_ready
     );
 
-   assign ibus_ready = ibus_valid;
-   assign dbus_ready = dbus_valid;
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	ibus_ready <= 1'b0;
+	dbus_ready <= 1'b0;
+     end else if (clken) begin
+	ibus_ready <= ibus_valid;
+	dbus_ready <= dbus_valid;
+     end
 
    tcm_alt tcm_alt (
      .address_a	( dbus_a[sizebits-1:2] ),

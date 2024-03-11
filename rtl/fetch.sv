@@ -1,9 +1,10 @@
 module predict_branch
   (
-   input [31:0]		    this_insn,
-   input [31:0]		    next_pc,
-   output reg		    take,
-   output reg signed [31:0] offset
+   input [31:0]	     this_insn,
+   input	     is_16,	// This can differ for fused NOPs
+   input [31:0]	     this_pc,
+   output reg	     take,
+   output reg [31:0] next_pc
    );
 
    wire [31:0]	 i = this_insn;
@@ -30,6 +31,12 @@ module predict_branch
 
    always @(*)
      begin
+	logic absolute;
+	logic [31:0] offset;
+
+	absolute = 1'b0;	// Not yet supported
+	offset   = 32'bx;
+
 	unique casez ({i[15:13], i[6:0]})
 	  10'b?01_?????01: begin	// C.J(AL)
 	     take   = 1'b1;
@@ -47,11 +54,20 @@ module predict_branch
 	     take   = b_imm[12];	// Predict taken if backwards
 	     offset = b_imm;
 	  end
-	  default: begin
+	  default: begin		// Anything else
 	     take   = 1'b0;
-	     offset = 32'bx;
 	  end
 	endcase
+
+	if (~take) begin
+	   absolute = 1'b0;
+	   offset = is_16 ? 3'd2 : 3'd4; // Normal successor
+	end
+
+	if (absolute)
+	  next_pc = offset & core.PC_MASK;
+	else
+	  next_pc = (this_pc + offset) & core.PC_MASK;
      end
 endmodule
 
@@ -75,23 +91,28 @@ module fetch
    output reg [31:0] insn_pc
    );
 
-   reg [31:0]	 next_pc;
-   reg [15:0]	 pref_16;
-   reg		 pref_valid;
+   wire [31:0]	     next_pc;
+   reg [15:0]	     pref_16;
+   reg		     pref_valid;
 
-   reg [31:0]	 this_pc;
-   reg		 this_valid;
+   reg [31:0]	     this_pc;
 
-   logic [31:0]	 this_insn;
-   logic	 have_16;
-   logic	 have_32;
-   logic	 is_16;
+   logic [31:0]	     this_insn;
+   logic	     this_valid;
+   logic	     have_16;
+   logic	     have_32;
+   logic	     is_16;
 
-   wire		     br_take;
-   wire [31:0]	     br_offset;
+   wire		 br_take;
+   wire [31:0]	 br_offset;
    // Branch prediction
-   predict_branch pred(.this_insn(this_insn), .next_pc(next_pc),
-     .take(br_take), .offset(br_offset));
+   predict_branch pred (
+     .this_insn	(this_insn),
+     .is_16	(is_16),
+     .this_pc	(this_pc),
+     .take	(br_take),
+     .next_pc	(next_pc)
+     );
 
    // Opportunistically skip padding c.nops by treating them as
    // the upper part of a 32-bit instruction for the purpose of
@@ -100,21 +121,22 @@ module fetch
       is_cnop = !cinst[15:13] && !cinst[11:7] && cinst[1:0] == 2'b01;
    endfunction
 
-   wire		     have_data = ibus_valid & ibus_ready;
+   reg		     ibus_valid_q;
+   wire		     have_data = ibus_valid_q & ibus_ready;
 
    always @(*)
      begin
-	if (!next_pc[1])
+	if (!this_pc[1])
 	  begin
-	     this_insn = ibus_rdata;
-	     have_16   = have_data;
-	     have_32   = have_data;
+	     this_insn	= ibus_rdata;
+	     have_16	= have_data;
+	     have_32	= have_data;
 	  end
 	else if (pref_valid)
 	  begin
-	     this_insn = { ibus_rdata[15:0], pref_16 };
-	     have_16 = 1'b1;
-	     have_32 = have_data;
+	     this_insn	= { ibus_rdata[15:0], pref_16 };
+	     have_16	= 1'b1;
+	     have_32	= have_data;
 	  end
 	else
 	  begin
@@ -125,47 +147,51 @@ module fetch
 
 	is_16 = !(this_insn[1:0] == 2'b11) &&
 		!(have_32 & is_cnop(this_insn[31:16]));
+
+	this_valid = this_insn[1:0] == 2'b11 ? have_32 : have_16;
      end
+
+   assign ibus_a = this_valid ? next_pc : this_pc;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
-	  ibus_a 	  <= core.RESET_PC & core.PC_MASK & ~32'b11;
-	  insn_pc 	  <= core.RESET_PC & core.PC_MASK;
-	  next_pc 	  <= core.RESET_PC & core.PC_MASK;
-	  this_pc 	  <= core.RESET_PC & core.PC_MASK;
-	  valid_o 	  <= 1'b0;
-	  this_valid      <= 1'b0;
+	  insn_pc	  <= core.RESET_PC & core.PC_MASK;
+	  this_pc	  <= core.RESET_PC & core.PC_MASK;
+	  valid_o	  <= 1'b0;
 	  insn_pred_taken <= 1'b0;
-	  insn 		  <= 32'bx;
-	  pref_valid 	  <= 1'b0;
-	  pref_16 	  <= 16'bx;
-	  ibus_valid 	  <= 1'b0;
+	  insn		  <= 32'bx;
+	  pref_valid	  <= 1'b0;
+	  pref_16	  <= 16'bx;
+	  ibus_valid	  <= 1'b0;
+	  ibus_valid_q	  <= 1'b0;
        end
      else if (clken)
        begin
-	  if (restart)
+	  // Worst case, refetch the same datum. It should be harmless
+	  // with TCM or an icache, but otherwise it might be good to be
+	  // a bit smarter here.
+	  ibus_valid <= 1'b1;
+
+	  if (restart & !stall)
 	    begin
-	       ibus_a 	       <= restart_pc & core.PC_MASK & ~32'b11;
-	       insn_pc 	       <= restart_pc & core.PC_MASK;
-	       next_pc 	       <= restart_pc & core.PC_MASK;
-	       this_pc 	       <= restart_pc & core.PC_MASK;
-	       this_valid      <= 1'b0;
-	       valid_o 	       <= 1'b0;
+	       insn_pc	       <= restart_pc & core.PC_MASK;
+	       this_pc	       <= restart_pc & core.PC_MASK;
+	       valid_o	       <= 1'b0;
 	       insn_pred_taken <= 1'b0;
-	       insn 	       <= 32'bx;
+	       insn	       <= 32'bx;
 	       pref_valid      <= 1'b0;
-	       pref_16 	       <= 16'bx;
-	       ibus_valid      <= 1'b1;
+	       pref_16	       <= 16'bx;
+	       ibus_valid_q    <= 1'b0; // Discard mispredicted data
 	    end
 	  else
 	    begin
 	       logic advance;
-	       logic [31:0] pc_incr;
-	       logic [31:0] pc_updated;
 
-	       pc_incr = 32'b0;
-	       advance = !stall & (have_32 | (have_16 & is_16));
+	       ibus_valid_q <= ibus_valid;
+
+	       advance	     = this_valid & !stall;
+	       valid_o	    <= advance;
 
 	       if (advance)
 		 begin
@@ -174,12 +200,6 @@ module fetch
 		    valid_o	    <= this_valid;
 		    this_pc         <= next_pc;
 		    insn_pred_taken <= br_take; // Should this be latched?
-		    if (br_take)
-		      pc_incr = br_offset;
-		    else if (is_16)
-		      pc_incr = 3'd2;
-		    else
-		      pc_incr = 3'd4;
 		 end
 	       else if (!stall)
 		 begin
@@ -187,34 +207,21 @@ module fetch
 		    insn	    <= this_insn;
 		    insn_pc         <= this_pc;
 		    valid_o	    <= 1'b0;
-		    insn_pred_taken <= 1'bx;
+		    insn_pred_taken <= 1'b0;
 		 end
 
-	       pc_updated = (next_pc + pc_incr) & core.PC_MASK;
-	       next_pc   <= pc_updated;
-
-	       if (advance & br_take)
-		 begin
-		    pref_valid <= 1'b0;
-		    ibus_a     <= pc_updated & ~2'b11;
-		    ibus_valid <= 1'b1;
-		 end
-	       else if ((advance & !(is_16 & !next_pc[1])) |
-			(have_data & !is_16 & next_pc[1]))
-		 begin
-		    pref_16    <= ibus_rdata[31:16];
-		    pref_valid <= is_16 | next_pc[1];
-		    ibus_a     <= (ibus_a + 3'd4) & core.PC_MASK;
-		    ibus_valid <= 1'b1;
-		 end
-	       else if (pref_valid & is_16 & !next_pc[0])
-		 begin
-		    ibus_valid <= 1'b0;
-		 end
-	       else
-		 begin
-		    ibus_valid <= 1'b1;
-		 end
+	       if (advance) begin
+		  if (br_take) begin
+		     pref_valid <= 1'b0;
+		     pref_16    <= 16'bx;
+		  end else begin
+		     if (!(is_16 & ~this_pc[1]) ||
+		       (have_data & ~is_16 & this_pc[1])) begin
+			pref_16    <= ibus_rdata[31:16];
+			pref_valid <= is_16 | this_pc[1];
+		     end
+		  end
+	       end
 	    end
        end // if (clken)
 endmodule // fetch

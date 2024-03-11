@@ -143,6 +143,18 @@ module core (rst_n, clk, clken,
 	end
      end
 
+   // This is necessary to avoid a combinatorial path
+   reg dbus_ready_err;
+   reg ibus_ready_err;
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	dbus_ready_err <= 1'b0;
+	ibus_ready_err <= 1'b0;
+     end else begin
+	dbus_ready_err <= dbus_err_sel;
+	ibus_ready_err <= ibus_err_sel;
+     end
+
    generate
       if (tcm_size_bits) begin
 	 tcm #(
@@ -151,6 +163,7 @@ module core (rst_n, clk, clken,
 	   ) tcm (
 	   .rst_n	(rst_n),
 	   .clk		(clk),
+	   .clken	(clken),
 	   .ibus_a	(ibus_a),
 	   .ibus_valid	(ibus_valid),
 	   .ibus_rdata	(ibus_rdata_tcm),
@@ -206,12 +219,37 @@ module core (rst_n, clk, clken,
 	end
      end
 
-   assign dbus_ready = dbus_err_sel | dbus_ready_io |
+   assign dbus_ready = dbus_ready_err | dbus_ready_io |
 		       dbus_ready_tcm | dbus_ready_ram;
-   assign ibus_ready = ibus_err_sel | ibus_ready_tcm | ibus_ready_ram;
+   assign ibus_ready = ibus_ready_err | ibus_ready_tcm | ibus_ready_ram;
+
+   reg dbus_io_sel_q;
+   reg dbus_ram_sel_q;
+   reg dbus_tcm_sel_q;
+
+   reg ibus_ram_sel_q;
+   reg ibus_tcm_sel_q;
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	dbus_io_sel_q  <= 1'bx;
+	dbus_ram_sel_q <= 1'bx;
+	dbus_tcm_sel_q <= 1'bx;
+
+	ibus_ram_sel_q <= 1'bx;
+	ibus_tcm_sel_q <= 1'bx;
+     end else if (clken) begin
+	dbus_io_sel_q  <= dbus_io_sel;
+	dbus_ram_sel_q <= dbus_ram_sel;
+	dbus_tcm_sel_q <= dbus_tcm_sel;
+
+	ibus_ram_sel_q <= ibus_ram_sel;
+	ibus_tcm_sel_q <= ibus_tcm_sel;
+     end
+
    always @(*)
      begin
-	unique case ({dbus_io_sel, dbus_ram_sel, dbus_tcm_sel})
+	unique case ({dbus_io_sel_q, dbus_ram_sel_q, dbus_tcm_sel_q})
 	  3'b000: dbus_rdata  = INVALID_DATA;
 	  3'b001: dbus_rdata  = dbus_rdata_tcm;
 	  3'b010: dbus_rdata  = dbus_rdata_ram;
@@ -219,7 +257,7 @@ module core (rst_n, clk, clken,
 	  default: dbus_rdata = 32'bx;
 	endcase
 
-	unique case ({ibus_ram_sel, ibus_tcm_sel})
+	unique case ({ibus_ram_sel_q, ibus_tcm_sel_q})
 	  2'b00: ibus_rdata   = INVALID_DATA;
 	  2'b01: ibus_rdata   = ibus_rdata_tcm;
 	  2'b10: ibus_rdata   = ibus_rdata_ram;
@@ -289,6 +327,7 @@ module core (rst_n, clk, clken,
      end
 
    // Backend units (E, M, and W stages)
+   decoded_insn_t e_op;
    wire	       e_valid_i;
    wire	       e_stall;
    wire	       e_valid_o;
@@ -300,6 +339,7 @@ module core (rst_n, clk, clken,
    wire	       e_rs2_m;
    wire	       e_rs2_w;
 
+   decoded_insn_t m_op;
    wire	       m_valid_i;
    wire	       m_stall;
    wire	       m_valid_o;
@@ -326,6 +366,7 @@ module core (rst_n, clk, clken,
      .e_stall		(e_stall),
      .e_valid_o		(e_valid_o),
      .e_kill		(e_kill),
+     .e_op		(e_op),
      .e_restartpc	(e_restartpc),
      .e_busy		(e_busy),
      .e_rs1_m		(e_rs1_m),
@@ -335,6 +376,7 @@ module core (rst_n, clk, clken,
 
      .m_valid_i		(m_valid_i),
      .m_stall		(m_stall),
+     .m_op		(m_op),
      .m_valid_o		(m_valid_o),
      .m_busy		(m_busy),
 
@@ -373,9 +415,9 @@ module core (rst_n, clk, clken,
      .e_op	(e_op),
      .m_op	(m_op),
 
-     .d_ready	(1'b1 /*d_ready*/),
-     .e_ready	(1'b1 /*e_ready*/),
-     .m_ready	(1'b1 /*m_ready*/),
+     .d_busy	(d_busy),
+     .e_busy	(e_busy),
+     .m_busy	(m_busy),
 
      .e_kill	(e_kill),
      .f_restart	(f_restart),

@@ -5,7 +5,7 @@
 `timescale 1 ns / 1 ps
 
 module test #(
-  parameter int	NUM_IRQS = 1
+  parameter int	NUM_IRQS = 31
    );
 
    localparam int IRQ_BITS = $clog2(NUM_IRQS+1);
@@ -38,6 +38,7 @@ module test #(
      .io_addr	( io_addr ),
      .io_wdata	( io_wdata ),
      .io_valid	( io_valid ),
+     .io_wrq	( io_wrq ),
      .io_wbe	( io_wbe ),
      .io_ready	( io_ready ),
      .io_rdata	( io_rdata ),
@@ -58,6 +59,8 @@ module test #(
    always #1 clk <= ~clk;
 
    assign irq = 'b0;
+   assign io_rdata = io_addr;
+   assign io_ready = io_valid;
 
    always @(posedge clk)
      begin

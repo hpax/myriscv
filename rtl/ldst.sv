@@ -53,28 +53,23 @@ module ldst (
 
    assign dbus_a[31:2] = addr[31:2] + upper_word;
    assign dbus_a[1:0]  = 2'b00;
-   assign dbus_valid   = valid & |memop;
-   assign dbus_wrq     = valid & memop == 2'b01;
+   assign dbus_valid   = rst_n & valid & |memop;
+   assign dbus_wrq     = rst_n & valid & memop == 2'b01;
 
    logic		      misaligned;
    always @(*)
-     begin
-	priority casez ({dbus_valid, size, dbus_a[1:0]})
-	  5'b1_00_??: misaligned = 1'b0;
-	  5'b1_01_0?: misaligned = 1'b0;
-	  5'b1_01_11: misaligned = 1'b1;
-	  5'b1_10_00: misaligned = 1'b0;
-	  5'b1_10_??: misaligned = 1'b1;
-	  5'b1_11_??: misaligned = 1'bx; // Invalid
-	  5'b0_??_??: misaligned = 1'b0; // Not a memop
-	endcase // priority casez ({dbus_valid, size, lower_byte})
-     end
+     unique case (size)
+       2'b00:	misaligned = 1'b0;			// Byte
+       2'b01:	misaligned = (addr[1:0] == 2'b11);	// Halfword
+       2'b10:	misaligned = (addr[1:0] != 2'b00);	// Word
+       default:	misaligned = 1'b0;			// Invalid
+     endcase
 
-   assign busy = !dbus_ready | (misaligned & ~upper_word);
+   assign busy = dbus_valid & (~dbus_ready | (misaligned & ~upper_word));
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-       upper_word <= 1'b0;
+	upper_word <= 1'b0;
      end else if (clken) begin
 	upper_word <= dbus_valid & dbus_ready & misaligned & ~upper_word;
      end
@@ -124,7 +119,7 @@ module ldst (
 	  if (dbus_wrq)
 	    begin
 	       dbus_wbe <= bytemask;
-	       unique casez (addr[1:0])
+	       unique case (addr[1:0])
 		 2'b00: dbus_wdata <= src2;
 		 2'b01: dbus_wdata <= { src2[23:0], src2[7:0]  };
 		 2'b10: dbus_wdata <= { src2[15:0], src2[15:8] };
@@ -135,7 +130,7 @@ module ldst (
 	  // Set up load MUXes
 	  ld_uns <= ~memop[1];
 
-	  unique casez (size)
+	  unique case (size)
 	    2'b00:   ld_ext <= 4'b1110;
 	    2'b01:   ld_ext <= 4'b1100;
 	    2'b10:   ld_ext <= 4'b0000;

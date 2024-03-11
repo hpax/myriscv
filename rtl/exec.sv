@@ -35,10 +35,11 @@ module backend #(
 
  input		       e_valid_i,
  input		       e_stall,
+ input		       decoded_insn_t e_op,
  output reg	       e_valid_o,
- output	reg	       e_kill,
+ output reg	       e_kill,
  output reg [31:0]     e_restartpc, // Address for the front end after kill
- output	reg	       e_busy,
+ output reg	       e_busy,
  input		       e_rs1_m,
  input		       e_rs1_w,
  input		       e_rs2_m,
@@ -46,26 +47,27 @@ module backend #(
 
  input		       m_valid_i,
  input		       m_stall,
- output	reg	       m_valid_o,
- output	reg	       m_busy,
+ input		       decoded_insn_t m_op,
+ output reg	       m_valid_o,
+ output reg	       m_busy,
 
  // Data output, unregistered and registered
  output reg [31:0]     e_dout,
  output reg [31:0]     m_din,
 
  // Data bus from ldst unit
- output reg [31:0]     dbus_a,
- output reg	       dbus_valid,
- output	reg	       dbus_wrq,
- output reg [3:0]      dbus_wbe,
- output reg [31:0]     dbus_wdata,
+ output [31:0]	       dbus_a,
+ output		       dbus_valid,
+ output		       dbus_wrq,
+ output [3:0]	       dbus_wbe,
+ output [31:0]	       dbus_wdata,
  input [31:0]	       dbus_rdata,
  input		       dbus_ready
  );
 
-   wire		   e_clken = clken & e_valid_i & ~e_stall;
-   wire		   m_clken = clken & m_valid_i & ~m_stall;
-   wire		   w_clken = clken & m_valid_o;
+   wire		       e_clken = clken & (~e_stall | e_busy | e_kill);
+   wire		       m_clken = clken & (~m_stall | m_busy);
+   wire		       w_clken = clken & m_valid_o;
 
    wire [31:0]	   e_rs1_data;
    wire [31:0]	   e_rs2_data;
@@ -73,27 +75,11 @@ module backend #(
    reg [3:0]	   m_dout_be;
 
    // E-stage pipeline synchronization signals
-   assign e_valid_o = e_clken & e_valid_i & ~e_stall & ~e_kill;
+   assign e_valid_o = e_clken & e_valid_i & ~e_kill;
    assign e_busy    = 1'b0;
 
-   // E-stage instruction -- duplicates pipeline.sv, fix
-   decoded_insn_t e_op;
-   always @(negedge rst_n or posedge clk)
-     if (~rst_n)
-       e_op <= reset_op(core.RESET_PC);
-     else if (e_clken)
-       e_op <= d_op;
-
    // M-stage pipeline synchronization signals
-   assign m_valid_o = m_clken & m_valid_i & ~m_stall;
-
-   // M-stage instruction
-   decoded_insn_t m_op;
-   always @(posedge clk)
-     if (~rst_n)
-       m_op <= reset_op(core.RESET_PC);
-     else if (m_clken)
-       m_op <= e_op;
+   assign m_valid_o = m_clken & (m_valid_i & ~m_busy);
 
    // Latched output to M stage; also used by the bypass network
    always @(posedge clk)
@@ -391,7 +377,7 @@ module backend #(
    //
    // Load/store unit
    //
-   wire ldst_valid = e_valid_i &&
+   wire ldst_valid = e_valid_i &
 	(e_op.itype == INSN_LD || e_op.itype == INSN_ST);
 
    wire [31:0] ldst_dout;
