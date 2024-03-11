@@ -5,45 +5,47 @@
 // This generates the data bus address, byte enables, permuted store
 // data, and sets up the multiplexers for the load data.
 //
-// memop is encoded as:
-// 00 - not memop
-// 01 - store
-// 10 - unsigned load
-// 11 - signed load
-//
 // This unit supports misaligned accesses by breaking them into two if they
 // cross a word boundary.
 //
 module ldst (
-		input	      rst_n,
-		input	      clk,
-		input	      clken,
-		input	      valid,
+		input		  rst_n,
+		input		  clk,
+		input		  clken,
+		input		  valid,	// It is a memop
 
-		input [1:0]   memop,	// See above
-		input [1:0]   size,	// Data size == 2^x bytes
+		input		  memop_st,	// It is a store
+		input		  memop_ldu,	// Load is unsigned
+		input [1:0]	  size, // Data size == 2^x bytes
 
-		input [31:0]  addr,	// address
-		input [31:0]  src2,	// store data
+		input [31:0]	  addr, // address
+		input [31:0]	  src2, // store data
 
-		output reg [31:0] dout,	// Load data output
-		output reg [3:0]  dout_wbe, // Load data output enables
+		output reg [31:0] dout, // Load data output
+		output reg [3:0]  dout_wbe,
+		output reg	  dout_valid,
 
 		// Set if the pipeline should be held due to misaligned
-		// input or waiting for data
-		output	      busy,
+		// input or waiting for data.
+		output		  busy,
 
-		output [31:0] dbus_a,
-		output	      dbus_valid,
-		output	      dbus_wrq,
+		output [31:0]	  dbus_a,
+		output		  dbus_valid,
+		output		  dbus_wrq,
 		output reg [3:0]  dbus_wbe,
 		output reg [31:0] dbus_wdata,
-		input [31:0]  dbus_rdata,
-		input	      dbus_ready
+		input [31:0]	  dbus_rdata,
+		input		  dbus_ready
 		);
 
    // Handling the upper word of a misaligned operation?
    reg			      upper_word;
+
+   // Hold output address while busy; also increments for the second word.
+   reg [31:0]		      latched_a;
+
+   // Should we use latched data?
+   wire			      use_latched = busy;
 
    // Each of the load byte MUXes can take data from any byte,
    // or set it to 0 or the MSB of another byte.
@@ -51,84 +53,143 @@ module ldst (
    reg			      ld_uns;
    reg [3:0][1:0]	      ld_src;
 
-   assign dbus_a[31:2] = addr[31:2] + upper_word;
-   assign dbus_a[1:0]  = 2'b00;
-   assign dbus_valid   = rst_n & valid & |memop;
-   assign dbus_wrq     = rst_n & valid & memop == 2'b01;
+   assign dbus_a	= use_latched ? latched_a : addr;
+   assign dbus_valid	= rst_n & valid;
+   assign dbus_wrq	= rst_n & valid & memop_st;
 
-   logic		      misaligned;
-   always @(*)
-     unique case (size)
-       2'b00:	misaligned = 1'b0;			// Byte
-       2'b01:	misaligned = (addr[1:0] == 2'b11);	// Halfword
-       2'b10:	misaligned = (addr[1:0] != 2'b00);	// Word
-       default:	misaligned = 1'b0;			// Invalid
-     endcase
-
-   assign busy = dbus_valid & (~dbus_ready | (misaligned & ~upper_word));
+   reg			      dbus_valid_q;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	upper_word <= 1'b0;
+	dbus_valid_q <= 1'b0;
      end else if (clken) begin
-	upper_word <= dbus_valid & dbus_ready & misaligned & ~upper_word;
+	dbus_valid_q <= dbus_valid;
      end
 
-   logic [3:0] bytemask;
+   logic		      misaligned_comb;
+   reg			      misaligned_q;
    always @(*)
-     unique casez ({size, addr[1:0], upper_word})
-       5'b00_00_0: bytemask <= 4'b0001;
-       5'b00_01_0: bytemask <= 4'b0010;
-       5'b00_10_0: bytemask <= 4'b0100;
-       5'b00_11_0: bytemask <= 4'b1000;
-
-       5'b01_00_0: bytemask <= 4'b0011;
-       5'b01_01_0: bytemask <= 4'b0110;
-       5'b01_10_0: bytemask <= 4'b1100;
-       5'b01_11_0: bytemask <= 4'b1000;
-       5'b01_11_1: bytemask <= 4'b0001;
-
-       5'b10_00_0: bytemask <= 4'b1111;
-       5'b10_01_0: bytemask <= 4'b1110;
-       5'b10_01_1: bytemask <= 4'b0001;
-       5'b10_10_0: bytemask <= 4'b1100;
-       5'b10_10_1: bytemask <= 4'b0011;
-       5'b10_11_0: bytemask <= 4'b1000;
-       5'b10_11_1: bytemask <= 4'b0111;
-
-       default:    bytemask <= 4'bxxxx; // Invalid
-     endcase // unique casez ({size, addr[1:0], upper_word})
-
-   // XXX: this is wrong for a misaligned load
-   assign dout_wbe = 4'b1111;
+     unique case (size)
+       2'b00: misaligned_comb = 1'b0;			// Byte
+       2'b01: misaligned_comb = (dbus_a[1:0] == 2'b11);	// Halfword
+       2'b10: misaligned_comb = (dbus_a[1:0] != 2'b00);	// Word
+       default:	misaligned_comb = 1'bx;		// Invalid
+       endcase
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
+       misaligned_q <= 1'bx;
+     else if (clken & ~busy)
+       misaligned_q <= misaligned_comb;
+
+   reg	upper_word_q;
+
+   assign dout_valid = dbus_valid_q & dbus_ready;
+   assign busy	     = dbus_valid_q & (~dbus_ready |
+		       (misaligned_q & ~upper_word_q));
+   assign upper_word = dout_valid ? misaligned_q & ~upper_word_q : upper_word_q;
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n)
+       upper_word_q <= 1'b0;
+     else if (clken)
+       upper_word_q <= dbus_valid_q & upper_word;
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	latched_a    <= 'bx;
+     end else if (clken) begin
+	if (~busy)
+	  latched_a <= addr;
+     end
+
+   // Bytemask for the bus, upper and lower word
+   // The upper word enables can be x when aligned
+   logic [1:0][3:0] bytemask;
+   always @(*)
+     unique case ({size, addr[1:0]})
+       4'b00_00: bytemask = 8'bxxxx_0001;
+       4'b00_01: bytemask = 8'bxxxx_0010;
+       4'b00_10: bytemask = 8'bxxxx_0100;
+       4'b00_11: bytemask = 8'bxxxx_1000;
+
+       4'b01_00: bytemask = 8'bxxxx_0011;
+       4'b01_01: bytemask = 8'bxxxx_0110;
+       4'b01_10: bytemask = 8'bxxxx_1100;
+       4'b01_11: bytemask = 8'b0001_1000;
+
+       4'b10_00: bytemask = 8'bxxxx_1111;
+       4'b10_01: bytemask = 8'b0001_1110;
+       4'b10_10: bytemask = 8'b0011_1100;
+       4'b10_11: bytemask = 8'b0111_1000;
+
+       default:  bytemask = 8'bxxxx_xxxx; // Invalid
+     endcase
+
+   // Bytemask for the register file. The bytemask here must include
+   // any bytes that are derived by zero/sign extension. It is safe to
+   // write all the bytes on the low-word operation, but the high word
+   // operation must limit its byte enables.
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n)
+       dout_wbe <= 4'bxxxx;
+     else if (clken) begin
+	if (~upper_word)
+	  dout_wbe <= 4'b1111;
+	else
+	  unique case (latched_a[1:0]) // Can always use the latched here
+	    2'b01:   dout_wbe <= 4'b1000;
+	    2'b10:   dout_wbe <= 4'b1100;
+	    2'b11:   dout_wbe <= 4'b1110;
+	    default: dout_wbe <= 4'bxxxx;
+	  endcase
+     end
+
+   // dbus output MUXes
+   logic [31:0] wdata_comb;
+   always @(*)
+     unique case (addr[1:0])
+       2'b00: wdata_comb = src2;
+       2'b01: wdata_comb = { src2[23:0], src2[7:0]  };
+       2'b10: wdata_comb = { src2[15:0], src2[15:8] };
+       2'b11: wdata_comb = { src2[7:0],  src2[31:8] };
+       default: dbus_wdata = 32'bx;
+     endcase // unique casez (addr[1:0])
+
+   reg [31:0]	  latched_wdata;
+   reg [1:0][3:0] latched_wbe;
+   always @(posedge clk or negedge rst_n)
+     if (~rst_n) begin
+	latched_wbe   <= 8'bx;
+	latched_wdata <= 32'bx;
+     end else if (clken) begin
+	if (~busy) begin
+	   latched_wbe	 <= bytemask;
+	   latched_wdata <= wdata_comb;
+	end
+     end
+
+   always @(*)
+     if (use_latched) begin
+	dbus_wbe   = latched_wbe[upper_word];
+	dbus_wdata = latched_wdata;
+     end else begin
+	dbus_wbe   = bytemask[0];
+	dbus_wdata = wdata_comb;
+     end
+
+   // Load input MUX setup
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n)
        begin
-	  dbus_wdata   <= 32'bx;
-	  dbus_wbe     <= 4'b0;
 	  ld_ext       <= 4'bx;
 	  ld_uns       <= 1'bx;
 	  ld_src       <= 8'bx;
        end
-     else
+     else if (clken & ~busy)
        begin
-	  dbus_wbe     <= 4'b0;
-	  dbus_wdata   <= 32'bx;
-
-	  if (dbus_wrq)
-	    begin
-	       dbus_wbe <= bytemask;
-	       unique case (addr[1:0])
-		 2'b00: dbus_wdata <= src2;
-		 2'b01: dbus_wdata <= { src2[23:0], src2[7:0]  };
-		 2'b10: dbus_wdata <= { src2[15:0], src2[15:8] };
-		 2'b11: dbus_wdata <= { src2[7:0],  src2[31:8] };
-	       endcase // unique casez (addr[1:0])
-	    end // if (dbus_wrq)
-
 	  // Set up load MUXes
-	  ld_uns <= ~memop[1];
+	  ld_uns <= memop_ldu;
 
 	  unique case (size)
 	    2'b00:   ld_ext <= 4'b1110;
@@ -151,7 +212,7 @@ module ldst (
 	  endcase // unique casez ({size, addr[1:0]})
        end // else: !if(~rst_n)
 
-   // Output MUXes
+   // Load data output MUXes
    always @(*)
      begin
 	logic [7:0] din[0:3];	// Input bytes

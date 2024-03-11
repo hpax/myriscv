@@ -11,9 +11,7 @@
 // The clock enable MUST BE HONORED; the outputs MUST NOT CHANGE if the
 // clock enable is disabled.
 //
-`define RAW
 
-`ifdef RAW
 module mult
   #(
     parameter width = 32,
@@ -34,29 +32,39 @@ module mult
   output	[width-1:0] ql
     );
 
-   wire signed [width:0]      a = { src1[width-1] & ssign1, src1 };
-   wire signed [width:0]      b = { src2[width-1] & ssign2, src2 };
-   wire signed [2*width-1:0]  m = a * b;
+   logic signed [width:0]   a;
+   logic signed [width:0]   b;
 
-   reg [width-1:0]	      l_q;
-   reg [width-1:0]	      h_q;
+   logic [width-1:0]	      l_q;
+   logic [width-1:0]	      h_q;
+
    reg			      high_q;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	l_q    <= 'bx;
-	h_q    <= 'bx;
-	high_q <= 1'bx;
+	a	<= 'bx;
+	b	<= 'bx;
+	high_q	<= 1'bx;
      end else if (clken) begin
-	high_q <= high;
-	l_q <= m[width-1:0];
-	h_q <= (high | mux_late) ? m[2*width-1:width] : m[width-1:0];
+	a	<= { src1[width-1] & ssign1, src1 };
+	b	<= { src2[width-1] & ssign2, src2 };
+	high_q	<= high;
      end
 
-   assign q  = (~high_q & mux_late) ? l_q : h_q;
+   always @(*) begin
+      logic signed [2*width-1:0] m;
+
+      m = a * b;
+
+      l_q = m[width-1:0];
+      h_q = m[2*width-1:width];
+   end
+
+   assign q  = ~high_q ? l_q : h_q;
    assign ql = l_q;
 endmodule // mult
-`else
+
+`ifdef SKIP
 module mult
   #(
     parameter width = 32,

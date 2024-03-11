@@ -3,20 +3,36 @@
 `ifndef _TYPES_SV
 `define _TYPES_SV 1
 
+//
+// Note:
+// INSN_KILLED means an interruption in the flow of control,
+// INSN_NULL means that PC should not be advanced.
+// and that the next valid instruction will re-establish the canonical PC.
+// INSN_NOP means the PC should be advanced normally.
+//
 typedef enum logic [3:0] {
-	INSN_NULL  = 4'b0000,	// Just zero rd
-	INSN_ALU   = 4'b0001,	// ALU (incl NOP)
-	INSN_MUL   = 4'b0010,	// True multiply
-	INSN_MULL  = 4'b0011,	// MULH -> MULL forward
-	INSN_LD    = 4'b0100,	// Memory load
-	INSN_ST    = 4'b0101,	// Memory store
-	INSN_JAL   = 4'b1000,	// JAL, JALR
-	INSN_AGU   = 4'b1001,	// LUI, AUIPC
-	INSN_BR    = 4'b1010,   // Conditional branch
-	INSN_CSR   = 4'b1011,	// CSR instruction
-	INSN_ECALL = 4'b1110,	// ECALL, EBREAK
-	INSN_ERR   = 4'b1111	// Invalid instruction
+	INSN_KILLED = 4'b0000,	// Killed instruction
+	INSN_NULL   = 4'b0001,	// Branch bubble
+	INSN_NOP    = 4'b0010,	// No-op instruction (unless decoded as ALU)
+	INSN_ALU    = 4'b0011,	// ALU instruction
+	INSN_MUL    = 4'b0100,	// True multiply
+	INSN_MULL   = 4'b0101,	// MULH -> MULL forward
+	INSN_LD     = 4'b0110,	// Memory load
+	INSN_ST     = 4'b0111,	// Memory store
+	INSN_JAL    = 4'b1000,	// JAL, JALR
+	INSN_AGU    = 4'b1001,	// LUI, AUIPC
+	INSN_BR     = 4'b1010,  // Conditional branch
+	INSN_CSR    = 4'b1011,	// CSR instruction
+	INSN_ECALL  = 4'b1110,	// ECALL, EBREAK (trap)
+	INSN_ERR    = 4'b1111	// Invalid instruction (trap)
 } insn_type_t;
+
+function logic insn_ldst(input insn_type_t insn);
+   insn_ldst = insn[3:1] == 3'b011;
+endfunction
+function logic insn_real(input insn_type_t insn);
+   insn_real = |insn[3:1];
+endfunction
 
 typedef struct packed {
    logic [4:0] r;		// Architectural register number
@@ -55,7 +71,7 @@ typedef struct packed {
 function decoded_insn_t dummy_op(
   input	       insn_type_t itype,
   input [31:0] pc,
-  input	       i16
+  input i16
   );
    dummy_op.itype	= itype;
    dummy_op.rd		= 'bx;
@@ -75,12 +91,27 @@ function decoded_insn_t dummy_op(
    dummy_op.csrw	= 1'b0;
 
    dummy_op.pc		= pc;
-   dummy_op.i16		= i16;
+   dummy_op.i16		= 'bx;
    dummy_op.pred_taken	= 1'bx;
 endfunction
 
-function decoded_insn_t reset_op(input [31:0] reset_pc);
-   reset_op = dummy_op(INSN_NULL, reset_pc - 3'd4, 1'b0);
+function decoded_insn_t killed_op;
+   killed_op = dummy_op(INSN_KILLED, 32'bx, 1'bx);
+endfunction
+
+function decoded_insn_t null_op(input [31:0] pc);
+   null_op = dummy_op(INSN_NULL, pc, 1'bx);
+endfunction
+
+function decoded_insn_t err_op(input [31:0] pc, input i16);
+   err_op = dummy_op(INSN_ERR, pc, i16);
+endfunction
+
+// This returns the true successor pc, without masking!
+function logic [31:0] successor_pc(input decoded_insn_t op);
+   successor_pc = op.pc;
+   if (insn_real(op.itype))
+     successor_pc += op.i16 ? 3'd2 : 3'd4;
 endfunction
 
 //
@@ -108,16 +139,19 @@ endfunction
 //          01 =  -1
 //          10 = shamt
 //          11 = -mcnt-1
-//     1 - sand
-//     0 - sxor
+//   1:0 - sign (masked) bit selection:
+//	    00 =  0
+//	    01 =  1
+//          10 =  src[spos]
+//	    11 = ~src[spos]
+//
 
 typedef struct packed {
    logic [1:0] rcnt;
-   logic [2:0] mpos;
+   logic [1:0] mpos;
    logic [2:0] mcnt;
    logic [1:0] spos;
-   logic       sand;
-   logic       sxor;
+   logic [1:0] sbit;
 } shiftop_t;
 
 //
@@ -142,9 +176,7 @@ typedef struct packed {
    logic       invert;
    logic [1:0] shadd;
    logic [1:0] bitop;
-   logic	bc_l;		// bitcnt count leading
-   logic	bc_t;		// bitcnt count trailing
-   logic	bc_s;		// bitcnt count set
+   logic [2:0] bcop;		// bitcnt operation
    logic [1:0] msign;
    shiftop_t   shiftop;
    cond_t      cond;

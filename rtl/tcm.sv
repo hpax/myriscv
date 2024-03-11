@@ -13,22 +13,22 @@ module tcm
     parameter string init_file = ""
     )
    (
-    input		 rst_n,
-    input		 clk,
-    input		 clken,
+    input	      rst_n,
+    input	      clk,
+    input	      clken,
 
-    input [sizebits-1:0] ibus_a,
-    input		 ibus_valid,
-    output reg [31:0]	 ibus_rdata,
-    output reg		 ibus_ready,
+    input [31:0]      ibus_a,
+    input	      ibus_valid,
+    output reg [31:0] ibus_rdata,
+    output reg	      ibus_ready,
 
-    input [sizebits-1:0] dbus_a,
-    input [31:0]	 dbus_wdata,
-    input		 dbus_valid,
-    input		 dbus_wrq,
-    input [3:0]		 dbus_wbe,
-    output reg [31:0]	 dbus_rdata,
-    output reg		 dbus_ready
+    input [31:0]      dbus_a,
+    input [31:0]      dbus_wdata,
+    input	      dbus_valid,
+    input	      dbus_wrq,
+    input [3:0]	      dbus_wbe,
+    output reg [31:0] dbus_rdata,
+    output reg	      dbus_ready
     );
 
    // Convert from byte address to word address and strip unused bits

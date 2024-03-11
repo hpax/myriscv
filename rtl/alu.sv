@@ -62,13 +62,9 @@ module alu_decode
 	       { 7'b011_0000, ALU_SLL }: begin
 		  unique casez ({!op.rs2_valid, op.rs2.r})
 		    6'b1_?00??: begin // CTZ, CLZ, CPOP (+inverses)
-		       if (core.WITH_extensions ||
-			 (!op.rs2.r[4] && op.rs2.r[1:0] != 2'b11)) begin
+		       ctl.bcop = {op.rs2.r[4] && op.rs2.r[1:0]};
+		       if (core.WITH_extensions || ctl.bcop < 3'b011)
 			  ctl.unit = ALUSRC_BITCNT;
-			  ctl.bc_l = ~op.rs2.r[0];
-			  ctl.bc_t = op.rs2.r[1] ^ op.rs2.r[0];
-			  ctl.bc_s = op.rs2.r[4] ^ op.rs2.r[1];
-		       end
 		    end
 		    6'b1_0010?: begin
 		       ctl.unit = ALUSRC_SHIFT;
@@ -77,6 +73,9 @@ module alu_decode
 		    6'b0_?????: begin
 		       ctl.unit = ALUSRC_SHIFT;
 		       ctl.shiftop = 11'b11_xx_000_xx_x_x; // ROL
+		    end
+		    default: begin
+		       // Do nothing
 		    end
 		  endcase // unique casez ({!op.rs2_valid, op.rs2.r})
 	       end // case: { 7'b011_0000, ALU_SLL }
@@ -96,6 +95,9 @@ module alu_decode
 		       // advanced combination instruction
 		       ctl.unit = ALUSRC_ORC;
 		    end
+		    default: begin
+		       // Do nothing
+		    end
 		  endcase
 	       end
 	       { 7'b010_0100, ALU_SRL }: begin
@@ -112,6 +114,9 @@ module alu_decode
 		       // In the future, rs2 might be a control mask for a more
 		       // advanced bitswap instruction
 		       ctl.unit = ALUSRC_REV;
+		    end
+		    default: begin
+		       // Do nothing
 		    end
 		  endcase
 	       end
@@ -133,6 +138,9 @@ module alu_decode
 		       ctl.unit = ALUSRC_SHIFT;
 		       ctl.shiftop = 11'b00_11_101_xx_0_0; // ZEXT.H
 		    end
+		    default: begin
+		       // Do nothing
+		    end
 		  endcase // unique casez (op.rs2.r)
 	       end
 	       { 7'b000_0101, 3'b1?? }: if (core.WITH_minmax) begin
@@ -141,6 +149,9 @@ module alu_decode
 	       end
 	       { 7'b000_0111, 3'b1?1 }: if (core.WITH_Zicond) begin
 		  ctl.unit = ALUSRC_ZICOND;
+	       end
+	       default: begin
+		  // Do nothing
 	       end
 	     endcase // unique casez ({funct7, op.funct3})
 	  end
@@ -326,16 +337,16 @@ endmodule
 // it makes sense for it to be given two pipeline stages (output data
 // from the M stage.)
 //
-module alu
-   (
-    output reg [31:0] dst,
-    output reg	      cmp_out,	// Comparator output bypassing output MUX
+module alu #(
+  parameter bit bitcnt_separate = 1'b0
+		) (
+  output reg [31:0] dst,
+  output reg	    cmp_out, // Comparator output bypassing output MUX
 
-    input [31:0]      src1,
-    input [31:0]      src2,
+  input [31:0]	    src1,
+  input [31:0]	    src2,
 
-    input	      aluctl_t ctl
-    );
+  input		    aluctl_t ctl);
 
    wire [31:0]		  invsrc2 = src2 ^ {32{ctl.invert}};
    wire [31:0]		  add_out;
@@ -395,14 +406,42 @@ module alu
    //
    // Zbb operations
    //
-   wire [5:0]		  bitcnt_out;
-   bitcnt bitcnt (
-     .d		(src1),
-     .q		(bitcnt_out),
-     .ones	(ctl.bc_s),	// CPOP, C[TL]S
-     .ct	(ctl.bc_t),	// CPOP[N], CT[ZS]
-     .cl	(ctl.bc_l)	// CPOP[N], CL[ZS]
-   );
+   logic [5:0]		  bitcnt_out;
+   generate
+      if (bitcnt_separate) begin
+	 wire [31:0] clz_out;
+	 wire [31:0] ctz_out;
+	 wire [31:0] cpop_out;
+
+	 bitcnt clz (.d (src1), .q (clz_out), .ones (1'b0),
+	   .ct (1'b0), .cl (1'b1));
+	 bitcnt ctz (.d (src1), .q (ctz_out), .ones (1'b0),
+	   .ct (1'b1), .cl (1'b0));
+	 bitcnt cpop (.d (src1), .q (cpop_out), .ones (1'b1),
+	   .ct (1'b1), .cl (1'b1));
+
+	 always @(*)
+	   unique case (ctl.bcop)
+	     3'b000: bitcnt_out  = clz_out;
+	     3'b010: bitcnt_out  = ctz_out;
+	     3'b011: bitcnt_out  = cpop_out;
+	     default: bitcnt_out = 32'bx;
+	   endcase
+      end else begin
+	 wire bc_cl   = ~ctl.bcop[0];
+	 wire bc_ct   = ctl.bcop[1] ^ ctl.bcop[0];
+	 wire bc_ones = ctl.bcop[2] ^ ctl.bcop[1];
+
+	 bitcnt bitcnt (
+	   .d		(src1),
+	   .q		(bitcnt_out),
+	   .ones	(bc_ones),	// CPOP, C[TL]S
+	   .ct		(bc_ct),	// CPOP[N], CT[ZS]
+	   .cl		(bc_cl)		// CPOP[N], CL[ZS]
+	   );
+      end
+   endgenerate
+
    wire [31:0]		  orc_out;
    orc orc (.d(src1), .q(orc_out));
    wire [31:0]		  rev_out;
@@ -415,15 +454,16 @@ module alu
      begin
 	dst = 'bx;
 	unique case (ctl.unit)
-	  ALUSRC_ADD:    dst = add_out;
-	  ALUSRC_LOGIC:  dst = bit_out;
-	  ALUSRC_SET:    dst = cmp_out;
+	  ALUSRC_ADD:    dst			   = add_out;
+	  ALUSRC_LOGIC:  dst			   = bit_out;
+	  ALUSRC_SET:    dst			   = cmp_out;
 	  ALUSRC_MINMAX: if (core.WITH_minmax) dst = minmax_out;
-	  ALUSRC_SHIFT:  dst = shift_out;
-	  //ALUSRC_BITCNT: if (core.WITH_bitcnt) dst = bitcnt_out;
-	  ALUSRC_ORC:    dst = orc_out;
-	  ALUSRC_REV:    dst = rev_out;
+	  ALUSRC_SHIFT:  dst			   = shift_out;
+	  ALUSRC_BITCNT: if (core.WITH_bitcnt) dst = bitcnt_out;
+	  ALUSRC_ORC:    dst			   = orc_out;
+	  ALUSRC_REV:    dst			   = rev_out;
 	  ALUSRC_ZICOND: if (core.WITH_Zicond) dst = zicond_out;
+	  default:       dst = 'bx;
 	endcase // unique case (alusrc)
      end
 endmodule // alu

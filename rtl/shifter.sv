@@ -232,14 +232,13 @@ module shifter
 
    always @(*)
      begin
-	rcnt = 'bx;
 	unique case (op.rcnt)
 	  2'b00:   rcnt = 'b0;
 	  2'b10:   rcnt = shamt;
 	  2'b11:   rcnt = -shamt;
+	  default: rcnt = 'bx;
 	endcase // unique case (op.rcnt)
 
-	mcnt = 'bx;
 	unique case (op.mcnt)
 	  3'b000:  mcnt = 'd0;
 	  3'b001:  mcnt = 'd1;
@@ -248,23 +247,27 @@ module shifter
 	  3'b101:  mcnt = -'sd16;
 	  3'b110:  mcnt = shamt;
 	  3'b111:  mcnt = -shamt;
+	  default: mcnt = 'bx;
 	endcase // unique case (op.mcnt)
 
-	mpos = 'bx;
 	unique case (op.mpos)
 	  2'b00:   mpos = 'b0;
 	  2'b01:   mpos = 'b1;
 	  2'b10:   mpos = shamt;
 	  2'b11:   mpos = -mcnt;
+	  default: mpos = 'bx;
 	endcase // unique case (op.mpos)
 
-	spos = 'bx;
 	unique case (op.spos)
 	  2'b00:   spos = 'b0;
 	  2'b01:   spos = -'sb1;
 	  2'b10:   spos = shamt;
 	  2'b11:   spos = -mcnt-1'b1;
+	  default: spos = 'bx;
 	endcase
+
+	sand = op.sbit[1];
+	sxor = op.sbit[0];
      end // always @ (*)
 
    shifter_core core (
@@ -272,8 +275,8 @@ module shifter
 		      .mpos (mpos),
 		      .mcnt (mcnt),
 		      .spos (spos),
-		      .sand (op.sand),
-		      .sxor (op.sxor),
+		      .sand (sand),
+		      .sxor (sxor),
 		      .d    (d),
 		      .q    (q));
 endmodule

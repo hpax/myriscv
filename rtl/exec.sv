@@ -78,16 +78,13 @@ module backend #(
    assign e_valid_o = e_clken & e_valid_i & ~e_kill;
    assign e_busy    = 1'b0;
 
-   // M-stage pipeline synchronization signals
-   assign m_valid_o = m_clken & (m_valid_i & ~m_busy);
-
    // Latched output to M stage; also used by the bypass network
    always @(posedge clk)
      if (m_clken)
        m_din <= e_dout;
 
    // Register file
-   regfile #(.contexts(1'b1 << `CONTEXT_BITS)) regs
+   regfile #(.contexts(1 << `CONTEXT_BITS)) regs
      (
      .rst_n    ( rst_n ),
      .clk      ( clk ),
@@ -98,7 +95,7 @@ module backend #(
      .rs2_data ( e_rs2_data ),
      .rd       ( m_op.rd ),
      .rd_data  ( m_dout ),
-     .rd_wren  ( m_valid_o ),
+     .rd_wren  ( m_valid_o & (m_op.rd_e | m_op.rd_m) ),
      .rd_wbe   ( m_dout_be )
       );
 
@@ -278,9 +275,10 @@ module backend #(
      end
 
    //
-   // Successor PC (for JAL/JALR)
+   // Successor PC (for JAL/JALR and, in the future, branch predict
+   // validation.)
    //
-   wire [31:0] e_next_pc  = e_op.pc + (e_op.i16 ? 3'd2 : 3'd4);
+   wire [31:0] e_next_pc  = successor_pc(e_op);
 
    //
    // Branch, jump, trap and interrupt handling
@@ -345,6 +343,8 @@ module backend #(
 	if (csrw_mtvec)
 	  mtvec <= rwmz(mtvec,  e_csr_wval, core.MTVEC_WMASK, core.PC_MASK);
 
+	// XXX: writing mepc seems to be a frequency limiter; it could
+	// probably be written in the M stage (post-kill) instead.
 	if (trap_irq)
 	  mepc  <= e_op.pc & core.PC_MASK;
 	else if (csrw_mepc)
@@ -377,11 +377,11 @@ module backend #(
    //
    // Load/store unit
    //
-   wire ldst_valid = e_valid_i &
-	(e_op.itype == INSN_LD || e_op.itype == INSN_ST);
+   wire ldst_valid = insn_ldst(e_op.itype);
 
    wire [31:0] ldst_dout;
    wire [3:0]  ldst_dout_wbe;
+   wire	       ldst_dout_valid;
    wire	       ldst_busy;
 
    ldst ldst (
@@ -389,12 +389,14 @@ module backend #(
      .clk		(clk),
      .clken		(clken),
      .valid		(ldst_valid),
-     .memop		({~e_op.itype[0], e_op.funct3[2]}),
+     .memop_st		(e_op.itype[0]),
+     .memop_ldu		(e_op.funct3[2]),
      .size		(e_op.funct3[1:0]),
      .addr		(e_addr),
      .src2		(e_src2),
      .dout		(ldst_dout),
      .dout_wbe		(ldst_dout_wbe),
+     .dout_valid	(ldst_dout_valid),
      .busy		(ldst_busy),
      .dbus_a		(dbus_a),
      .dbus_valid	(dbus_valid),
@@ -411,18 +413,21 @@ module backend #(
    // M stage output MUX
    //
    always @(*)
-     unique casez (m_op.itype)
+     unique case (m_op.itype)
        INSN_LD: begin
 	  m_dout    = ldst_dout;
 	  m_dout_be = ldst_dout_wbe;
+	  m_valid_o = ldst_dout_valid;
        end
        INSN_MUL: begin
 	  m_dout    = m_mul_o;
 	  m_dout_be = 4'b1111;
+	  m_valid_o = m_valid_i;
        end
        default: begin
 	  m_dout    = m_din;
 	  m_dout_be = 4'b1111;
+	  m_valid_o = m_valid_i;
        end
      endcase
 endmodule // execute

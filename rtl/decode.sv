@@ -61,10 +61,10 @@ module decode_comb
 	op.rd.c       = default_context;
 	op.rd_e       = 1'b0;
 	op.rd_m       = 1'b0;
-	op.rs1.r      = i[19:5];
+	op.rs1.r      = i[19:15];
 	op.rs1.c      = default_context;
 	op.rs1_valid  = 1'b0;
-	op.rs2.r      = i[16:12];
+	op.rs2.r      = i[24:20];
 	op.rs2.c      = default_context;
 	op.rs2_valid  = 1'b0;
 	op.imm	      = 'bx;      op.imm_u      = 1'b0; op.imm_pc    = 1'b0;
@@ -113,7 +113,7 @@ module decode_comb
 	     unique casez (op.funct3)
 	       3'b000,		// FENCE/PAUSE
 	       3'b001: begin	// FENCE.I (Zifencei)
-		  op.itype = INSN_NULL;	// Treat as NOP
+		  op.itype = INSN_NOP;	// Treat as NOP
 	       end
 	       default: begin
 		  op.itype = INSN_ERR;
@@ -202,53 +202,36 @@ module decode_comb
 
 	// Give the synthesizer a bit more flexibility
 	if (op.itype == INSN_ERR)
-	  op = dummy_op(INSN_ERR, op.pc, op.i16);
+	  op = err_op(op.pc, op.i16);
      end // always @ (*)
 endmodule
 
-//
-// D stage fast multiply watcher. Looks for a multiply that
-// can safely use the result of a previous multiply; this is
-// allows MULH* to forward the low half of the result to MUL in
-// the E stage rather than M stage.
-module decode_fast_mult
+module decode_seq
   (
-   input	rst_n,
-   input	clk,
-   input	d_clken,
+   input  rst_n,
+   input  clk,
+   input  d_clken,
 
-   input	d_killed, // If downstream instructions are killed
+   input  d_valid_i,
+   input  d_killed, // If downstream instructions are killed
 
-   input	decoded_insn_t op_i,
-   output	decoded_insn_t op_o // Adjusted operation
+   input  decoded_insn_t op_i,
+   output decoded_insn_t op_o // Adjusted operation
 );
+   // D stage fast multiply watcher. Looks for a multiply that
+   // can safely use the result of a previous multiply; this is
+   // allows MULH* to forward the low half of the result to MUL in
+   // the E stage rather than M stage.
+   function logic insn_mult(input decoded_insn_t op);
+      // The combinatorial decode leaves a multiply as INSN_ALU.
+      insn_mult = (op.itype == INSN_ALU) &
+		  op.rs1_valid & op.rs2_valid &
+		  (op.funct7 == 7'b000_0001) & !op.funct3[2];
+   endfunction
 
    reg		have_mult;
    regnum_t	mult_rs1;
    regnum_t	mult_rs2;
-
-   wire		is_mult =  op_i.itype == INSN_ALU && op_i.rs2_valid &&
-		op_i.funct7 == 7'b000_0001 && !op_i.funct3[2];
-
-   always @(*) begin
-      op_o	  = op_i;
-
-      if (is_mult)
-	begin
-	   if (have_mult && !op_i.funct3[1:0] &&
-	     op_i.rs1 == mult_rs1 && op_i.rs2 == mult_rs2) begin
-	      // Can forward old multiply result
-	      op_o.itype = INSN_MULL;
-	   end else begin
-	      // Need to actually multiply
-	      op_o.itype = INSN_MUL;
-	      // Move the output to the M stage. Note that
-	      // using op_i.rd_e here handles the case of rd == x0.
-	      op_o.rd_m = op_i.rd_e;	  // Output in M stage
-	      op_o.rd_e = 1'b0;
-	   end
-	end // if (is_mult)
-   end
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
@@ -259,22 +242,60 @@ module decode_fast_mult
        end
      else if (d_clken)
        begin
-	  if (d_killed)
-	    have_mult <= 1'b0;	// State rolled back
-	  else if (is_mult) begin
-	     have_mult <= op_i.rd != op_i.rs1 && op_i.rd != op_i.rs2;
-	     mult_rs1  <= op_i.rs1;
-	     mult_rs2  <= op_i.rs2;
-	  end else if ((op_i.rd_e | op_i.rd_m) &&
-	       (op_i.rd == mult_rs1 || op_i.rd == mult_rs2))
-	    have_mult <= 1'b0;	// Input registers clobbered
+	  if (d_killed) begin
+	     // State rolled back
+	     have_mult <= 1'b0;
+	     mult_rs1  <= 'bx;
+	     mult_rs2  <= 'bx;
+	  end else if (op_o.itype == INSN_MUL) begin
+	     if (op_o.rd != op_o.rs1 && op_o.rd != op_o.rs2) begin
+		have_mult <= 1'b1;
+		mult_rs1  <= op_o.rs1;
+		mult_rs2  <= op_o.rs2;
+	     end else begin
+		have_mult <= 1'b0;
+		mult_rs1  <= 'bx;
+		mult_rs2  <= 'bx;
+	     end
+	  end else if ((op_o.rd_e | op_o.rd_m) &&
+	    (!have_mult || op_o.rd == mult_rs1 || op_o.rd == mult_rs2)) begin
+	     // Input registers clobbered
+	     // The have_mult clause is for the benefit of simulation
+	     have_mult <= 1'b0;
+	     mult_rs1  <= 'bx;
+	     mult_rs2  <= 'bx;
+	  end
        end // if (d_clken)
-endmodule // decode_fast_mult
+
+   always @(*) begin
+      op_o = op_i;
+
+      // Killed instruction
+      if (d_killed)
+	op_o = killed_op();
+      else if (!d_valid_i)
+	op_o = null_op(op_i.pc);
+      else if (insn_mult(op_o)) begin
+	 // Multiply handling
+	 if (have_mult && !op_i.funct3[1:0] &&
+	   op_i.rs1 == mult_rs1 && op_i.rs2 == mult_rs2) begin
+	    // Can forward old multiply low result
+	    op_o.itype = INSN_MULL;
+	 end else begin
+	    // Need to actually multiply
+	    op_o.itype = INSN_MUL;
+	    // Move the output to the M stage. Note that
+	    // using op_i.rd_e here handles the case of rd == x0.
+	    op_o.rd_m = op_i.rd_e;	  // Output in M stage
+	    op_o.rd_e = 1'b0;
+	 end
+      end
+   end
+endmodule // decode_seq
 
 //
 // Decoder pipeline stage
 //
-
 module decode (
   input			      rst_n,
   input			      clk,
@@ -295,21 +316,23 @@ module decode (
 			 );
 
 
-   wire	d_clken = d_valid_i & ~d_stall;
+   wire	d_clken = clken & d_valid_i & ~d_stall;
 
    assign d_busy    = 1'b0;
-   assign d_valid_o = d_clken & d_valid_i;
+   assign d_valid_o = d_valid_i & ~d_stall & d_valid_i;
 
    decoded_insn_t c_op;		// decode_comb op out
 
+   // Purely combinatorial decode
    decode_comb comb (
      .d_din (d_din), .d_was_16(d_was_16), .d_pred_taken(d_pred_taken),
      .d_pc (d_pc & core.PC_MASK), .op(c_op)
      );
 
-   decode_fast_mult mult (
+   // Additional, sequence-dependent 
+   decode_seq mult (
      .rst_n (rst_n), .clk(clk), .d_clken(d_clken), .d_killed(d_killed),
-     .op_i(c_op), .op_o(d_op)
+     .d_valid_i (d_valid_i), .op_i(c_op), .op_o(d_op)
      );
 endmodule
 

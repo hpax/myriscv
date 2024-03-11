@@ -26,17 +26,21 @@ instruction allowed to advance to the M stage must complete.
 
 Bypasses and latencies:
 
-	E -> E		1 cycle
+	E -> E		1 cycle	 (immediate use)
 	M -> E		2 cycles
 	E -> F		3 cycles
 	M -> F		4 cycles
 
-Penalty cycles:
+Mandatory penalty cycles in the current implementation:
 
 A jump/branch to a misaligned 32-bit instruction takes a 1-cycle
 penalty.
 
-A misaligned memory operation takes a 1-cycle penalty.
+Load data or multiply output used in the next cycle takes a 1-cycle
+penalty.
+
+A memory operation which crosses a 32-bit boundary takes a 1-cycle
+(one dbus transaction) penalty.
 
 
 Each stage has the following handshaking signals:
@@ -44,7 +48,9 @@ Each stage has the following handshaking signals:
 output  valid_o
 
 	Assert when a stage presents output signals corresponding to a
-	valid (non-null) datum.
+	valid (non-null) datum. It is not required that a pipeline
+	stage emits a datum in response to a valid input; it is
+	permitted for a stage to "eat" its input.
 
 input	valid_i
 
@@ -52,11 +58,15 @@ input	valid_i
 
 output	busy
 
-	Assert when the stage is doing processing taking more than one cycle.
-	If busy = valid_o = 0, the stage is empty and can accept a
-	datum even if the subsequent pipeline stage is stalled.
+	Assert when the stage is doing processing taking more than one
+	cycle.  If busy = valid_o = 0, the stage is empty and can
+	accept a datum even the next pipeline stage is stalled.
 
 	When valid_i = 1 and busy = 0, the stage accepted a datum.
+
+	valid_o can be asserted together with busy; this allows
+	a pipeline stage to issue multiple ops/data items to the
+	subsequent stage (e.g. Zcm instructions or misaligned loads.)
 
 input	stall
 

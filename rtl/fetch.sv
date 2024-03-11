@@ -151,12 +151,15 @@ module fetch
 	this_valid = this_insn[1:0] == 2'b11 ? have_32 : have_16;
      end
 
-   assign ibus_a = this_valid ? next_pc : this_pc;
+   wire advance  = this_valid & ~stall;
+   assign ibus_a = advance ? next_pc : this_pc;
+
+   reg	restart_q;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
-	  insn_pc	  <= core.RESET_PC & core.PC_MASK;
+	  insn_pc	  <= 32'bx;
 	  this_pc	  <= core.RESET_PC & core.PC_MASK;
 	  valid_o	  <= 1'b0;
 	  insn_pred_taken <= 1'b0;
@@ -175,22 +178,19 @@ module fetch
 
 	  if (restart & !stall)
 	    begin
-	       insn_pc	       <= restart_pc & core.PC_MASK;
+	       insn_pc	       <= 1'bx;
 	       this_pc	       <= restart_pc & core.PC_MASK;
 	       valid_o	       <= 1'b0;
 	       insn_pred_taken <= 1'b0;
 	       insn	       <= 32'bx;
 	       pref_valid      <= 1'b0;
 	       pref_16	       <= 16'bx;
+	       ibus_valid      <= 1'b0; // Improve timing
 	       ibus_valid_q    <= 1'b0; // Discard mispredicted data
 	    end
 	  else
 	    begin
-	       logic advance;
-
 	       ibus_valid_q <= ibus_valid;
-
-	       advance	     = this_valid & !stall;
 	       valid_o	    <= advance;
 
 	       if (advance)
@@ -200,6 +200,15 @@ module fetch
 		    valid_o	    <= this_valid;
 		    this_pc         <= next_pc;
 		    insn_pred_taken <= br_take; // Should this be latched?
+
+		  if (br_take) begin
+		     pref_valid <= 1'b0;
+		     pref_16    <= 16'bx;
+		  end else if (!(is_16 & ~this_pc[1]) ||
+		    (have_data & ~is_16 & this_pc[1])) begin
+		     pref_16    <= ibus_rdata[31:16];
+		     pref_valid <= is_16 | this_pc[1];
+		  end
 		 end
 	       else if (!stall)
 		 begin
@@ -209,19 +218,6 @@ module fetch
 		    valid_o	    <= 1'b0;
 		    insn_pred_taken <= 1'b0;
 		 end
-
-	       if (advance) begin
-		  if (br_take) begin
-		     pref_valid <= 1'b0;
-		     pref_16    <= 16'bx;
-		  end else begin
-		     if (!(is_16 & ~this_pc[1]) ||
-		       (have_data & ~is_16 & this_pc[1])) begin
-			pref_16    <= ibus_rdata[31:16];
-			pref_valid <= is_16 | this_pc[1];
-		     end
-		  end
-	       end
 	    end
        end // if (clken)
 endmodule // fetch
