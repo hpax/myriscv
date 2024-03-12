@@ -14,8 +14,8 @@ module decode_comb
     parameter bit DECODE_C       = 1'b1	 // Set to 0 if not desired *OR* done before this logic.
     )
   (
-   input [31:0]	d_din, // From fetch stage
-   input	d_was_16, // Externally decoded 16-bit instruction
+   input [31:0]	d_din,		// From fetch stage
+   input	d_insn_16,	// 16-bit instruction but not a fused pair!
    input	d_pred_taken,
    input [31:0]	d_pc,
 
@@ -23,20 +23,17 @@ module decode_comb
    );
 
    // Expand RV32C instructions if applicable
+   // d_insn_16 doesn't necessarily match the opcode; it can be clear
+   // for a fused pair, and set for an externally decoded 16-bit instruction.
+   //
+   // The only fused pair currently supported is a c.nop as the second
+   // instruction, so it can safely be ignored.
    wire [31:0]	 i;
-   wire		 is_16;
+   wire [31:0]	 cinst;
+   wire		 is_16 = d_insn_16;
 
-   generate
-      if (DECODE_C)
-	begin
-	   rv32c_comb rv32c (.d(d_din), .q(i), .is_16(is_16));
-	end
-      else
-	begin
-	   assign i      = d_din;
-	   assign is_16  = d_was_16;
-	end
-   endgenerate
+   rv32c_comb rv32c (.d(d_din), .q(cinst));
+   assign i = DECODE_C ? cinst : d_din;
 
    // Immediate formats
    wire signed [11:0] i_imm = i[31:20];
@@ -49,8 +46,6 @@ module decode_comb
 
    always @(*)
      begin
-	logic imm_pc;
-
 	op	      = 'bx;
 	op.i16        = is_16;
 
@@ -73,8 +68,6 @@ module decode_comb
 
 	op.funct7     = i[31:25];
 	op.funct3     = i[14:12];
-
-	imm_pc	      = 1'b0;
 
 	unique case (i[6:0])
 	  LOAD: begin
@@ -309,7 +302,7 @@ module decode (
   input			      clken,
 
   input [31:0]		      d_din,		// From fetch stage
-  input			      d_was_16,		// F decoded 16-bit instruction
+  input			      d_insn_16,	// 16-bit instruction packet
   input			      d_pred_taken,	// F predicted taken branch
   input [31:0]		      d_pc,
 
@@ -332,7 +325,7 @@ module decode (
 
    // Purely combinatorial decode
    decode_comb comb (
-     .d_din (d_din), .d_was_16(d_was_16), .d_pred_taken(d_pred_taken),
+     .d_din (d_din), .d_insn_16(d_insn_16), .d_pred_taken(d_pred_taken),
      .d_pc (d_pc & core.PC_MASK), .op(c_op)
      );
 

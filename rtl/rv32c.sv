@@ -12,9 +12,8 @@
 
 module rv32c_comb
    (
-    input [31:0]  d,		// Input; [31:16] used only for passthrough
-    output [31:0] q,
-    output reg	  is_16		// Advance PC with 2 not 4
+    input [31:0]  d, // Input; [31:16] used only for passthrough
+    output [31:0] q
     );
 
    parameter logic [31:0] INVALID = { 31'bx, 1'b0 };
@@ -98,12 +97,11 @@ module rv32c_comb
 
 	unique case (i[1:0])
 	  2'b11: begin
-	     is_16 = 1'b0;		// Not a compressed instruction
+	     // Not a compressed instruction
 	     o = i;
 	  end
 
 	  2'b00: begin
-	     is_16 = 1'b1;
 	     unique case (i[15:13])
 	       3'b000:		// C.ADDI4SPN or invalid
 		 if (i[12:5])
@@ -155,7 +153,6 @@ module rv32c_comb
 	  end // case: 2'b00
 
 	  2'b01: begin
-	     is_16 = 1'b1;
 	     unique casez (i[15:13])
 	       3'b000:		// C.ADDI (incl C.NOP)
 		 o = addi(r1, r1, ci_imm);
@@ -245,7 +242,6 @@ module rv32c_comb
 	  end // case: 2'b10
 
 	  2'b10: begin
-	     is_16 = 1'b1;
 	     unique case (i[15:13])
 	       3'b000:	// C.SLLI (including 63-32)
 		 o = insn_i(r1, r1, {6'b0, ci_imm}, 3'b001, OP_IMM);

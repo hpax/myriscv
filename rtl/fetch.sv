@@ -58,7 +58,7 @@ module predict_branch
 	     if (take)
 	       offset = cb_imm;
 	  end
-	  10'b???_110?111: begin	// J(AL)
+	  10'b???_1100111: begin	// J(AL)
 	     take   = 1'b1;		// Unconditional
 	     if (take)
 	       offset = j_imm;
@@ -106,7 +106,11 @@ module fetch
    output reg [31:0] insn, // Actually d_din
    output reg	     valid_o, // Actually d_valid_i
    output reg	     insn_pred_taken,
-   output reg [31:0] insn_pc
+   output reg [31:0] insn_pc,
+
+   // This flag can be clear for pair of fused 16-bit instructions;
+   // the decode stage needs to consider that appropriately.
+   output reg	     insn_16
    );
 
    wire [31:0]	     next_pc;
@@ -215,6 +219,7 @@ module fetch
 		 begin
 		    insn	    <= this_insn;
 		    insn_pc	    <= this_pc;
+		    insn_16	    <= is_16;
 		    valid_o	    <= this_valid;
 		    this_pc         <= next_pc;
 		    insn_pred_taken <= br_take; // Should this be latched?

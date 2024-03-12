@@ -36,6 +36,11 @@ module core (rst_n, clk, clken,
    parameter	bit	     ALU_EARLY_DECODE   = 1'b0;
    parameter	bit	     PREDICT_JALR_ZERO	= 1'b0;
 
+   // This allows a c.nop inserted for padding to be
+   // fused with a previous c.xxx instruction into a
+   // pseudo-32-bit instruction.
+   parameter	bit	     FUSE_CNOP = 1'b1;
+
    parameter	string	     TCM_INIT_FILE = "";
 
    //
@@ -277,6 +282,7 @@ module core (rst_n, clk, clken,
    wire [31:0] f_restartpc;
    wire	       f_stall;
    wire [31:0] d_insn;
+   wire	       d_insn_16;
    wire	       d_valid_i;
    wire	       d_insn_pred_taken;
    wire	[31:0] d_insn_pc;
@@ -297,7 +303,8 @@ module core (rst_n, clk, clken,
      .valid_o		(d_valid_i),
      .insn		(d_insn),
      .insn_pred_taken	(d_insn_pred_taken),
-     .insn_pc		(d_insn_pc)
+     .insn_pc		(d_insn_pc),
+      .insn_16		(d_insn_16)
      );
 
    // Decode unit (D stage)
@@ -313,7 +320,7 @@ module core (rst_n, clk, clken,
      .clken		(clken),
 
      .d_din		(d_insn),
-     .d_was_16		(1'b0),
+     .d_insn_16		(d_insn_16),
      .d_pred_taken	(d_insn_pred_taken),
      .d_pc		(d_insn_pc),
      .d_valid_i		(d_valid_i),
