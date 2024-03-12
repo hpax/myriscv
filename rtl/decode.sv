@@ -43,20 +43,19 @@ module decode_comb
    wire signed [11:0] s_imm = { i[31:25], i[11:7] };
    wire signed [12:0] b_imm = { i[31], i[7], i[30:25], i[11:8], 1'b0 };
    wire signed [20:0] j_imm = { i[31], i[19:12], i[20], i[30:21], 1'b0 };
-   // U-immediate in mangled format that mostly matches the J immediate format
-   // XXX: is the D and E stages close enough that this hack is actually
-   // a net loss??? Experiment.
-   wire signed [20:0] u_imm = { 1'b0, i[19:12], i[31:20] };
+   wire signed [31:0] u_imm = { i[31:12], 12'b0 };
 
    wire [`CONTEXT_BITS-1:0] default_context = 'b0;
 
    always @(*)
      begin
+	logic imm_pc;
+
 	op	      = 'bx;
 	op.i16        = is_16;
 
 	op.itype      = INSN_ERR;
-	op.pc	      = d_pc;
+	op.pc	      = d_pc & core.PC_MASK;
 	op.rd.r       = i[11:7];
 	op.rd.c       = default_context;
 	op.rd_e       = 1'b0;
@@ -67,12 +66,15 @@ module decode_comb
 	op.rs2.r      = i[24:20];
 	op.rs2.c      = default_context;
 	op.rs2_valid  = 1'b0;
-	op.imm	      = 'bx;      op.imm_u      = 1'b0; op.imm_pc    = 1'b0;
-	op.csrw       = 1'b0;     op.csrr       = 1'b0;
+	op.imm	      = 'bx;
+	op.csrw       = 1'b0;
+	op.csrr       = 1'b0;
 	op.pred_taken = d_pred_taken;
 
 	op.funct7     = i[31:25];
 	op.funct3     = i[14:12];
+
+	imm_pc	      = 1'b0;
 
 	unique case (i[6:0])
 	  LOAD: begin
@@ -98,8 +100,7 @@ module decode_comb
 	       op.itype	  = INSN_BR;
 	     op.rs1_valid = 1'b1;
 	     op.rs2_valid = 1'b1;
-	     op.imm	  = b_imm;
-	     op.imm_pc    = 1'b1;
+	     op.imm	  = b_imm + op.pc;
 	  end
 
 	  JALR: begin
@@ -124,8 +125,7 @@ module decode_comb
 	  JAL: begin
 	     op.itype     = INSN_JAL;
 	     op.rd_e      = 1'b1;
-	     op.imm       = j_imm;
-	     op.imm_pc    = 1'b1;
+	     op.imm       = j_imm + op.pc;
 	  end
 
 	  OP: begin
@@ -176,13 +176,20 @@ module decode_comb
 	     endcase // unique casez (op.funct3[1:0])
 	  end
 
-	  AUIPC, LUI: begin
-	     op.itype   = INSN_AGU;
-	     op.rs1.r  = 5'b0;		// This becomes addend for LUI
+	  AUIPC: begin
+	     op.itype  = INSN_ALU;
+	     op.funct3 = ALU_ADD;
+	     op.rs1.r  = 5'b0;	// rs1 = immediate 0
+	     op.rd_e   = 1'b1;
+	     op.imm    = u_imm + op.pc;
+	  end
+
+	  LUI: begin
+	     op.itype  = INSN_ALU;
+	     op.funct3 = ALU_ADD;
+	     op.rs1.r  = 5'b0;	// rs1 = immediate 0
 	     op.rd_e   = 1'b1;
 	     op.imm    = u_imm;
-	     op.imm_u  = 1'b1;
-	     op.imm_pc = ~i[5];		// 0 = LUI, 1 = AUIPC
 	  end
 
 	  default: begin

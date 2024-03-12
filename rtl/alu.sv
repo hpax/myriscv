@@ -248,9 +248,10 @@ endmodule
 // Zbb operations
 //
 
-// NB: cpop: ones = 1, cl = 1, ct = 1
-//     ctz:  ones = 0, cl = 0, ct = 1
-//     clz:  ones = 0, cl = 1, ct = 0
+//  Generic count module (slow, even with constant config?)
+//  cpop: ones = 1, cl = 1, ct = 1
+//  ctz:  ones = 0, cl = 0, ct = 1
+//  clz:  ones = 0, cl = 1, ct = 0
 module bitcnt #(
   parameter width = 32
 	    ) (
@@ -286,6 +287,94 @@ module bitcnt #(
 	end
    endgenerate
 endmodule // bitcnt
+
+// Separate bit count ops
+module clz #(
+  parameter width = 32
+	    ) (
+  input [width-1:0]	   d,
+  output [$clog2(width):0] q
+	       );
+
+   localparam		     hw = width >> 1;
+
+   generate
+      if (width < 2)
+	begin
+	   assign q = ~d;
+	end
+      else
+	begin
+	   wire [hw-1:0]  dl = d[hw-1:0];
+	   wire [hw-1:0]  dh = d[width-1:hw];
+	   wire [$clog2(hw):0]  ql;
+	   wire [$clog2(hw):0]  qh;
+
+	   clz #(hw) l (.d(dl), .q(ql));
+	   clz #(hw) h (.d(dh), .q(qh));
+
+	   assign q = qh[$clog2(hw)] ? { 1'b1, ql } : { 1'b0, qh };
+	end
+   endgenerate
+endmodule // clz
+
+module ctz #(
+  parameter width = 32
+	    ) (
+  input [width-1:0]	   d,
+  output [$clog2(width):0] q
+	       );
+
+   localparam		     hw = width >> 1;
+
+   generate
+      if (width < 2)
+	begin
+	   assign q = ~d;
+	end
+      else
+	begin
+	   wire [hw-1:0]  dl = d[hw-1:0];
+	   wire [hw-1:0]  dh = d[width-1:hw];
+	   wire [$clog2(hw):0]  ql;
+	   wire [$clog2(hw):0]  qh;
+
+	   ctz #(hw) l (.d(dl), .q(ql));
+	   ctz #(hw) h (.d(dh), .q(qh));
+
+	   assign q = ql[$clog2(hw)] ? { 1'b1, qh } : { 1'b0, ql };
+	end
+   endgenerate
+endmodule // ctz
+
+module cpop #(
+  parameter width = 32
+	    ) (
+  input [width-1:0]	   d,
+  output [$clog2(width):0] q
+	       );
+
+   localparam		     hw = width >> 1;
+
+   generate
+      if (width < 2)
+	begin
+	   assign q = d;
+	end
+      else
+	begin
+	   wire [hw-1:0]  dl = d[hw-1:0];
+	   wire [hw-1:0]  dh = d[width-1:hw];
+	   wire [$clog2(hw):0]  ql;
+	   wire [$clog2(hw):0]  qh;
+
+	   cpop #(hw) l (.d(dl), .q(ql));
+	   cpop #(hw) h (.d(dh), .q(qh));
+
+	   assign q = ql + qh;
+	end
+   endgenerate
+endmodule // cpop
 
 module orc
 #(
@@ -338,7 +427,7 @@ endmodule
 // from the M stage.)
 //
 module alu #(
-  parameter bit bitcnt_separate = 1'b0
+  parameter bit bitcnt_separate = 1'b1
 		) (
   output reg [31:0] dst,
   output reg	    cmp_out, // Comparator output bypassing output MUX
@@ -413,12 +502,9 @@ module alu #(
 	 wire [31:0] ctz_out;
 	 wire [31:0] cpop_out;
 
-	 bitcnt clz (.d (src1), .q (clz_out), .ones (1'b0),
-	   .ct (1'b0), .cl (1'b1));
-	 bitcnt ctz (.d (src1), .q (ctz_out), .ones (1'b0),
-	   .ct (1'b1), .cl (1'b0));
-	 bitcnt cpop (.d (src1), .q (cpop_out), .ones (1'b1),
-	   .ct (1'b1), .cl (1'b1));
+	 clz  #(32) clz  (.d (src1), .q (clz_out));
+	 ctz  #(32) ctz  (.d (src1), .q (ctz_out));
+	 cpop #(32) cpop (.d (src1), .q (cpop_out));
 
 	 always @(*)
 	   unique case (ctl.bcop)
@@ -432,7 +518,7 @@ module alu #(
 	 wire bc_ct   = ctl.bcop[1] ^ ctl.bcop[0];
 	 wire bc_ones = ctl.bcop[2] ^ ctl.bcop[1];
 
-	 bitcnt bitcnt (
+	 bitcnt #(32) bitcnt (
 	   .d		(src1),
 	   .q		(bitcnt_out),
 	   .ones	(bc_ones),	// CPOP, C[TL]S

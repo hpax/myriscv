@@ -74,6 +74,7 @@ set_global_assignment -name EDA_MAINTAIN_DESIGN_HIERARCHY ON -section_id eda_sim
 set_global_assignment -name VERILOG_INPUT_VERSION SYSTEMVERILOG_2005
 set_global_assignment -name VERILOG_SHOW_LMF_MAPPING_MESSAGES OFF
 set_global_assignment -name OPTIMIZATION_MODE "AGGRESSIVE PERFORMANCE"
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/counter.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/types.sv
 set_global_assignment -name VERILOG_INCLUDE_FILE ../rtl/config.vh
 set_global_assignment -name VERILOG_INCLUDE_FILE ../rtl/myriscv.vh

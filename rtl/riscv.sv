@@ -129,7 +129,9 @@ typedef enum logic [31:0] {
 	     // 32-47 reserved
 	     // 48-63 custom
 
-	     MCAUSE_IRQ     = 32'h8000_0000
+	     MCAUSE_IRQ     = 32'h8000_0000,
+
+	     MCAUSE_FIXED_MASK = MCAUSE_IRQ | 32'd63
 } csr_mcause_t;
 
 `endif

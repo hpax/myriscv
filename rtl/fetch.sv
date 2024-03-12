@@ -1,7 +1,12 @@
+//
+// Predict the successor instruction. This does not need to be
+// perfect; however, the "take" flag needs to be set when strict
+// successor flow of control is not maintained.
+//
 module predict_branch
   (
    input [31:0]	     this_insn,
-   input	     is_16,	// This can differ for fused NOPs
+   input	     is_16,	// This can differ from the opcode
    input [31:0]	     this_pc,
    output reg	     take,
    output reg [31:0] next_pc
@@ -9,6 +14,7 @@ module predict_branch
 
    wire [31:0]	 i = this_insn;
 
+   wire signed [11:0]    i_imm = i[31:20];
    wire signed [12:0]	 b_imm = { i[31], i[7], i[30:25], i[11:8], 1'b0 };
    wire signed [20:0]	 j_imm = { i[31], i[19:12], i[20], i[30:21], 1'b0 };
    wire signed [11:0]	 cj_imm;
@@ -22,7 +28,7 @@ module predict_branch
    assign cj_imm[4]   = i[11];
    assign cj_imm[11]  = i[12];
    wire signed [8:0]	 cb_imm;
-   assign cb_imm[0]   = 1'b1;
+   assign cb_imm[0]   = 1'b0;
    assign cb_imm[5]   = i[2];
    assign cb_imm[2:1] = i[4:3];
    assign cb_imm[7:6] = i[6:5];
@@ -32,42 +38,54 @@ module predict_branch
    always @(*)
      begin
 	logic absolute;
-	logic [31:0] offset;
+	logic [31:0] absolute_pc;
+	logic signed [20:0] offset;
 
-	absolute = 1'b0;	// Not yet supported
-	offset   = 32'bx;
+	absolute    = 1'b0;
+	absolute_pc = 32'bx;
+	take        = 1'b0;
+	// Normal successor PC
+	offset      = is_16 ? 3'd2 : 3'd4;
 
 	unique casez ({i[15:13], i[6:0]})
 	  10'b?01_?????01: begin	// C.J(AL)
-	     take   = 1'b1;
-	     offset = cj_imm;
+	     take   = 1'b1;		// Unconditional
+	     if (take)
+	       offset = cj_imm;
 	  end
 	  10'b11?_?????01: begin	// C.B*
-	     take   = cb_imm[8];	// Predict taken if backwards
-	     offset = cb_imm;
+	     take   = cb_imm < 'b0;	// Predict taken if backwards
+	     if (take)
+	       offset = cb_imm;
 	  end
 	  10'b???_110?111: begin	// J(AL)
-	     take   = 1'b1;
-	     offset = j_imm;
+	     take   = 1'b1;		// Unconditional
+	     if (take)
+	       offset = j_imm;
+	  end
+	  10'b???_1101111: begin	// JALR
+	     if (core.PREDICT_JALR_ZERO && !i[19:12]) begin
+		// j[al]r addr(zero)
+		take        = 1'b1;	// Unconditional
+		absolute    = 1'b1;
+		absolute_pc = i_imm;
+	     end
 	  end
 	  10'b???_1100011: begin	// B*
-	     take   = b_imm[12];	// Predict taken if backwards
-	     offset = b_imm;
+	     take   = b_imm < 'b0;	// Predict taken if backwards
+	     if (take)
+	       offset = b_imm;
 	  end
+
 	  default: begin		// Anything else
-	     take   = 1'b0;
+	     // Not a branch
 	  end
 	endcase
 
-	if (~take) begin
-	   absolute = 1'b0;
-	   offset = is_16 ? 3'd2 : 3'd4; // Normal successor
-	end
+	if (!absolute)
+	  absolute_pc = this_pc + offset;
 
-	if (absolute)
-	  next_pc = offset & core.PC_MASK;
-	else
-	  next_pc = (this_pc + offset) & core.PC_MASK;
+	next_pc = absolute_pc & core.PC_MASK;
      end
 endmodule
 

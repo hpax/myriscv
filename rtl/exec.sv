@@ -4,16 +4,14 @@
 
 `include "myriscv.vh"
 
-// Compute the new value for a register that has both a write mask and
-// a fixed mask (all bits outside the fixed mask are forced to zero.)
-function logic [31:0] rwmz(
-  input [31:0] dst,
+// Compute the new value for a register under mask
+function logic [31:0] wmask(
   input [31:0] src,
-  input [31:0] wmask,
-  input [31:0] fmask
+  input [31:0] old,
+  input [31:0] mask
   );
 
-   rwmz = ((dst & ~wmask) | (src & wmask)) & fmask;
+   wmask = (src & mask) | (old & ~mask);
 endfunction
 
 module backend #(
@@ -50,6 +48,11 @@ module backend #(
  input		       decoded_insn_t m_op,
  output reg	       m_valid_o,
  output reg	       m_busy,
+
+ // Counters
+ input [63:0]	       ctr_time,
+ input [63:0]	       ctr_cycle,
+ input [63:0]	       ctr_instret,
 
  // Data output, unregistered and registered
  output reg [31:0]     e_dout,
@@ -132,29 +135,12 @@ module backend #(
      else
        e_src2 = e_rs2_data;	// Data already in register file
 
-   // AGU adder; this is the only place where a U-immediate is
-   // accepted.
    //
-   // LD, ST, JALR, LUI use src1 as addend (always 0 for LUI);
-   // branch, JAL, AUIPC use pc as addend.
+   // AGU adder; separate adder for performance reasons.
+   //
    logic [31:0]	e_addr;
    always @(*)
-     begin
-	logic [31:0] e_addri;
-	logic [31:0] e_addra;
-
-	if (e_op.imm_u)
-	  e_addri = { e_op.imm[11:0], e_op.imm[19:12], 12'b0 };
-	else
-	  e_addri = e_op.imm;
-
-	if (e_op.imm_pc)
-	  e_addra = e_op.pc;
-	else
-	  e_addra = e_src1;
-
-	e_addr = e_addri + e_addra;
-     end
+     e_addr = e_src1 + e_op.imm;
 
    // ALU
    aluctl_t e_aluctl;
@@ -190,35 +176,42 @@ module backend #(
    //
    // CSR registers
    //
-   reg [31:0] mtvec = core.MTVEC_RESET & core.PC_MASK;
-   reg [31:0] mepc  = 32'bx & core.PC_MASK;
-   localparam [31:0] mcause_mask = 32'h8000_0000 | {IRQ_BITS{1'b1}};
+   reg [31:0] mtvec;
+   reg [31:0] mepc;
+   localparam [31:0] mcause_mask = MCAUSE_FIXED_MASK | {IRQ_BITS{1'b1}};
    reg [31:0] mcause;
-
-   reg [63:0] ctr_time	  = 64'b0;
-   reg [63:0] ctr_cycle   = 64'b0;
-   reg [63:0] ctr_instret = 64'b0;
-
-   wire [63:0] csr_cycle  = core.CTR_CYCLE_WIDTH ? ctr_cycle : ctr_time;
 
    //
    // CSR read/write logic
    //
    logic [31:0]	e_csr_rval;
    logic [31:0]	e_csr_wval;
+   wire [11:0]	ncsr = e_op.imm[11:0];
 
+   // For a CSR with read side effects, the read side effect
+   // should be conditioned on e_op.csrr.
    always @(*)
-     unique casez (e_op.imm[11:0])
-       CSR_MTVEC:  e_csr_rval			      = mtvec;
-       CSR_MEPC:   e_csr_rval			      = mepc;
-       CSR_MCAUSE: e_csr_rval			      = mcause;
-       CSR_TIME:   e_csr_rval			      = ctr_time[31:0];
-       CSR_TIMEH:  e_csr_rval			      = ctr_time[63:32];
-       CSR_CYCLE, CSR_MCYCLE:   e_csr_rval	      = csr_cycle[31:0];
-       CSR_CYCLEH, CSR_MCYCLEH: e_csr_rval	      = csr_cycle[63:32];
-       CSR_INSTRET,  CSR_MINSTRET:         e_csr_rval = ctr_instret[31:0];
-       CSR_INSTRETH, CSR_MINSTRETH:        e_csr_rval = ctr_instret[63:32];
-       default:    e_csr_rval			      = 32'b0;
+     unique case (ncsr)
+       CSR_MTVEC:
+	 e_csr_rval  = mtvec;
+       CSR_MEPC:
+	 e_csr_rval  = mepc;
+       CSR_MCAUSE:
+	 e_csr_rval  = mcause;
+       CSR_TIME:
+	 e_csr_rval  = ctr_time[31:0];
+       CSR_TIMEH:
+	 e_csr_rval  = ctr_time[63:32];
+       CSR_CYCLE, CSR_MCYCLE:
+	 e_csr_rval  = ctr_cycle[31:0];
+       CSR_CYCLEH, CSR_MCYCLEH:
+	 e_csr_rval  = ctr_cycle[63:32];
+       CSR_INSTRET,  CSR_MINSTRET:
+	 e_csr_rval  = ctr_instret[31:0];
+       CSR_INSTRETH, CSR_MINSTRETH:
+	 e_csr_rval  = ctr_instret[63:32];
+       default:
+	 e_csr_rval  = 32'b0;
      endcase
 
    always @(*)
@@ -229,29 +222,9 @@ module backend #(
        default: e_csr_wval  = 32'bx;
      endcase
 
-   wire		csrw_mtvec  = e_op.csrw && e_op.imm[11:0] == CSR_MTVEC;
-   wire		csrw_mepc   = e_op.csrw && e_op.imm[11:0] == CSR_MEPC;
-   wire		csrw_mcause = e_op.csrw && e_op.imm[11:0] == CSR_MCAUSE;
-
-   //
-   // Counters. All counters are read only, even when using the m-
-   // CSR numbers.
-   //
-   wire [63:0]	ctr_time_mask    = (1'b1 << core.CTR_TIME_WIDTH)    - 1'b1;
-   wire [63:0]	ctr_cycle_mask   = (1'b1 << core.CTR_CYCLE_WIDTH)   - 1'b1;
-   wire [63:0]	ctr_instret_mask = (1'b1 << core.CTR_INSTRET_WIDTH) - 1'b1;
-   always @(posedge clk)
-     begin
-	ctr_time <= (ctr_time + 1'b1) & ctr_time_mask;
-
-	if (clken)
-	  ctr_cycle <= (ctr_cycle + 1'b1) & ctr_cycle_mask;
-
-	// An instruction is considered retired when it gets
-	// accepted by the W stage.
-	if (w_clken)
-	   ctr_instret <= (ctr_instret + 1'b1) & ctr_instret_mask;
-     end
+   wire		csrw_mtvec  = e_op.csrw && ncsr == CSR_MTVEC;
+   wire		csrw_mepc   = e_op.csrw && ncsr == CSR_MEPC;
+   wire		csrw_mcause = e_op.csrw && ncsr == CSR_MCAUSE;
 
    //
    // Interrupt recognition
@@ -289,76 +262,89 @@ module backend #(
    always @(*)
      begin
 	logic [31:0] new_pc;
+	logic	     trap;
+	logic	     jump;
 
 	e_kill	    = 1'b0;
 	new_pc	    = e_next_pc;
 	trap_irq    = 1'b0;
+	trap        = 1'b0;
+	jump        = 1'b0;
 	trap_mcause = 32'bx;
 
 	if (e_irq) begin
-	   trap_irq	 = 1'b1;
+	   trap_irq      = 1'b1;
 	   trap_mcause   = MCAUSE_IRQ | e_irq_vector;
+	   new_pc        = mtvec + (e_irq_vector << 2);
 	end else unique case (e_op.itype)
 	  INSN_ERR: if (core.TRAP_BADINSN) begin
-	     trap_irq    = 1'b1;
+	     trap        = 1'b1;
 	     trap_mcause = MCAUSE_BADINSN;
 	  end
 	  INSN_ECALL: begin	// ECALL, EBREAK
-	     trap_irq	 = 1'b1;
+	     trap	 = 1'b1;
 	     trap_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
 	  end
 	  INSN_ALU: if (core.TRAP_BADALU) begin
-	     trap_irq    = e_aluctl.unit == ALUSRC_ERR;
+	     trap	 = e_aluctl.unit == ALUSRC_ERR;
 	     trap_mcause = MCAUSE_BADINSN;
 	  end
-	  INSN_JAL: begin
-	     e_kill	 = !e_op.pred_taken;
-	     new_pc	 = e_addr;
+	  INSN_JAL: begin	// JAL, JALR
+	     jump	 = !e_op.pred_taken;
 	  end
 	  INSN_BR: begin
-	     e_kill	= e_cmp_out != e_op.pred_taken;
-	     if (e_cmp_out)
-	       new_pc   = e_addr;
+	     jump	 = e_cmp_out != e_op.pred_taken;
 	  end
 	  default: begin
 	     // No control transfer
 	  end
 	endcase
 
-	if (core.TRAP_BADPC && (new_pc & ~core.PC_MASK) && !trap_irq) begin
-	   trap_irq    = 1'b1;	// PC out of bounds
+	if (jump)
+	   new_pc = e_addr;
+
+	if (trap)
+	  trap_irq = 1'b1;
+
+	if (core.TRAP_BADPC && !trap_irq && (new_pc & ~core.PC_MASK)) begin
+	   trap = 1'b1;
 	   trap_mcause = MCAUSE_BADPC;
 	end
 
-	if (trap_irq) begin
-	   e_kill = 1'b1;	// The unexpected is never predicted...
-	   new_pc = mtvec + (e_irq_vector << 2);
+	if (trap) begin
+	   trap_irq = 1'b1;
+	   new_pc   = mtvec;
 	end
 
-	e_restartpc = new_pc & core.PC_MASK;
+	e_kill		= trap | jump;
+	e_restartpc	= new_pc & core.PC_MASK;
      end
 
-   always @(posedge clk)
-     if (e_clken) begin
+   //
+   // Handle mcause and mtvec
+   wire [31:0] mtvec_reset = core.MTVEC_RESET & core.PC_MASK;
+   wire [31:0] mtvec_wmask = core.MTVEC_WMASK & core.PC_MASK;
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	mtvec  <= mtvec_reset;
+	mcause <= 32'b0;
+	mepc   <= 32'b0;
+     end else if (e_clken) begin
 	if (csrw_mtvec)
-	  mtvec <= rwmz(mtvec,  e_csr_wval, core.MTVEC_WMASK, core.PC_MASK);
+	  mtvec <= wmask(e_csr_wval, mtvec_reset, mtvec_wmask);
 
 	// XXX: writing mepc seems to be a frequency limiter; it could
 	// probably be written in the M stage (post-kill) instead.
 	if (trap_irq)
 	  mepc  <= e_op.pc & core.PC_MASK;
 	else if (csrw_mepc)
-	  mepc  <= rwmz(mepc,   e_csr_wval, core.PC_MASK,     core.PC_MASK);
+	  mepc  <= e_csr_wval & core.PC_MASK;
 
 	if (trap_irq)
-	  begin
-	     if (e_irq)
-	       mcause	  <= MCAUSE_IRQ | e_irq_vector;
-	     else
-	       mcause	  <= trap_mcause;
-	  end
-	else if (csrw_mcause);
-	  mcause <= rwmz(mcause, e_csr_wval, mcause_mask, mcause_mask);
+	  mcause <= trap_mcause & mcause_mask;
+	else if (csrw_mcause)
+	  mcause <= e_csr_wval & mcause_mask;
      end
 
    //
@@ -369,7 +355,6 @@ module backend #(
        INSN_ALU:  e_dout = e_alu_out;
        INSN_MULL: e_dout = m_mull_o;
        INSN_JAL:  e_dout = e_next_pc;
-       INSN_AGU:  e_dout = e_addr;
        INSN_CSR:  e_dout = e_csr_rval;
        default:   e_dout = 32'bx; // No output, or delivered from M stage
      endcase

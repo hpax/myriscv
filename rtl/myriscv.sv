@@ -1,18 +1,19 @@
 `include "myriscv.vh"
 
 module core (rst_n, clk, clken,
-  io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready,io_rdata,
-  irq, intack, buserr
-    );
+	     ctr_time, ctr_cycle, ctr_instret,
+	     io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready,io_rdata,
+	     irq, intack, buserr
+	     );
    parameter    bit WITH_Zba		= 1'b1;
    parameter    bit WITH_Zcf		= 1'b1;
    parameter    bit WITH_Zcb		= 1'b1;
    parameter    bit WITH_Zcd		= 1'b1;
    parameter    bit WITH_Zbb		= 1'b1;
-   parameter    bit WITH_bitcnt         = 1'b0;
+   parameter    bit WITH_bitcnt         = 1'b1;
    parameter    bit WITH_Zmmul		= 1'b1;
    parameter    bit WITH_Zicond		= 1'b1;
-   parameter    bit WITH_minmax		= 1'b0;
+   parameter    bit WITH_minmax		= 1'b1;
    parameter    bit WITH_extensions	= 1'b1;
    parameter    bit STRICT_UNDEFINED	= 1'b0;
 
@@ -29,10 +30,11 @@ module core (rst_n, clk, clken,
    parameter    logic [31:0] MTVEC_WMASK	= 32'h0;
 
    parameter    int	     CTR_TIME_WIDTH	= 40;
-   parameter    int	     CTR_CYCLE_WIDTH	= 40;
+   parameter    int	     CTR_CYCLE_WIDTH	=  0;
    parameter    int	     CTR_INSTRET_WIDTH	= 40;
 
-   parameter	bit	     ALU_EARLY_DECODE = 1'b0;
+   parameter	bit	     ALU_EARLY_DECODE   = 1'b0;
+   parameter	bit	     PREDICT_JALR_ZERO	= 1'b0;
 
    parameter	string	     TCM_INIT_FILE = "";
 
@@ -62,6 +64,10 @@ module core (rst_n, clk, clken,
    input		     rst_n;
    input		     clk;
    input		     clken;
+
+   inout tri0 [63:0]	     ctr_time;
+   output [63:0]	     ctr_cycle;
+   output [63:0]	     ctr_instret;
 
    output reg [31:0]	     io_addr;
    output reg [31:0]	     io_wdata;
@@ -265,6 +271,7 @@ module core (rst_n, clk, clken,
 	endcase
      end
 
+
    // Fetch unit (F stage)
    wire f_restart;
    wire [31:0] f_restartpc;
@@ -349,9 +356,9 @@ module core (rst_n, clk, clken,
    wire [31:0] m_din;
 
    backend
-     #(.NUM_IRQS ( NUM_IRQS ),
-       .IRQ_BITS ( IRQ_BITS ),
-     .ALU_EARLY_DECODE ( ALU_EARLY_DECODE )
+     #(.NUM_IRQS	 ( NUM_IRQS ),
+       .IRQ_BITS	 ( IRQ_BITS ),
+       .ALU_EARLY_DECODE ( ALU_EARLY_DECODE )
        ) backend (
      .rst_n		(rst_n),
      .clk		(clk),
@@ -382,6 +389,10 @@ module core (rst_n, clk, clken,
 
      .e_dout		(e_dout),
      .m_din		(m_din),
+
+     .ctr_time          (ctr_time),
+     .ctr_cycle		(ctr_cycle),
+     .ctr_instret	(ctr_instret),
 
      .dbus_a		(dbus_a),
      .dbus_valid	(dbus_valid),
@@ -432,5 +443,30 @@ module core (rst_n, clk, clken,
      .e_rs2_m	(e_rs2_m),
      .e_rs2_w	(e_rs2_w)
      );
+   // Time counter. If CTR_TIME_WIDTH is 0, ctr_time is an input
+   // which can be connected to an external counter or set to 0;
+   // otherwise it is an output.
+   generate
+      if (CTR_TIME_WIDTH) begin
+	 counter #(.o_bits(64), .c_bits(CTR_TIME_WIDTH))
+	 timectr (.clk(clk), .ctr(ctr_time));
+      end
+   endgenerate
+
+   // Other counters. All counters are read only, even when using the m-
+   // CSR numbers.
+   generate
+      if (CTR_CYCLE_WIDTH) begin
+	 counter #(.o_bits(64), .c_bits(CTR_CYCLE_WIDTH))
+         cyclectr (.rst_n (rst_n), .clk(clk), .clken(clken), .ctr(ctr_cycle));
+      end else begin
+	 assign ctr_cycle = ctr_time;
+      end
+   endgenerate
+
+   counter #(.o_bits(64), .c_bits(CTR_INSTRET_WIDTH))
+   instretctr (.rst_n (rst_n), .clk(clk), .clken(clken),
+	       .count(m_valid_o & ~m_stall), .ctr(ctr_instret));
+
 
 endmodule

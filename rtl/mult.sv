@@ -12,6 +12,11 @@
 // clock enable is disabled.
 //
 
+`ifdef ALTERA_RESERVED_QIS
+// This seems worse than the generic result?!
+// `define ALTERA_MULT 1
+`endif
+
 module mult
   #(
     parameter width = 32,
@@ -32,62 +37,11 @@ module mult
   output	[width-1:0] ql
     );
 
-   logic signed [width:0]   a;
-   logic signed [width:0]   b;
 
-   logic [width-1:0]	      l_q;
-   logic [width-1:0]	      h_q;
-
-   reg			      high_q;
-
-   always @(negedge rst_n or posedge clk)
-     if (~rst_n) begin
-	a	<= 'bx;
-	b	<= 'bx;
-	high_q	<= 1'bx;
-     end else if (clken) begin
-	a	<= { src1[width-1] & ssign1, src1 };
-	b	<= { src2[width-1] & ssign2, src2 };
-	high_q	<= high;
-     end
-
-   always @(*) begin
-      logic signed [2*width-1:0] m;
-
-      m = a * b;
-
-      l_q = m[width-1:0];
-      h_q = m[2*width-1:width];
-   end
-
-   assign q  = ~high_q ? l_q : h_q;
-   assign ql = l_q;
-endmodule // mult
-
-`ifdef SKIP
-module mult
-  #(
-    parameter width = 32,
-    parameter bit mux_late = 1'b1 // High/low as combinatorial MUX
-    )
-   (
-  input			 rst_n,
-  input			 clk,
-  input			 clken,
-
-  input [width-1:0]	 src1,
-  input			 ssign1, // src1 is signed
-  input [width-1:0]	 src2,
-  input			 ssign2, // src2 is signed
-  input			 high, // q should contains the high half result
-
-  output	[width-1:0] q,
-  output	[width-1:0] ql
-    );
+`ifdef ALTERA_MULT		// Altera IP
 
    wire [width-1:0]	      l_q;
    wire [width-1:0]	      h_q;
-   reg			      high_q;
 
    altmult am (
      .clock0  ( clk ),
@@ -99,13 +53,43 @@ module mult
      .result  ( {h_q, l_q} )
      );
 
-   always @(posedge clk)
-     high_q <= high;
+`else				// Generic
+
+   logic signed [width:0]   a;
+   logic signed [width:0]   b;
+
+   logic [width-1:0]	      l_q;
+   logic [width-1:0]	      h_q;
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	a	<= 'bx;
+	b	<= 'bx;
+     end else if (clken) begin
+	a	<= $signed({ src1[width-1] & ssign1, src1 });
+	b	<= $signed({ src2[width-1] & ssign2, src2 });
+     end
+
+   always @(*) begin
+      logic signed [2*width-1:0] m;
+
+      m = a * b;
+
+      l_q = m[width-1:0];
+      h_q = m[2*width-1:width];
+   end
+`endif
+
+   reg				 high_q;
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n)
+       high_q <= 1'bx;
+     else if (clken)
+       high_q <= high;
 
    assign q  = ~high_q ? l_q : h_q;
    assign ql = l_q;
 endmodule // mult
-`endif
 
 module multiplier
   #(

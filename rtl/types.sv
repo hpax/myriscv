@@ -5,9 +5,11 @@
 
 //
 // Note:
-// INSN_KILLED means an interruption in the flow of control,
+// INSN_KILLED means an interruption in the flow of control, the PC
+// of the instruction packet is invalid, but the next valid instruction
+// received in the pipeline will contain a canonical (guaranteed
+// non-speculative) PC.
 // INSN_NULL means that PC should not be advanced.
-// and that the next valid instruction will re-establish the canonical PC.
 // INSN_NOP means the PC should be advanced normally.
 //
 typedef enum logic [3:0] {
@@ -19,10 +21,9 @@ typedef enum logic [3:0] {
 	INSN_MULL   = 4'b0101,	// MULH -> MULL forward
 	INSN_LD     = 4'b0110,	// Memory load
 	INSN_ST     = 4'b0111,	// Memory store
-	INSN_JAL    = 4'b1000,	// JAL, JALR
-	INSN_AGU    = 4'b1001,	// LUI, AUIPC
-	INSN_BR     = 4'b1010,  // Conditional branch
-	INSN_CSR    = 4'b1011,	// CSR instruction
+	INSN_CSR    = 4'b1000,	// CSR instruction
+	INSN_JAL    = 4'b1100,	// JAL, JALR
+	INSN_BR     = 4'b1101,  // Conditional branch
 	INSN_ECALL  = 4'b1110,	// ECALL, EBREAK (trap)
 	INSN_ERR    = 4'b1111	// Invalid instruction (trap)
 } insn_type_t;
@@ -31,6 +32,7 @@ function logic insn_ldst(input insn_type_t insn);
    insn_ldst = insn[3:1] == 3'b011;
 endfunction
 function logic insn_real(input insn_type_t insn);
+   // Not INSN_KILLED or INSN_NULL
    insn_real = |insn[3:1];
 endfunction
 
@@ -49,9 +51,7 @@ typedef struct packed {
    logic	 rs1_valid;	// Register number (not immediate)
    regnum_t	 rs2;		// 5-bit register number or immediate
    logic	 rs2_valid;	// Register number (not immediate)
-   logic signed [20:0] imm;	// Immediate (permuted for U immediate)
-   logic	 imm_u;		// U-type immediate
-   logic         imm_pc;	// PC-relative immediate (BR; JAL; AUIPC)
+   logic [31:0]	 imm;		// Decoded immediate
 
    logic  [31:0] pc;		// Address of this instruction
    logic	 i16;		// Compressed (16-bit) instruction
@@ -82,17 +82,15 @@ function decoded_insn_t dummy_op(
    dummy_op.rs2		= 'bx;
    dummy_op.rs2_valid	= 1'b0;
    dummy_op.imm		= 'bx;
-   dummy_op.imm_u	= 1'bx;
-   dummy_op.imm_pc	= 'bx;
    dummy_op.funct3	= 'bx;
    dummy_op.funct7	= 'bx;
 
    dummy_op.csrr	= 1'b0;
    dummy_op.csrw	= 1'b0;
 
-   dummy_op.pc		= pc;
+   dummy_op.pc		= pc & core.PC_MASK;
    dummy_op.i16		= 'bx;
-   dummy_op.pred_taken	= 1'bx;
+   dummy_op.pred_taken	= 1'b0;
 endfunction
 
 function decoded_insn_t killed_op;
