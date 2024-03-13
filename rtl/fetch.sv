@@ -1,3 +1,5 @@
+`include "myriscv.vh"
+
 //
 // Predict the successor instruction. This does not need to be
 // perfect; however, the "take" flag needs to be set when strict
@@ -47,23 +49,29 @@ module predict_branch
 	// Normal successor PC
 	offset      = is_16 ? 3'd2 : 3'd4;
 
-	unique casez ({i[15:13], i[6:0]})
-	  10'b?01_?????01: begin	// C.J(AL)
+	unique casez (i[6:0])
+	  7'b?????01: begin		// RVC quadrant 1
+	     unique casez (i[15:13])
+	       3'b?01: begin		// C.J(AL)
+		  take   = 1'b1;	// Unconditional
+		  if (take)
+		    offset = cj_imm;
+	       end
+	       3'b11?: begin		// C.BEQZ/C.BNEZ
+		  take   = cb_imm < 0;	// Predict taken if backwards
+		  if (take)
+		    offset = cb_imm;
+	       end
+	       default: begin
+		  // Default
+	       end
+	     endcase // unique casez (i[15:13])
+	  end
+	  JAL: begin
 	     take   = 1'b1;		// Unconditional
-	     if (take)
-	       offset = cj_imm;
+	     offset = j_imm;
 	  end
-	  10'b11?_?????01: begin	// C.B*
-	     take   = cb_imm < 'b0;	// Predict taken if backwards
-	     if (take)
-	       offset = cb_imm;
-	  end
-	  10'b???_1100111: begin	// J(AL)
-	     take   = 1'b1;		// Unconditional
-	     if (take)
-	       offset = j_imm;
-	  end
-	  10'b???_1101111: begin	// JALR
+	  JALR: begin
 	     if (core.PREDICT_JALR_ZERO && !i[19:12]) begin
 		// j[al]r addr(zero)
 		take        = 1'b1;	// Unconditional
@@ -71,16 +79,15 @@ module predict_branch
 		absolute_pc = i_imm;
 	     end
 	  end
-	  10'b???_1100011: begin	// B*
-	     take   = b_imm < 'b0;	// Predict taken if backwards
+	  BRANCH: begin
+	     take   = b_imm < 0;	// Predict taken if backwards
 	     if (take)
 	       offset = b_imm;
 	  end
-
-	  default: begin		// Anything else
-	     // Not a branch
+	  default: begin
+	     // Not a transfer or not predicted
 	  end
-	endcase
+	endcase // unique casez (i[6:0])
 
 	if (!absolute)
 	  absolute_pc = this_pc + offset;

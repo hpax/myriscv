@@ -462,7 +462,7 @@ module alu #(
 
    always @(*) begin
       cmp_lt  = ctl.cond[0] ^ (ctl.cond[1] ? cmp_ltu : cmp_lts);
-      cmp_out = ctl.cond[2] ? cmp_eq ^ ctl.cond[0] : cmp_lt;
+      cmp_out = ctl.cond[2] ? cmp_lt : (cmp_eq ^ ctl.cond[0]);
    end
 
    //

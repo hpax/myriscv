@@ -99,7 +99,7 @@ module backend #(
      .rs2_data ( e_rs2_data ),
      .rd       ( m_op.rd ),
      .rd_data  ( m_dout ),
-     .rd_wren  ( m_valid_o & (m_op.rd_e | m_op.rd_m) ),
+     .rd_wren  ( m_valid_o & m_op.rd_m ),
      .rd_wbe   ( m_dout_be )
       );
 

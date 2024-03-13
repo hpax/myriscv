@@ -97,6 +97,12 @@ module pipe_ctl #(
 	  end else begin
 	     e_valid_i <= d_valid_o;
 	     e_op      <= d_op;
+
+	     // Bypass control (note: _m takes priority over _w!)
+	     e_rs1_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs1_valid, d_op.rs1);
+	     e_rs1_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs1_valid, d_op.rs1);
+	     e_rs2_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs2_valid, d_op.rs2);
+	     e_rs2_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs2_valid, d_op.rs2);
 	  end
 
 	  if (!e_valid_o) begin
@@ -107,12 +113,10 @@ module pipe_ctl #(
 	  end else begin
 	     m_valid_i <= e_valid_o;
 	     m_op      <= e_op;
+	     // Data in the E stage is forwarded to the M stage,
+	     // so it isn't in the register file yet.
+	     m_op.rd_m <= e_op.rd_e | e_op.rd_m;
 	  end
 
-	  // Bypass control
-	  e_rs1_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs1_valid, d_op.rs1);
-	  e_rs1_w   <= regeq(e_op.rd_m, e_op.rd, d_op.rs1_valid, d_op.rs1);
-	  e_rs2_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs2_valid, d_op.rs2);
-	  e_rs2_w   <= regeq(e_op.rd_m, e_op.rd, d_op.rs2_valid, d_op.rs2);
        end // else: !if(~rst_n)
 endmodule

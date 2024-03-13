@@ -93,7 +93,7 @@ module decode_comb
 	       op.itype	  = INSN_BR;
 	     op.rs1_valid = 1'b1;
 	     op.rs2_valid = 1'b1;
-	     op.imm	  = b_imm + op.pc;
+	     op.imm	  = op.pc + b_imm;
 	  end
 
 	  JALR: begin
@@ -118,7 +118,7 @@ module decode_comb
 	  JAL: begin
 	     op.itype     = INSN_JAL;
 	     op.rd_e      = 1'b1;
-	     op.imm       = j_imm + op.pc;
+	     op.imm       = op.pc + j_imm;
 	  end
 
 	  OP: begin
@@ -174,7 +174,7 @@ module decode_comb
 	     op.funct3 = ALU_ADD;
 	     op.rs1.r  = 5'b0;	// rs1 = immediate 0
 	     op.rd_e   = 1'b1;
-	     op.imm    = u_imm + op.pc;
+	     op.imm    = op.pc + u_imm;
 	  end
 
 	  LUI: begin
