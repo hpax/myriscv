@@ -2,8 +2,6 @@
 // Very simple test bench
 //
 
-`timescale 1 ns / 1 ps
-
 module test #(
   parameter int	NUM_IRQS = 31
    );
@@ -49,14 +47,16 @@ module test #(
      .buserr	( buserr )
      );
 
+   localparam int	CLOCK = 1000;
+
    initial
      begin
 	clk       <= 1'b1;
 	rst_n	  <= 1'b0;
-	#16 rst_n <= 1'b1;
+	#(16*CLOCK) rst_n <= 1'b1;
      end
 
-   always #1 clk <= ~clk;
+   always #(CLOCK >> 1) clk <= ~clk;
 
    assign irq = 'b0;
    assign io_rdata = io_addr;
@@ -75,8 +75,8 @@ module test #(
 		dstr[i] = 8'h20;
 	   end
 
-	   $display("(%t) io: %h %s %b %h \"%s\"",
-	     $time, io_addr, io_wrq ? "w" : "r",
+	   $display("(%u) io: %h %s %b %h \"%s\"",
+	     $time/CLOCK, io_addr, io_wrq ? "w" : "r",
 	     io_wbe, data, dstr);
 	end
      end

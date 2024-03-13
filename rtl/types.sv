@@ -71,7 +71,7 @@ typedef struct packed {
 function decoded_insn_t dummy_op(
   input	       insn_type_t itype,
   input [31:0] pc,
-  input i16
+  input	       i16
   );
    dummy_op.itype	= itype;
    dummy_op.rd		= 'bx;
@@ -88,8 +88,8 @@ function decoded_insn_t dummy_op(
    dummy_op.csrr	= 1'b0;
    dummy_op.csrw	= 1'b0;
 
-   dummy_op.pc		= pc & core.PC_MASK;
-   dummy_op.i16		= 'bx;
+   dummy_op.pc		= pc;
+   dummy_op.i16		= i16;
    dummy_op.pred_taken	= 1'b0;
 endfunction
 

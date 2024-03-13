@@ -48,18 +48,21 @@ module pipe_ctl #(
 
    // Bubble due to W -> E forwarding necessary, for the following instruction
    // (i.e. this is a D stage signal.)
-   logic	      d_me_hazard;
+   reg	      d_me_hazard;
    always @(*)
-     begin
-	d_me_hazard = regeq(e_op.rd_m, e_op.rd, d_op.rs1_valid, d_op.rs1) |
-		      regeq(e_op.rd_m, e_op.rd, d_op.rs2_valid, d_op.rs2);
-     end
+     d_me_hazard = d_valid_o &
+		   (regeq(e_op.rd_m, e_op.rd, d_op.rs1_valid, d_op.rs1) |
+		    regeq(e_op.rd_m, e_op.rd, d_op.rs2_valid, d_op.rs2));
+
+   // The W stage always accepts
+   wire w_busy = 1'b0;
 
    // d_me_hazard has an effect very similar to e_busy.
-   assign f_stall	= d_busy | e_busy | m_busy | d_me_hazard;
-   assign d_stall	= e_busy | m_busy | d_me_hazard;
-   assign e_stall	= m_busy;
-   assign m_stall	= 1'b0;
+
+   assign m_stall	= w_busy;
+   assign e_stall	= (m_valid_o & m_stall) | m_busy;
+   assign d_stall	= (e_valid_o & e_stall) | e_busy | d_me_hazard;
+   assign f_stall	= (d_valid_o & d_stall) | d_busy;
 
    assign f_restart	= e_kill;
 
@@ -81,16 +84,16 @@ module pipe_ctl #(
 	  // expected next instruction; the E stage is allowed throw a
 	  // branch mispredict kill otherwise.
 	  //
-	  // For INSN_KILLED, the PC is undefined, and the next valid instruction
-	  // is defined to carry a new canonical PC.
+	  // For INSN_KILLED, the PC is undefined, and the next valid
+	  // instruction is defined to carry a new canonical PC.
 	  if (e_kill) begin
 	     e_valid_i <= 1'b0;
 	     e_op      <= killed_op();
-	  end else if (!d_valid_o) begin
+	  end else if (e_busy & e_valid_i) begin
+	     // Leave unchanged
+	  end else if (~d_valid_o | d_stall) begin
 	     e_valid_i <= 1'b0;
 	     e_op      <= null_op(d_op.pc);
-	  end else if (e_busy | (e_stall & e_valid_i)) begin
-	     // Leave unchanged
 	  end else begin
 	     e_valid_i <= d_valid_o;
 	     e_op      <= d_op;

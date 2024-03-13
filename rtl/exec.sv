@@ -78,7 +78,8 @@ module backend #(
    reg [3:0]	   m_dout_be;
 
    // E-stage pipeline synchronization signals
-   assign e_valid_o = e_clken & e_valid_i & ~e_kill;
+   // XXX: on an IRQ there really no reason to kill the instruction...
+   assign e_valid_o = e_valid_i & ~e_busy & ~e_kill;
    assign e_busy    = 1'b0;
 
    // Latched output to M stage; also used by the bypass network
@@ -265,60 +266,62 @@ module backend #(
 	logic	     trap;
 	logic	     jump;
 
-	e_kill	    = 1'b0;
 	new_pc	    = e_next_pc;
 	trap_irq    = 1'b0;
 	trap        = 1'b0;
-	jump        = 1'b0;
+	jump        = 1'b0;	// Mispredicted jump or branch
 	trap_mcause = 32'bx;
 
 	if (e_irq) begin
 	   trap_irq      = 1'b1;
 	   trap_mcause   = MCAUSE_IRQ | e_irq_vector;
 	   new_pc        = mtvec + (e_irq_vector << 2);
-	end else unique case (e_op.itype)
-	  INSN_ERR: if (core.TRAP_BADINSN) begin
-	     trap        = 1'b1;
-	     trap_mcause = MCAUSE_BADINSN;
-	  end
-	  INSN_ECALL: begin	// ECALL, EBREAK
-	     trap	 = 1'b1;
-	     trap_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
-	  end
-	  INSN_ALU: if (core.TRAP_BADALU) begin
-	     trap	 = e_aluctl.unit == ALUSRC_ERR;
-	     trap_mcause = MCAUSE_BADINSN;
-	  end
-	  INSN_JAL: begin	// JAL, JALR
-	     jump	 = !e_op.pred_taken;
-	  end
-	  INSN_BR: begin
-	     jump	 = e_cmp_out != e_op.pred_taken;
-	  end
-	  default: begin
-	     // No control transfer
-	  end
-	endcase
+	end else if (e_valid_i & ~e_busy) begin
+	   unique case (e_op.itype)
+	     INSN_ERR: if (core.TRAP_BADINSN) begin
+		trap        = 1'b1;
+		trap_mcause = MCAUSE_BADINSN;
+	     end
+	     INSN_ECALL: begin	// ECALL, EBREAK
+		trap	 = 1'b1;
+		trap_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
+	     end
+	     INSN_ALU: if (core.TRAP_BADALU) begin
+		trap	 = e_aluctl.unit == ALUSRC_ERR;
+		trap_mcause = MCAUSE_BADINSN;
+	     end
+	     INSN_JAL: begin	// JAL, JALR
+		jump	 = !e_op.pred_taken;
+	     end
+	     INSN_BR: begin
+		jump	 = e_cmp_out != e_op.pred_taken;
+	     end
+	     default: begin
+		// No control transfer
+	     end
+	   endcase
 
-	if (jump)
-	   new_pc = e_addr;
+	   // If we didn't predict this, we should have been, and vice
+	   // versa...
+	   if (jump && !e_op.pred_taken)
+	     new_pc = e_addr;
 
-	if (trap)
-	  trap_irq = 1'b1;
+	   if (core.TRAP_BADPC && !trap && (new_pc & ~core.PC_MASK)) begin
+	      trap = 1'b1;
+	      trap_mcause = MCAUSE_BADPC;
+	   end
 
-	if (core.TRAP_BADPC && !trap_irq && (new_pc & ~core.PC_MASK)) begin
-	   trap = 1'b1;
-	   trap_mcause = MCAUSE_BADPC;
-	end
+	   if (trap) begin
+	      trap_irq = 1'b1;
+	      new_pc   = mtvec;
+	   end
+	end // if (e_valid_i)
 
-	if (trap) begin
-	   trap_irq = 1'b1;
-	   new_pc   = mtvec;
-	end
-
-	e_kill		= trap | jump;
+	e_kill		= trap_irq | jump;
 	e_restartpc	= new_pc & core.PC_MASK;
      end
+
+   // XXX: add a "think cycle" for KILL?
 
    //
    // Handle mcause and mtvec

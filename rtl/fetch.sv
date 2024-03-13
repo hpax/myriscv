@@ -126,7 +126,6 @@ module fetch
    logic	     is_16;
 
    wire		 br_take;
-   wire [31:0]	 br_offset;
    // Branch prediction
    predict_branch pred (
      .this_insn	(this_insn),
@@ -173,7 +172,7 @@ module fetch
 	this_valid = this_insn[1:0] == 2'b11 ? have_32 : have_16;
      end
 
-   wire advance  = this_valid & ~stall;
+   wire advance  = this_valid & (~stall | ~valid_o);
    assign ibus_a = advance ? next_pc : this_pc;
 
    reg	restart_q;
@@ -198,7 +197,7 @@ module fetch
 	  // a bit smarter here.
 	  ibus_valid <= 1'b1;
 
-	  if (restart & !stall)
+	  if (restart)
 	    begin
 	       insn_pc	       <= 1'bx;
 	       this_pc	       <= restart_pc & core.PC_MASK;
@@ -212,8 +211,7 @@ module fetch
 	    end
 	  else
 	    begin
-	       ibus_valid_q <= ibus_valid;
-	       valid_o	    <= advance;
+	       ibus_valid_q	    <= ibus_valid;
 
 	       if (advance)
 		 begin
@@ -236,8 +234,6 @@ module fetch
 	       else if (!stall)
 		 begin
 		    // Consumed instruction but queue empty
-		    insn	    <= this_insn;
-		    insn_pc         <= this_pc;
 		    valid_o	    <= 1'b0;
 		    insn_pred_taken <= 1'b0;
 		 end

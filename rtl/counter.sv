@@ -17,32 +17,27 @@ module counter #(
     input tri1		    count,	// Count enable
     input tri0		    clear,	// Synchronous clear/load
     input tri0 [o_bits-1:0] clearval,	// Value on clear
-    
+
     output [o_bits-1:0]	    ctr		// Counter output
     );
 
-   generate
-      if (c_bits) begin
-	 reg [c_bits-1:0] ctr_q = resetval[c_bits-1:0];
+   reg [o_bits-1:0]	    ctr_q;
+   wire			    sbit = (sext && c_bits && o_bits < c_bits)
+			    ? ctr_q[c_bits-1] : 1'b0;
+   wire [o_bits-1:0]	    ctr_mask = (1'b1 << c_bits) - 1'b1;
 
-	 always @(negedge rst_n or posedge clk)
-	   if (~rst_n)
-	     ctr_q <= resetval[c_bits-1:0];
-	   else if (clken) begin
-	     if (clear)
-	       ctr_q <= clearval[c_bits-1:0];
-	     else if (count)
-	       ctr_q <= ctr_q + 1'b1;
-	   end
-      end
-   endgenerate
+   initial
+     ctr_q <= resetval & ctr_mask;
 
-   generate
-      if (!c_bits)
-	assign ctr = 'b0;
-      else if (sext)
-	 assign ctr = $signed(ctr_q);
-      else
-	 assign ctr = ctr_q;
-   endgenerate
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n)
+       ctr_q <= resetval & ctr_mask;
+     else if (clken) begin
+	if (clear)
+	  ctr_q <= clearval & ctr_mask;
+	else if (count)
+	  ctr_q <= (ctr_q + 1'b1) & ctr_mask;
+     end
+
+   assign ctr = (ctr_q & ctr_mask) | ({o_bits{sbit}} & ~ctr_mask);
 endmodule // ctr

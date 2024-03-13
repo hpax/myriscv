@@ -315,11 +315,11 @@ module decode (
   output		      decoded_insn_t d_op
 			 );
 
-
-   wire	d_clken = clken & d_valid_i & ~d_stall;
+   wire			      d_clken;
 
    assign d_busy    = 1'b0;
-   assign d_valid_o = d_valid_i & ~d_stall & d_valid_i;
+   assign d_clken   = clken & (d_busy | (d_valid_i & ~d_stall));
+   assign d_valid_o = d_valid_i & ~d_killed & ~d_busy;
 
    decoded_insn_t c_op;		// decode_comb op out
 
