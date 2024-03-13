@@ -60,17 +60,27 @@ module test #(
 
    assign irq = 'b0;
    assign io_rdata = io_addr;
-   assign io_ready = io_valid;
+
+   reg io_valid_q = 1'b0;
+   reg [7:0] io_delay_q;
+
+   assign io_rdata = io_addr + io_delay_q;
+   assign io_ready = io_valid && !io_delay_q;
 
    always @(posedge clk)
      begin
-	if (io_valid) begin
+	io_wait_q  <= io_valid & ~io_ready;
+	io_delay_q <= io_delay_q - io_valid;
+
+	if (io_valid & ~io_wait_q) begin
 	   logic [31:0]	    data;
 	   logic [3:0][7:0] dstr;
 
+	   io_delay_q <= io_addr[30] ? io_addr[7:0] : 8'b0;
+
 	   data = io_wrq ? io_wdata : io_rdata;
-	   dstr = data;
 	   for (int i = 0; i < 4; i++) begin
+	      dstr[i] = data[31-8*i:24-8*i];
 	      if (dstr[i] < 8'h20 || dstr[i] > 8'h7e)
 		dstr[i] = 8'h20;
 	   end
@@ -78,6 +88,9 @@ module test #(
 	   $display("(%u) io: %h %s %b %h \"%s\"",
 	     $time/CLOCK, io_addr, io_wrq ? "w" : "r",
 	     io_wbe, data, dstr);
+
+	   if (io_wrq && io_addr == -32'd8)
+	     $stop;		// Simulation break
 	end
      end
 endmodule
