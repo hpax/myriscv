@@ -141,7 +141,7 @@ module backend #(
    //
    logic [31:0]	e_addr;
    always @(*)
-     e_addr = e_src1 + e_op.imm;
+     e_addr = $signed(e_src1) + $signed(e_op.imm);
 
    // ALU
    aluctl_t e_aluctl;

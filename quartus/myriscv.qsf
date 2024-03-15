@@ -98,4 +98,5 @@ set_global_assignment -name QIP_FILE tcm_alt.qip
 set_global_assignment -name QIP_FILE altmult.qip
 set_global_assignment -name SOURCE_FILE db/myriscv.cmp.rdb
 set_global_assignment -name EDA_TEST_BENCH_DESIGN_INSTANCE_NAME cpu -section_id eda_simulation
+set_global_assignment -name EDA_NATIVELINK_SIMULATION_SETUP_SCRIPT ../test/test.tcl -section_id eda_simulation
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

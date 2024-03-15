@@ -36,11 +36,11 @@ module decode_comb
    assign i = DECODE_C ? cinst : d_din;
 
    // Immediate formats
-   wire signed [11:0] i_imm = i[31:20];
-   wire signed [11:0] s_imm = { i[31:25], i[11:7] };
-   wire signed [12:0] b_imm = { i[31], i[7], i[30:25], i[11:8], 1'b0 };
-   wire signed [20:0] j_imm = { i[31], i[19:12], i[20], i[30:21], 1'b0 };
-   wire signed [31:0] u_imm = { i[31:12], 12'b0 };
+   wire signed [31:0] i_imm = $signed(i[31:20]);
+   wire signed [31:0] s_imm = $signed({i[31:25], i[11:7]});
+   wire signed [31:0] b_imm = $signed({i[31], i[7], i[30:25], i[11:8], 1'b0});
+   wire signed [31:0] j_imm = $signed({i[31], i[19:12], i[20], i[30:21], 1'b0});
+   wire signed [31:0] u_imm = $signed({i[31:12], 12'b0});
 
    wire [`CONTEXT_BITS-1:0] default_context = 'b0;
 

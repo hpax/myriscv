@@ -90,7 +90,7 @@ module predict_branch
 	endcase // unique casez (i[6:0])
 
 	if (!absolute)
-	  absolute_pc = this_pc + offset;
+	  absolute_pc = $signed(this_pc) + offset;
 
 	next_pc = absolute_pc & core.PC_MASK;
      end
