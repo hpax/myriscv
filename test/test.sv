@@ -27,7 +27,7 @@ module test #(
 
    assign clken = 1'b1;
 
-   core #(.TCM_INIT_FILE ("/home/hpa/hwhacks/riscv/myriscv/test/test1.hex"))
+   core #(.TCM_INIT_FILE ("/home/hpa/hwhacks/riscv/myriscv/test/test2.hex"))
    cpu (
      .rst_n	( rst_n ),
      .clk	( clk ),
@@ -66,7 +66,7 @@ module test #(
 
    wire [7:0] io_sleep = io_addr[30] ? io_addr[7:0] : 8'b0;
 
-   assign io_rdata = io_addr + io_delay_q;
+   assign io_rdata = io_addr + io_sleep_ctr;
    assign io_ready = io_valid && (!io_sleep || !io_sleep_ctr);
 
    always @(posedge clk)
@@ -75,7 +75,7 @@ module test #(
 	io_sleep_ctr <= io_sleep_ctr - io_sleeping;
 
 	if (io_valid & ~io_sleeping) begin
-	   logic [31:0]	    data;
+	   logic [3:0][7:0] data;
 	   logic [3:0][7:0] dstr;
 
 	   io_sleep_ctr <= io_sleep - 1'b1;
@@ -83,12 +83,12 @@ module test #(
 
 	   data = io_wrq ? io_wdata : io_rdata;
 	   for (int i = 0; i < 4; i++) begin
-	      dstr[i] = data[31-8*i:24-8*i];
-	      if (dstr[i] < 8'h20 || dstr[i] > 8'h7e)
+	      dstr[i] = data[3-i];
+	      if (dstr[i] < 8'h20)
 		dstr[i] = 8'h20;
 	   end
 
-	   $display("(%u) io: %h %s %b %h \"%s\"",
+	   $display("(%d) io: %h %s %b %h \"%s\"",
 	     $time/CLOCK, io_addr, io_wrq ? "w" : "r",
 	     io_wbe, data, dstr);
 

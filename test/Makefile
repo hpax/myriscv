@@ -15,7 +15,7 @@ LDFLAGS	= -T test.ld
 
 .SECONDARY:
 
-all: test1.hex
+all: test1.hex test2.hex
 
 %.hex: %.bin
 	$(HEXDUMP) -v -e '"" 8/4 "%08x " "\n"' $< > $@
