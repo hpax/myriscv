@@ -203,10 +203,10 @@ module fetch
 	// This skips a c.nop in the second word if we have it
 	// ready...
 	f2_is_16 = !(f2_insn[1:0] == 2'b11) &&
-		!(f2_have_32 & is_cnop(f2_insn[31:16]));
+		   !(core.FUSE_CNOP && f2_have_32 & is_cnop(f2_insn[31:16]));
 
 	// Note: this form is written explicitly to handle X correctly
-	f2_valid = f2_have_32 | (f2_insn[1:0] != 2'b11 && f2_have_16);
+	f2_valid = f2_have_32 | (f2_have_16 && f2_insn[1:0] != 2'b11);
      end
 
    // Are we actually reading?
@@ -215,7 +215,15 @@ module fetch
    reg [31:0] ibus_a_q;
 
    // Advance ibus_a if and only if the input was accepted.
-   assign ibus_a = f2_have_data ? next_pc : ibus_a_q;
+   // Unless this is a predicted branch, always advance to the next
+   // *fetch datum*, not necessarily the next *instruction*.
+   wire	      f1_advance = f2_have_data & ~(pref_valid & f2_is_16);
+
+   always @(*)
+     if (f2_have_data & br_take)
+       ibus_a = next_pc;
+     else
+       ibus_a = (ibus_a_q + {f1_advance, 2'b00}) & core.PC_MASK;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
@@ -251,14 +259,12 @@ module fetch
 
 	       if (f2_have_data) begin
 		  pref_16      <= iword[31:16];
-		  pref_valid   <= ~br_take & f2_pc[1];
+		  pref_valid   <= f1_advance & ~br_take;
 	       end
 
 	       if (~f_stalled)
 		 begin
 		    d_valid_i	    <= f2_valid;
-		    pref_16         <= iword[31:16];
-		    pref_valid      <= ~br_take & (f2_is_16 | f2_pc[1]);
 
 		    // Should this really be here for !f2_valid?
 		    d_pred_taken    <= f2_valid & br_take;

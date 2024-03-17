@@ -39,7 +39,7 @@ module core (rst_n, clk, clken,
    // This allows a c.nop inserted for padding to be
    // fused with a previous c.xxx instruction into a
    // pseudo-32-bit instruction.
-   parameter	bit	     FUSE_CNOP = 1'b1;
+   parameter	bit	     FUSE_CNOP = 1'b0;
 
    parameter	string	     TCM_INIT_FILE = "";
 

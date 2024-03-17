@@ -51,6 +51,22 @@ test1:
 
 2:
 
+	/* The same, but misaligned */
+test1a:
+	.balign 4
+	c.nop
+	la a0,hello1_str
+	lbu a1,(a0)
+	add a0,a0,1
+	beqz a1,2f
+1:
+	sb a1,TTY(zero)
+	lbu a1,(a0)
+	add a0,a0,1
+	bnez a1,1b
+
+2:
+
 	/* Test with load to branch hazard */
 test2:
 	la a0,hello2_str
