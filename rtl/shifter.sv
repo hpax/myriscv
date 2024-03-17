@@ -208,7 +208,7 @@ module shifter_core
    wire [width-1:0]	    mask;
    maskgen #(.width(width)) maskgen (.cnt(mcnt), .pos(mpos), .q(mask));
 
-   assign q = (d_rot & mask) | ({width{sign_bit}} & ~mask);
+   assign q = (d_rot & ~mask) | ({width{sign_bit}} & mask);
 endmodule // shifter
 
 module shifter
