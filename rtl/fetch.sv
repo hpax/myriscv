@@ -1,20 +1,38 @@
+//
+// Fetch unit. The fetch stage is, in some respects, two stages:
+// F1 - produces the fetch PC and presents it on ibus_a;
+// F2 - accepts the data from ibus_rdata, and forwards it to the D stage,
+//      as well as provides the input data to the PC computation of
+//      the F1 stage.
+//
+// Because the PC-computing logic has to be combinatorial in order to
+// be able to do enough decoding to do branch prediction, if f_stall is
+// asserted, the F1 PC cannot be advanced and the datum needs to be
+// re-fetched (or latched; this assumes that re-fetching from TCM
+// or icache is "free".
+//
+
 `include "myriscv.vh"
 
 //
-// Predict the successor instruction. This does not need to be
-// perfect; however, the "take" flag needs to be set when strict
+// Predict the successor instruction. This (obviously) does not need
+// to be perfect; however, the "take" flag needs to be set when strict
 // successor flow of control is not maintained.
+//
+// If f2_valid is false, then next_pc reflects the successor PC
+// dependent only on f2_is_16; the instruction data is ignored.
 //
 module predict_branch
   (
-   input [31:0]	     this_insn,
-   input	     is_16,	// This can differ from the opcode
-   input [31:0]	     this_pc,
+   input [31:0]	     f2_insn,
+   input	     f2_is_16,
+   input	     f2_valid,
+   input [31:0]	     f2_pc,
    output reg	     take,
    output reg [31:0] next_pc
    );
 
-   wire [31:0]	 i = this_insn;
+   wire [31:0]	 i = f2_insn;
 
    wire signed [11:0]    i_imm = i[31:20];
    wire signed [12:0]	 b_imm = { i[31], i[7], i[30:25], i[11:8], 1'b0 };
@@ -47,50 +65,51 @@ module predict_branch
 	absolute_pc = 32'bx;
 	take        = 1'b0;
 	// Normal successor PC
-	offset      = is_16 ? 3'd2 : 3'd4;
+	offset      = f2_is_16 ? 3'd2 : 3'd4;
 
-	unique casez (i[6:0])
-	  7'b?????01: begin		// RVC quadrant 1
-	     unique casez (i[15:13])
-	       3'b?01: begin		// C.J(AL)
-		  take   = 1'b1;	// Unconditional
-		  if (take)
-		    offset = cj_imm;
+	if (f2_valid)
+	  unique casez (i[6:0])
+	    7'b?????01: begin		// RVC quadrant 1
+	       unique casez (i[15:13])
+		 3'b?01: begin		// C.J(AL)
+		    take   = 1'b1;	// Unconditional
+		    if (take)
+		      offset = cj_imm;
+		 end
+		 3'b11?: begin		// C.BEQZ/C.BNEZ
+		    take   = cb_imm < 0;	// Predict taken if backwards
+		    if (take)
+		      offset = cb_imm;
+		 end
+		 default: begin
+		    // Default
+		 end
+	       endcase // unique casez (i[15:13])
+	    end
+	    JAL: begin
+	       take   = 1'b1;		// Unconditional
+	       offset = j_imm;
+	    end
+	    JALR: begin
+	       if (core.PREDICT_JALR_ZERO && !i[19:12]) begin
+		  // j[al]r addr(zero)
+		  take        = 1'b1;	// Unconditional
+		  absolute    = 1'b1;
+		  absolute_pc = i_imm;
 	       end
-	       3'b11?: begin		// C.BEQZ/C.BNEZ
-		  take   = cb_imm < 0;	// Predict taken if backwards
-		  if (take)
-		    offset = cb_imm;
-	       end
-	       default: begin
-		  // Default
-	       end
-	     endcase // unique casez (i[15:13])
-	  end
-	  JAL: begin
-	     take   = 1'b1;		// Unconditional
-	     offset = j_imm;
-	  end
-	  JALR: begin
-	     if (core.PREDICT_JALR_ZERO && !i[19:12]) begin
-		// j[al]r addr(zero)
-		take        = 1'b1;	// Unconditional
-		absolute    = 1'b1;
-		absolute_pc = i_imm;
-	     end
-	  end
-	  BRANCH: begin
-	     take   = b_imm < 0;	// Predict taken if backwards
-	     if (take)
-	       offset = b_imm;
-	  end
-	  default: begin
-	     // Not a transfer or not predicted
-	  end
-	endcase // unique casez (i[6:0])
+	    end
+	    BRANCH: begin
+	       take   = b_imm < 0;	// Predict taken if backwards
+	       if (take)
+		 offset = b_imm;
+	    end
+	    default: begin
+	       // Not a transfer or not predicted
+	    end
+	  endcase // unique casez (i[6:0])
 
 	if (!absolute)
-	  absolute_pc = $signed(this_pc) + offset;
+	  absolute_pc = $signed(f2_pc) + offset;
 
 	next_pc = absolute_pc & core.PC_MASK;
      end
@@ -109,35 +128,39 @@ module fetch
    output reg	     ibus_valid,
    input	     ibus_ready,
 
-   input	     stall,
-   output reg [31:0] insn, // Actually d_din
-   output reg	     valid_o, // Actually d_valid_i
-   output reg	     insn_pred_taken,
-   output reg [31:0] insn_pc,
+   input	     f_stall,
 
+   //
+   // Note: this units outputs already latched outputs to the D stage!
+   //
+   output reg [31:0] d_insn,
+   output reg	     d_valid_i,
+   output reg	     d_pred_taken,
+   output reg [31:0] d_pc,
    // This flag can be clear for pair of fused 16-bit instructions;
    // the decode stage needs to consider that appropriately.
-   output reg	     insn_16
+   output reg	     d_insn_16
    );
 
    wire [31:0]	     next_pc;
-   reg [15:0]	     pref_16;
+   reg  [15:0]	     pref_16;	// Prefetched upper halfword
    reg		     pref_valid;
 
-   reg [31:0]	     this_pc;
+   reg [31:0]	     f2_pc;
 
-   logic [31:0]	     this_insn;
-   logic	     this_valid;
-   logic	     have_16;
-   logic	     have_32;
-   logic	     is_16;
+   logic [31:0]	     f2_insn;
+   logic	     f2_valid;
+   logic	     f2_have_16;
+   logic	     f2_have_32;
+   logic	     f2_is_16;
 
-   wire		 br_take;
+   wire		     br_take;
    // Branch prediction
    predict_branch pred (
-     .this_insn	(this_insn),
-     .is_16	(is_16),
-     .this_pc	(this_pc),
+     .f2_insn	(f2_insn),
+     .f2_is_16	(f2_is_16),
+     .f2_valid  (f2_valid),
+     .f2_pc	(f2_pc),
      .take	(br_take),
      .next_pc	(next_pc)
      );
@@ -149,100 +172,105 @@ module fetch
       is_cnop = !cinst[15:13] && !cinst[11:7] && cinst[1:0] == 2'b01;
    endfunction
 
-   reg		     ibus_valid_q;
-   wire		     have_data = ibus_valid_q & ibus_ready;
+   // If there is no output yet, no need to stall
+   wire		     f_stalled = f_stall & d_valid_i;
 
+   // f2_have_data is true if ibus_rdata contains usable data
+   reg	     ibus_valid_q;
+   wire	     f2_have_data = ibus_valid_q & ibus_ready & ~f_stalled;
+
+   // This benefits simulation by catching data read from the
+   // bus while not ready.
+   wire [31:0]	     iword = ibus_ready ? ibus_rdata : 32'bx;
+
+   // Do we have a usable instruction for the D stage?
    always @(*)
      begin
-	if (!this_pc[1])
-	  begin
-	     this_insn	= ibus_rdata;
-	     have_16	= have_data;
-	     have_32	= have_data;
-	  end
-	else if (pref_valid)
-	  begin
-	     this_insn	= { ibus_rdata[15:0], pref_16 };
-	     have_16	= 1'b1;
-	     have_32	= have_data;
-	  end
-	else
-	  begin
-	     this_insn = { 16'bx, ibus_rdata[31:16] };
-	     have_16 = have_data;
-	     have_32 = 1'b0;
-	  end // else: !if(pref_valid)
+	if (~f2_pc[1]) begin
+	   f2_insn	= iword;
+	   f2_have_16	= f2_have_data;
+	   f2_have_32	= f2_have_data;
+	end else if (pref_valid) begin
+	   f2_insn	= { iword[15:0], pref_16 };
+	   f2_have_16	= 1'b1;
+	   f2_have_32	= f2_have_data;
+	end else begin
+	   f2_insn	= { 16'bx, iword[31:16] };
+	   f2_have_16	= f2_have_data;
+	   f2_have_32	= 1'b0;
+	end
 
-	is_16 = !(this_insn[1:0] == 2'b11) &&
-		!(have_32 & is_cnop(this_insn[31:16]));
+	// This skips a c.nop in the second word if we have it
+	// ready...
+	f2_is_16 = !(f2_insn[1:0] == 2'b11) &&
+		!(f2_have_32 & is_cnop(f2_insn[31:16]));
 
-	this_valid = this_insn[1:0] == 2'b11 ? have_32 : have_16;
+	// Note: this form is written explicitly to handle X correctly
+	f2_valid = f2_have_32 | (f2_insn[1:0] != 2'b11 && f2_have_16);
      end
 
-   wire advance  = this_valid & (~stall | ~valid_o);
-   assign ibus_a = advance ? next_pc : this_pc;
+   // Are we actually reading?
+   assign ibus_valid = rst_n & ~restart;
 
-   reg	restart_q;
+   reg [31:0] ibus_a_q;
+
+   // Advance ibus_a if and only if the input was accepted.
+   assign ibus_a = f2_have_data ? next_pc : ibus_a_q;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
-	  insn_pc	  <= 32'bx;
-	  this_pc	  <= core.RESET_PC & core.PC_MASK;
-	  valid_o	  <= 1'b0;
-	  insn_pred_taken <= 1'b0;
-	  insn		  <= 32'bx;
-	  pref_valid	  <= 1'b0;
-	  pref_16	  <= 16'bx;
-	  ibus_valid	  <= 1'b0;
-	  ibus_valid_q	  <= 1'b0;
+	  d_pc		<= core.RESET_PC & core.PC_MASK;
+	  f2_pc		<= core.RESET_PC & core.PC_MASK;
+	  ibus_a_q      <= core.RESET_PC & core.PC_MASK;
+	  d_valid_i	<= 1'b0;
+	  d_pred_taken	<= 1'b0;
+	  d_insn	<= 32'bx;
+	  pref_valid	<= 1'b0;
+	  pref_16	<= 16'bx;
+	  ibus_valid_q	<= 1'b0; // Data not ready yet
        end
      else if (clken)
        begin
-	  // Worst case, refetch the same datum. It should be harmless
-	  // with TCM or an icache, but otherwise it might be good to be
-	  // a bit smarter here.
-	  ibus_valid <= 1'b1;
-
 	  if (restart)
 	    begin
-	       insn_pc	       <= 1'bx;
-	       this_pc	       <= restart_pc & core.PC_MASK;
-	       valid_o	       <= 1'b0;
-	       insn_pred_taken <= 1'b0;
-	       insn	       <= 32'bx;
-	       pref_valid      <= 1'b0;
-	       pref_16	       <= 16'bx;
-	       ibus_valid      <= 1'b0; // Improve timing
-	       ibus_valid_q    <= 1'b0; // Discard mispredicted data
+	       d_pc		<= restart_pc & core.PC_MASK;
+	       f2_pc		<= restart_pc & core.PC_MASK;
+	       ibus_a_q		<= restart_pc & core.PC_MASK;
+	       d_valid_i	<= 1'b0;
+	       d_pred_taken	<= 1'b0;
+	       d_insn		<= 32'bx;
+	       pref_valid	<= 1'b0;
+	       pref_16		<= 16'bx;
+	       ibus_valid_q	<= 1'b0; // Discard incoming data
 	    end
 	  else
 	    begin
-	       ibus_valid_q	    <= ibus_valid;
+	       ibus_valid_q	<= ibus_valid;
+	       ibus_a_q         <= ibus_a;
 
-	       if (advance)
-		 begin
-		    insn	    <= this_insn;
-		    insn_pc	    <= this_pc;
-		    insn_16	    <= is_16;
-		    valid_o	    <= this_valid;
-		    this_pc         <= next_pc;
-		    insn_pred_taken <= br_take; // Should this be latched?
+	       if (f2_have_data) begin
+		  pref_16      <= iword[31:16];
+		  pref_valid   <= ~br_take & f2_pc[1];
+	       end
 
-		  if (br_take) begin
-		     pref_valid <= 1'b0;
-		     pref_16    <= 16'bx;
-		  end else if (!(is_16 & ~this_pc[1]) ||
-		    (have_data & ~is_16 & this_pc[1])) begin
-		     pref_16    <= ibus_rdata[31:16];
-		     pref_valid <= is_16 | this_pc[1];
-		  end
-		 end
-	       else if (!stall)
+	       if (~f_stalled)
 		 begin
-		    // Consumed instruction but queue empty
-		    valid_o	    <= 1'b0;
-		    insn_pred_taken <= 1'b0;
+		    d_valid_i	    <= f2_valid;
+		    pref_16         <= iword[31:16];
+		    pref_valid      <= ~br_take & (f2_is_16 | f2_pc[1]);
+
+		    // Should this really be here for !f2_valid?
+		    d_pred_taken    <= f2_valid & br_take;
+
+		    // If f2_valid == 0, this is only a partial
+		    // instruction fetch.
+		    if (f2_valid) begin
+		       d_insn       <= f2_insn;
+		       d_pc	    <= f2_pc;
+		       d_insn_16    <= f2_is_16;
+		       f2_pc	    <= next_pc;
+		    end
 		 end
 	    end
        end // if (clken)

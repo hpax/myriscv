@@ -299,12 +299,12 @@ module core (rst_n, clk, clken,
      .ibus_valid	(ibus_valid),
      .ibus_ready	(ibus_ready),
 
-     .stall		(f_stall),
-     .valid_o		(d_valid_i),
-     .insn		(d_insn),
-     .insn_pred_taken	(d_insn_pred_taken),
-     .insn_pc		(d_insn_pc),
-      .insn_16		(d_insn_16)
+     .f_stall		(f_stall),
+     .d_valid_i		(d_valid_i),
+     .d_insn		(d_insn),
+     .d_pred_taken	(d_insn_pred_taken),
+     .d_pc		(d_insn_pc),
+     .d_insn_16		(d_insn_16)
      );
 
    // Decode unit (D stage)

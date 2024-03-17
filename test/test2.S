@@ -6,7 +6,7 @@
 
 	TTY  = -1
 	STOP = -8
-	
+
 	.section ".null","a"
 	.balign 4
 	.globl ___NULL
@@ -32,25 +32,14 @@ ___mtvec:
 	.balign 4
 	j _irq_common
 	.endr
-	
+
 	.section ".text.hot","ax"
 	.globl _start
 _start:
-	
-	/* Test with load to branch hazard */
+
+	/* Test with instruction in the load hazard slot */
 test1:
 	la a0,hello1_str
-	lbu a1,(a0)
-	beqz a1,2f
-1:
-	add a0,a0,1
-	sb a1,TTY(zero)
-	lbu a1,(a0)
-	bnez a1,1b
-
-	/* Test with other instruction in the hazard slot */
-test2:
-	la a0,hello2_str
 	lbu a1,(a0)
 	add a0,a0,1
 	beqz a1,2f
@@ -61,6 +50,18 @@ test2:
 	bnez a1,1b
 
 2:
+
+	/* Test with load to branch hazard */
+test2:
+	la a0,hello2_str
+	lbu a1,(a0)
+	beqz a1,2f
+1:
+	add a0,a0,1
+	sb a1,TTY(zero)
+	lbu a1,(a0)
+	bnez a1,1b
+
 	ebreak
 	la a0,ebreak_failed_str
 	jal print_str
@@ -114,12 +115,12 @@ print_hex:
 	add a1,a1,-1
 	bnez a1,1b
 	ret
-	
+
 	.section ".rodata.hot","a"
 hello1_str:
 	.asciz "Hello, World #1!\r\n"
 hello2_str:
-	.asciz "Hello, World #1!\r\n"
+	.asciz "Hello, World #2!\r\n"
 ebreak_failed_str:
 	.asciz "ERROR: fall through after ebreak\r\n"
 irq_str:

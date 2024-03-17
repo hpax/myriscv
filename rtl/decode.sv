@@ -329,7 +329,7 @@ module decode (
      .d_pc (d_pc & core.PC_MASK), .op(c_op)
      );
 
-   // Additional, sequence-dependent 
+   // Additional, sequence-dependent
    decode_seq mult (
      .rst_n (rst_n), .clk(clk), .d_clken(d_clken), .d_killed(d_killed),
      .d_valid_i (d_valid_i), .op_i(c_op), .op_o(d_op)

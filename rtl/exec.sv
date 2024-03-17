@@ -78,8 +78,11 @@ module backend #(
    reg [3:0]	   m_dout_be;
 
    // E-stage pipeline synchronization signals
-   // XXX: on an IRQ there really no reason to kill the instruction...
-   assign e_valid_o = e_valid_i & ~e_busy & ~e_kill;
+   logic	   e_trap;
+   logic	   e_jump;
+
+   wire   e_accept  = e_valid_i & ~e_busy;
+   assign e_valid_o = e_accept & ~e_trap & ~e_jump;
    assign e_busy    = 1'b0;
 
    // Latched output to M stage; also used by the bypass network
@@ -252,73 +255,81 @@ module backend #(
    // Successor PC (for JAL/JALR and, in the future, branch predict
    // validation.)
    //
-   wire [31:0] e_next_pc  = successor_pc(e_op);
+   wire [31:0] e_succ_pc  = successor_pc(e_op);
 
    //
-   // Branch, jump, trap and interrupt handling
+   // Branch, jump, trap and interrupt handling.
    //
-   logic        trap_irq;
+   // Traps have the highest priority, followed by interrupts.
+   //
+   // e_restartpc should always reflect the latest instruction
+   // executed, in case *another* pipeline stage pulls kill.
+   //
    logic [31:0]	trap_mcause;
+   logic [31:0]	e_next_pc;
 
    always @(*)
      begin
-	logic [31:0] new_pc;
-	logic	     trap;
-	logic	     jump;
-
-	new_pc	    = e_next_pc;
-	trap_irq    = 1'b0;
-	trap        = 1'b0;
-	jump        = 1'b0;	// Mispredicted jump or branch
+	e_trap      = 1'b0;
+	e_jump      = 1'b0;	// Mispredicted jump or branch
 	trap_mcause = 32'bx;
+	e_restartpc = e_op.pc & core.PC_MASK;
 
-	if (e_irq) begin
-	   trap_irq      = 1'b1;
-	   trap_mcause   = MCAUSE_IRQ | e_irq_vector;
-	   new_pc        = mtvec + (e_irq_vector << 2);
-	end else if (e_valid_i & ~e_busy) begin
+	if (e_accept) begin
 	   unique case (e_op.itype)
 	     INSN_ERR: if (core.TRAP_BADINSN) begin
-		trap        = 1'b1;
+		e_trap      = 1'b1;
 		trap_mcause = MCAUSE_BADINSN;
 	     end
 	     INSN_ECALL: begin	// ECALL, EBREAK
-		trap	 = 1'b1;
+		e_trap	 = 1'b1;
 		trap_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
 	     end
 	     INSN_ALU: if (core.TRAP_BADALU) begin
-		trap	 = e_aluctl.unit == ALUSRC_ERR;
+		e_trap	 = e_aluctl.unit == ALUSRC_ERR;
 		trap_mcause = MCAUSE_BADINSN;
 	     end
 	     INSN_JAL: begin	// JAL, JALR
-		jump	 = !e_op.pred_taken;
+		e_jump	 = !e_op.pred_taken;
 	     end
 	     INSN_BR: begin
-		jump	 = e_cmp_out != e_op.pred_taken;
+		e_jump	 = e_cmp_out != e_op.pred_taken;
 	     end
 	     default: begin
 		// No control transfer
 	     end
 	   endcase
 
+	   // e_succ_pc is always the subsequent instruction.
+	   // It is used to set the target register of JAL(R).
+	   //
+	   // e_next_pc reflects jumps, but not traps or interrupts;
+	   // it is used to set mepc after an interrupt.
+	   e_next_pc   = e_succ_pc;
+
 	   // If we didn't predict this, we should have been, and vice
 	   // versa...
-	   if (jump && !e_op.pred_taken)
-	     new_pc = e_addr;
+	   if (e_jump & !e_op.pred_taken)
+	     e_next_pc = e_addr;
 
-	   if (core.TRAP_BADPC && !trap && (new_pc & ~core.PC_MASK)) begin
-	      trap = 1'b1;
-	      trap_mcause = MCAUSE_BADPC;
+	   // For an invalid PC, unless we are taking another trap...
+	   if (core.TRAP_BADPC) begin
+	      if (!e_trap && (e_next_pc & ~core.PC_MASK)) begin
+		 e_trap = 1'b1;
+		 trap_mcause = MCAUSE_BADPC;
+	      end
 	   end
 
-	   if (trap) begin
-	      trap_irq = 1'b1;
-	      new_pc   = mtvec;
-	   end
-	end // if (e_valid_i)
+	   if (e_trap)
+	     e_restartpc = mtvec & core.PC_MASK;
+	   else
+	     e_restartpc = e_next_pc;
+	end // if (e_accept)
 
-	e_kill		= trap_irq | jump;
-	e_restartpc	= new_pc & core.PC_MASK;
+	if (!e_trap & ~e_busy & e_irq)
+	  e_restartpc   = (mtvec + (e_irq_vector << 2)) & core.PC_MASK;
+
+	e_kill		= e_trap | (e_irq & ~e_busy) | e_jump;
      end
 
    // XXX: add a "think cycle" for KILL?
@@ -339,13 +350,17 @@ module backend #(
 
 	// XXX: writing mepc seems to be a frequency limiter; it could
 	// probably be written in the M stage (post-kill) instead.
-	if (trap_irq)
+	if (e_trap)
 	  mepc  <= e_op.pc & core.PC_MASK;
+	else if (e_irq & ~e_busy)
+	  mepc  <= e_next_pc & core.PC_MASK;
 	else if (csrw_mepc)
 	  mepc  <= e_csr_wval & core.PC_MASK;
 
-	if (trap_irq)
-	  mcause <= trap_mcause & mcause_mask;
+	if (e_trap)
+	  mcause <= trap_mcause;
+	else if (e_irq & ~e_busy)
+	  mcause <= MCAUSE_IRQ | e_irq_vector;
 	else if (csrw_mcause)
 	  mcause <= e_csr_wval & mcause_mask;
      end
@@ -357,7 +372,7 @@ module backend #(
      unique case (e_op.itype)
        INSN_ALU:  e_dout = e_alu_out;
        INSN_MULL: e_dout = m_mull_o;
-       INSN_JAL:  e_dout = e_next_pc;
+       INSN_JAL:  e_dout = e_succ_pc;
        INSN_CSR:  e_dout = e_csr_rval;
        default:   e_dout = 32'bx; // No output, or delivered from M stage
      endcase
