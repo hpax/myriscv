@@ -93,7 +93,7 @@ module pipe_ctl #(
 	     // Leave unchanged
 	  end else if (~d_valid_o | d_stall) begin
 	     e_valid_i <= 1'b0;
-	     e_op      <= null_op(d_op.pc);
+	     e_op      <= null_op(d_op.pc, d_op.mcontext);
 	  end else begin
 	     e_valid_i <= d_valid_o;
 	     e_op      <= d_op;
@@ -107,7 +107,7 @@ module pipe_ctl #(
 
 	  if (!e_valid_o) begin
 	     m_valid_i <= 1'b0;
-	     m_op      <= null_op(e_op.pc);
+	     m_op      <= null_op(e_op.pc, e_op.mcontext);
 	  end else if (m_busy | (m_stall & m_valid_i)) begin
 	     // Leave unchanged
 	  end else begin

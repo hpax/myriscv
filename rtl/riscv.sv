@@ -61,49 +61,53 @@ typedef enum logic [2:0] {
 
 // CSR register numbers
 typedef enum logic [11:0] {
-	     CSR_CYCLE	   = 12'hc00,
-	     CSR_CYCLEH    = 12'hc80,
-	     CSR_TIME	   = 12'hc01,
-	     CSR_TIMEH	   = 12'hc81,
-	     CSR_INSTRET   = 12'hc02,
-	     CSR_INSTRETH  = 12'hc82,
+	// Standard CSRs
+	CSR_CYCLE		= 12'hc00,
+	CSR_CYCLEH		= 12'hc80,
+	CSR_TIME		= 12'hc01,
+	CSR_TIMEH		= 12'hc81,
+	CSR_INSTRET		= 12'hc02,
+	CSR_INSTRETH		= 12'hc82,
 
-	     CSR_MVENDORID = 12'hf11,
-	     CSR_MARCHID   = 12'hf12,
-	     CSR_MIMPID    = 12'hf13,
-	     CSR_MHARTID   = 12'hf14,
+	CSR_MVENDORID		= 12'hf11,
+	CSR_MARCHID		= 12'hf12,
+	CSR_MIMPID		= 12'hf13,
+	CSR_MHARTID		= 12'hf14,
 
-	     CSR_MSTATUS   = 12'h300,
-	     CSR_MISA	   = 12'h301,
-	     CSR_MIE	   = 12'h304,
-	     CSR_MTVEC	   = 12'h305,
-	     CSR_MSTATUSH  = 12'h310,
+	CSR_MSTATUS		= 12'h300,
+	CSR_MISA		= 12'h301,
+	CSR_MIE			= 12'h304,
+	CSR_MTVEC		= 12'h305,
+	CSR_MSTATUSH		= 12'h310,
+	CSR_MSCRATCH		= 12'h340,
+	CSR_MEPC		= 12'h341,
+	CSR_MCAUSE		= 12'h342,
+	CSR_MTVAL		= 12'h343,
+	CSR_MIP			= 12'h344,
+	CSR_MTINST		= 12'h34a,
 
-	     CSR_MSCRATCH  = 12'h340,
-	     CSR_MEPC	   = 12'h341,
-	     CSR_MCAUSE    = 12'h342,
-	     CSR_MTVAL	   = 12'h343,
-	     CSR_MIP	   = 12'h344,
-	     CSR_MTINST    = 12'h34a,
+	CSR_MENVCFG		= 12'h30a,
+	CSR_MENVCFGH		= 12'h31a,
 
-	     CSR_MENVCFG   = 12'h30a,
-	     CSR_MENVCFGH  = 12'h31a,
+	CSR_MCYCLE		= 12'hb00,
+	CSR_MINSTRET		= 12'hb02,
+	CSR_MCYCLEH		= 12'hb80,
+	CSR_MINSTRETH		= 12'hb82,
 
-	     CSR_MCYCLE    = 12'hb00,
-	     CSR_MINSTRET  = 12'hb02,
-	     CSR_MCYCLEH   = 12'hb80,
-	     CSR_MINSTRETH = 12'hb82,
+	CSR_TSELECT		= 12'h7a0,
+	CSR_TDATA1		= 12'h7a1,
+	CSR_TDATA2		= 12'h7a2,
+	CSR_TDATA3		= 12'h7a3,
+	CSR_MCONTEXT		= 12'h7a8,
 
-	     CSR_TSELECT   = 12'h7a0,
-	     CSR_TDATA1    = 12'h7a1,
-	     CSR_TDATA2    = 12'h7a2,
-	     CSR_TDATA3    = 12'h7a3,
-	     CSR_MCONTEXT  = 12'h7a8,
+	CSR_DCSR		= 12'h7b0,
+	CSR_DPC			= 12'h7b1,
+	CSR_DSCRATCH0		= 12'h7b2,
+	CSR_DSCRATCH1		= 12'h7b3,
 
-	     CSR_DCSR	   = 12'h7b0,
-	     CSR_DPC	   = 12'h7b1,
-	     CSR_DSCRATCH0 = 12'h7b2,
-	     CSR_DSCRATCH1 = 12'h7b3
+	// Extensions CSRs
+	CSR_USER_CONTEXT	= 12'h7f0,
+	CSR_CIE			= 12'h7f1 // Interrupt enable by context
 } csr_t;
 
 typedef enum logic [31:0] {

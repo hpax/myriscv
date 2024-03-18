@@ -29,7 +29,8 @@ module backend #(
  // IRQ pending bitmask. Note that there is no IRQ 0 since that vector
  // is reserved for exceptions; e_intack == 0 means no interrupt taken.
  input [NUM_IRQS:1]    d_irqs,
- output [IRQ_BITS-1:0] e_intack,
+ output reg [NUM_IRQS:1]   d_irqs_clear, // Clear edge-triggered interrupts
+ output reg [IRQ_BITS-1:0] e_intack,
 
  input		       e_valid_i,
  input		       e_stall,
@@ -37,6 +38,7 @@ module backend #(
  output reg	       e_valid_o,
  output reg	       e_kill,
  output reg [31:0]     e_restartpc, // Address for the front end after kill
+ output mcontext_t     e_restart_mcontext,
  output reg	       e_busy,
  input		       e_rs1_m,
  input		       e_rs1_w,
@@ -184,6 +186,9 @@ module backend #(
    reg [31:0] mepc;
    localparam [31:0] mcause_mask = MCAUSE_FIXED_MASK | {IRQ_BITS{1'b1}};
    reg [31:0] mcause;
+   reg [NUM_IRQS:1] mie;
+   reg [`USER_CONTEXTS+`SYS_CONTEXTS-1:0] cie; // Context interrupt enable
+   rcontext_t user_context;
 
    //
    // CSR read/write logic
@@ -214,6 +219,26 @@ module backend #(
 	 e_csr_rval  = ctr_instret[31:0];
        CSR_INSTRETH, CSR_MINSTRETH:
 	 e_csr_rval  = ctr_instret[63:32];
+       CSR_MISA:
+	 e_csr_rval  = core.csrval_misa;
+       CSR_MVENDORID:
+	 e_csr_rval  = core.csrval_vendorid;
+       CSR_MARCHID:
+	 e_csr_rval  = core.csrval_archid;
+       CSR_MIMPID:
+	 e_csr_rval  = core.csrval_impid;
+       CSR_MIP:
+	 e_csr_rval  = { d_irqs, 1'b0 };
+       CSR_MIE:
+	 e_csr_rval  = { mie, 1'b0 };
+       CSR_MSTATUS:
+	 e_csr_rval  = { 28'b0,
+			 cie[e_op.mcontext.m], 1'b0,
+			 cie[e_op.mcontext.u], 1'b0 };
+       CSR_USER_CONTEXT:
+	 e_csr_rval  = e_op.mcontext.u;
+       CSR_CIE:
+	 e_csr_rval  = cie;
        default:
 	 e_csr_rval  = 32'b0;
      endcase
@@ -226,9 +251,14 @@ module backend #(
        default: e_csr_wval  = 32'bx;
      endcase
 
-   wire		csrw_mtvec  = e_op.csrw && ncsr == CSR_MTVEC;
-   wire		csrw_mepc   = e_op.csrw && ncsr == CSR_MEPC;
-   wire		csrw_mcause = e_op.csrw && ncsr == CSR_MCAUSE;
+   wire		csrw_mtvec	  = e_op.csrw && ncsr == CSR_MTVEC;
+   wire		csrw_mepc	  = e_op.csrw && ncsr == CSR_MEPC;
+   wire		csrw_mcause	  = e_op.csrw && ncsr == CSR_MCAUSE;
+   wire		csrw_mip	  = e_op.csrw && ncsr == CSR_MIP;
+   wire		csrw_mie	  = e_op.csrw && ncsr == CSR_MIE;
+   wire		csrw_mstatus	  = e_op.csrw && ncsr == CSR_MSTATUS;
+   wire		csrw_user_context = e_op.csrw && ncsr == CSR_USER_CONTEXT;
+   wire		csrw_cie	  = e_op.csrw && ncsr == CSR_CIE;
 
    //
    // Interrupt recognition
@@ -236,19 +266,24 @@ module backend #(
    reg [IRQ_BITS-1:0] e_irq_vector;
    reg		      e_irq;
 
-   assign e_intack = e_irq_vector;
-
    // Note that e_irq_vector must be zero if !e_irq
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
 	e_irq		      <= 1'b0;
 	e_irq_vector	      <= 'b0;
      end else if (~clken) begin
-	e_irq	     <= |d_irqs;
+	logic [NUM_IRQS:1] real_irq;
+	real_irq      = d_irqs & mie;
+
+	e_irq        <= 1'b0;
 	e_irq_vector <= 'b0;
-	// Priority vector encoder
-	for (int i = NUM_IRQS; i > 0; i--)
-	  if (d_irqs[i]) e_irq_vector <= i;
+
+	if (cie[e_op.mcontext.m]) begin
+	   e_irq     <= |real_irq;
+	   // Priority vector encoder
+	   for (int i = NUM_IRQS; i > 0; i--)
+	     if (real_irq[i]) e_irq_vector <= i;
+	end
      end
 
    //
@@ -290,6 +325,7 @@ module backend #(
 	e_jump_pc   = 32'bx;
 	e_next_pc   = e_succ_pc;
 	e_restartpc = e_next_pc & core.PC_MASK;
+	e_restart_mcontext = e_op.mcontext;
 
 	if (e_accept) begin
 	   unique case (e_op.itype)
@@ -313,7 +349,26 @@ module backend #(
 		e_jump	  = e_cmp_out != e_op.pred_taken;
 		e_jump_pc = e_op.imm; // rs1 is not part of the jump addr!
 	     end
+	     INSN_MRET: begin
+		e_jump               = !e_op.pred_taken;
+		e_jump_pc            = mepc;
+		e_restart_mcontext.m = e_restart_mcontext.u;
+	     end
 	     default: begin
+		if (csrw_user_context) begin
+		   rcontext_t new_ctx;
+		   new_ctx = rcontext_t ' (e_csr_wval);
+		   // Force a mispredict kill when writing the user context;
+		   // the actual CSR write is done by the restart.
+		   // Writing user_context always goes to machine mode;
+		   // writing zero goes to machine mode without actually
+		   // modifying the user_context.
+		   e_jump    = 1'b1;
+		   e_jump_pc = e_succ_pc;
+		   if (new_ctx)
+		     e_restart_mcontext.u = new_ctx;
+		   e_restart_mcontext.m = CTX_MACHINE;
+		end
 		// No control transfer
 	     end
 	   endcase
@@ -330,30 +385,50 @@ module backend #(
 	      end
 	   end
 
-	   if (e_trap)
-	     e_restartpc = mtvec & core.PC_MASK;
-	   else
+	   if (e_trap) begin
+	      e_restartpc = mtvec & core.PC_MASK;
+	      e_restart_mcontext.m = CTX_MACHINE;
+	   end else begin
 	     e_restartpc = e_next_pc & core.PC_MASK;
+	   end
 	end // if (e_accept)
 
-	if (!e_trap & ~e_busy & e_irq)
-	  e_restartpc   = (mtvec + (e_irq_vector << 2)) & core.PC_MASK;
+	if (!e_trap & ~e_busy & e_irq) begin
+	   e_restartpc   = (mtvec + (e_irq_vector << 2)) & core.PC_MASK;
+	   e_restart_mcontext.m = CTX_MACHINE;
+	end
 
 	e_kill		= e_trap | (e_irq & ~e_busy) | e_jump;
      end
 
+   // Handle intack and d_irq_clear
+   always @(*) begin
+      e_intack      = 'b0;
+      d_irqs_clear  = 'b0;
+      if (~e_trap & e_irq & ~e_busy) begin
+	 e_intack     = e_irq_vector;
+	 d_irqs_clear = 1'b1 << e_irq_vector;
+      end else if (csrw_mip) begin
+	 d_irqs_clear = ~e_csr_wval[NUM_IRQS:1]; // Write 0 to clear
+      end
+   end
+
    // XXX: add a "think cycle" for KILL?
 
    //
-   // Handle mcause and mtvec
+   // Handle mepc, mcause, mtvec, mie, cie
+   //
    wire [31:0] mtvec_reset = core.MTVEC_RESET & core.PC_MASK;
    wire [31:0] mtvec_wmask = core.MTVEC_WMASK & core.PC_MASK;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	mtvec  <= mtvec_reset;
-	mcause <= 32'b0;
-	mepc   <= 32'b0;
+	mtvec        <= mtvec_reset;
+	mcause       <= 32'b0;
+	mepc         <= 32'b0;
+	mie          <= 'b0;
+	cie	     <= 'b0;
+	user_context <= CTX_MACHINE;
      end else if (e_clken) begin
 	if (csrw_mtvec)
 	  mtvec <= wmask(e_csr_wval, mtvec_reset, mtvec_wmask);
@@ -373,6 +448,16 @@ module backend #(
 	  mcause <= MCAUSE_IRQ | e_irq_vector;
 	else if (csrw_mcause)
 	  mcause <= e_csr_wval & mcause_mask;
+
+	if (csrw_mie)
+	  mie <= e_csr_wval[NUM_IRQS:1];
+
+	if (csrw_cie)
+	  cie <= e_csr_wval;
+	else if (csrw_mstatus) begin
+	   cie[e_op.mcontext.u] <= e_csr_wval[1]; // mstatus.sie = user ie
+	   cie[e_op.mcontext.m] <= e_csr_wval[3]; // mstatus.mie = current ie
+	end
      end
 
    //

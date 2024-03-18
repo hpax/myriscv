@@ -22,8 +22,9 @@ typedef enum logic [3:0] {
 	INSN_LD     = 4'b0110,	// Memory load
 	INSN_ST     = 4'b0111,	// Memory store
 	INSN_CSR    = 4'b1000,	// CSR instruction
-	INSN_JAL    = 4'b1100,	// JAL, JALR
-	INSN_BR     = 4'b1101,  // Conditional branch
+	INSN_JAL    = 4'b1010,	// JAL, JALR
+	INSN_BR     = 4'b1011,  // Conditional branch
+	INSN_MRET   = 4'b1100,	// MRET, SRET
 	INSN_ECALL  = 4'b1110,	// ECALL, EBREAK (trap)
 	INSN_ERR    = 4'b1111	// Invalid instruction (trap)
 } insn_type_t;
@@ -36,10 +37,30 @@ function logic insn_real(input insn_type_t insn);
    insn_real = |insn[3:1];
 endfunction
 
+// Register bank and machine mode context
+typedef enum logic [`CONTEXT_BITS-1:0] {
+	CTX_MACHINE	= `CONTEXT_BITS ' (0),
+	CTX_USER_MIN	= `CONTEXT_BITS ' (1),
+	CTX_USER_MAX	= `CONTEXT_BITS ' (CTX_USER_MIN + `USER_CONTEXTS - 1)
+} rcontext_t;
+
 typedef struct packed {
    logic [4:0] r;		// Architectural register number
-   logic [`CONTEXT_BITS-1:0] c;	// Register context
+   rcontext_t c;		// Register context
 } regnum_t;
+
+// Machine context that is subject to update/change on a pipeline kill.
+// This is not restricted just to being the register context.
+// This has nothing to do with the debug/trace "mcontext" CSR!!
+typedef struct packed {
+   rcontext_t m;		// Currently executing context
+   rcontext_t u;		// Current user context (user_context csr)
+} mcontext_t;
+
+function mcontext_t mcontext_reset;
+   mcontext_reset.m = CTX_MACHINE;
+   mcontext_reset.u = CTX_USER_MAX;
+endfunction // mcontext_reset
 
 typedef struct packed {
    insn_type_t   itype;
@@ -55,6 +76,7 @@ typedef struct packed {
 
    logic  [31:0] pc;		// Address of this instruction
    logic	 i16;		// Compressed (16-bit) instruction
+   mcontext_t	 mcontext;	// Machine context
 
    // Sub-opcodes; may be modified from the input instruction
    logic   [2:0] funct3;
@@ -71,7 +93,8 @@ typedef struct packed {
 function decoded_insn_t dummy_op(
   input	       insn_type_t itype,
   input [31:0] pc,
-  input	       i16
+  input	       i16,
+  input	       mcontext_t mcontext
   );
    dummy_op.itype	= itype;
    dummy_op.rd		= 'bx;
@@ -90,19 +113,21 @@ function decoded_insn_t dummy_op(
 
    dummy_op.pc		= pc;
    dummy_op.i16		= i16;
+   dummy_op.mcontext    = mcontext;
    dummy_op.pred_taken	= 1'b0;
 endfunction
 
 function decoded_insn_t killed_op;
-   killed_op = dummy_op(INSN_KILLED, 32'bx, 1'bx);
+   killed_op = dummy_op(INSN_KILLED, 32'bx, 1'bx, 'bx);
 endfunction
 
-function decoded_insn_t null_op(input [31:0] pc);
-   null_op = dummy_op(INSN_NULL, pc, 1'bx);
+function decoded_insn_t null_op(input [31:0] pc, input mcontext_t mcontext);
+   null_op = dummy_op(INSN_NULL, pc, 1'bx, mcontext);
 endfunction
 
-function decoded_insn_t err_op(input [31:0] pc, input i16);
-   err_op = dummy_op(INSN_ERR, pc, i16);
+function decoded_insn_t err_op(input [31:0] pc, input i16,
+			       input mcontext_t mcontext);
+   err_op = dummy_op(INSN_ERR, pc, i16, mcontext);
 endfunction
 
 // This returns the true successor pc, without masking!

@@ -16,8 +16,9 @@ module decode_comb
   (
    input [31:0]	d_din,		// From fetch stage
    input	d_insn_16,	// 16-bit instruction but not a fused pair!
-   input	d_pred_taken,
-   input [31:0]	d_pc,
+   input	d_pred_taken,	// Control transfer predicted taken
+   input [31:0]	d_pc,		// PC of instruction
+   input mcontext_t d_mcontext,	// Machine context of instruction
 
    output	decoded_insn_t op
    );
@@ -48,18 +49,19 @@ module decode_comb
      begin
 	op	      = 'bx;
 	op.i16        = is_16;
+	op.mcontext   = d_mcontext;
 
 	op.itype      = INSN_ERR;
 	op.pc	      = d_pc & core.PC_MASK;
 	op.rd.r       = i[11:7];
-	op.rd.c       = default_context;
+	op.rd.c       = op.mcontext.m;
 	op.rd_e       = 1'b0;
 	op.rd_m       = 1'b0;
 	op.rs1.r      = i[19:15];
-	op.rs1.c      = default_context;
+	op.rs1.c      = op.mcontext.m;
 	op.rs1_valid  = 1'b0;
 	op.rs2.r      = i[24:20];
-	op.rs2.c      = default_context;
+	op.rs2.c      = op.mcontext.m;
 	op.rs2_valid  = 1'b0;
 	op.imm	      = 'bx;
 	op.csrw       = 1'b0;
@@ -121,52 +123,45 @@ module decode_comb
 	     op.imm       = op.pc + j_imm;
 	  end
 
-	  OP: begin
+	  OP, OP_IMM: begin
 	     op.itype		= INSN_ALU;
 	     op.rs1_valid	= 1'b1;
-	     op.rs2_valid	= 1'b1;
+	     op.rs2_valid	= i[5];
 	     op.rd_e		= 1'b1;
-	  end
-
-	  OP_IMM: begin
-	     op.itype		= INSN_ALU;
-	     op.rs1_valid	= 1'b1;
-	     op.rs2_valid	= 1'b0;
-	     op.rd_e		= 1'b1;
-
-	     // For the SLLI and SLAI opcodes, rs2 is a short immediate
-	     // and funct7 is valid; for others, the full i immediate is
-	     // used and funct7 is considered zero.
-	     if (op.funct3[1:0] == 2'b01) begin
-	       op.imm	  = op.rs2.r;
-	     end else begin
-		op.imm	  = i_imm;
-	     end
+	     op.imm	        = i_imm;
 	  end
 
 	  SYSTEM: begin
-	     op.rs1_valid = !op.funct3[2];
 	     op.imm       = i_imm;
-	     unique casez (op.funct3[1:0])
-	       2'b01: begin	// CSRRW[I]
+	     unique casez ({op.funct7, op.funct3})
+	       10'b???????_?01: begin	// CSRRW[I]
+		  op.itype = INSN_CSR;
 		  op.rd_e = 1'b1;
 		  op.csrr = |op.rd.r;
 		  op.csrw = 1'b1;
-		  op.itype = INSN_CSR;
+		  op.rs1_valid = ~op.funct3[2];
 	       end
-	       2'b1?: begin	// CSRR[SC][I]
+	       10'b???????_?1?: begin	// CSRR[SC][I]
+		  op.itype = INSN_CSR;
 		  op.rd_e = 1'b1;
 		  op.csrr = 1'b1;
 		  op.csrw = |op.rs1.r;
-		  op.itype = INSN_CSR;
+		  op.rs1_valid = ~op.funct3[2];
 	       end
-	       2'b00: begin
-		  // ECALL, EBREAK
+	       10'b0000000_000: begin		// ECALL, EBREAK
 		  if (!core.STRICT_UNDEFINED ||
-		    (!i[31:21] && !op.rs1.r && !op.funct3[2]))
+		      (!op.rs2.r[4:1] && !op.rs1.r && !op.rd.r))
 		    op.itype = INSN_ECALL;
 	       end
-	     endcase // unique casez (op.funct3[1:0])
+	       10'b0011000_000:	begin		// MRET
+		  if (!core.STRICT_UNDEFINED ||
+		      (!op.rs2.r == 5'b00010 && !op.rs1.r && !op.rd.r))
+		    op.itype = INSN_MRET;
+	       end
+	       default: begin
+		  // Error
+	       end
+	     endcase // unique casez ({op.funct7, op_funct3})
 	  end
 
 	  AUIPC: begin
@@ -185,10 +180,33 @@ module decode_comb
 	     op.imm    = u_imm;
 	  end
 
+	  // CUSTOM0 is CUSTOM1 as OP_IMM is to OP
+	  CUSTOM0, CUSTOM1: begin
+	     op.itype		= INSN_ALU;
+	     op.rs1_valid	= 1'b1;
+	     op.rs2_valid	= i[5];
+	     op.rd_e		= 1'b1;
+	     op.imm	        = i_imm;
+
+	     unique casez (op.funct3)
+		3'b000: begin	// add.xu
+		   op.itype  = INSN_ALU;
+		   op.funct3 = ALU_ADD;
+		   op.rs1.c  = op.mcontext.u;
+		end
+	       3'b001: begin	// add.ux
+		  op.itype   = INSN_ALU;
+		  op.funct3  = ALU_ADD;
+		  op.rd.c    = op.mcontext.u;
+	       end
+	       default: begin
+		  // Error
+	       end
+	     endcase
+	  end
+
 	  default: begin
-	     // All other opcodes are invalid; this also takes care
-	     // of 16-bit decode failure
-	     op.itype = INSN_ERR;
+	     // Error
 	  end
 	endcase // unique case (i[6:0])
 
@@ -202,7 +220,7 @@ module decode_comb
 
 	// Give the synthesizer a bit more flexibility
 	if (op.itype == INSN_ERR)
-	  op = err_op(op.pc, op.i16);
+	  op = err_op(op.pc, op.i16, op.mcontext);
      end // always @ (*)
 endmodule
 
@@ -274,7 +292,7 @@ module decode_seq
       if (d_killed)
 	op_o = killed_op();
       else if (!d_valid_i)
-	op_o = null_op(op_i.pc);
+	op_o = null_op(op_i.pc, op_i.mcontext);
       else if (insn_mult(op_o)) begin
 	 // Multiply handling
 	 if (have_mult && !op_i.funct3[1:0] &&
@@ -297,22 +315,23 @@ endmodule // decode_seq
 // Decoder pipeline stage
 //
 module decode (
-  input			      rst_n,
-  input			      clk,
-  input			      clken,
+  input	       rst_n,
+  input	       clk,
+  input	       clken,
 
-  input [31:0]		      d_din,		// From fetch stage
-  input			      d_insn_16,	// 16-bit instruction packet
-  input			      d_pred_taken,	// F predicted taken branch
-  input [31:0]		      d_pc,
+  input [31:0] d_din, // From fetch stage
+  input	       d_insn_16, // 16-bit instruction packet
+  input	       d_pred_taken, // F predicted taken branch
+  input [31:0] d_pc,
+  input	       mcontext_t d_mcontext,
 
-  input			      d_valid_i,
-  input			      d_stall,
-  input			      d_killed,
-  output		      d_valid_o,
-  output		      d_busy,
+  input	       d_valid_i,
+  input	       d_stall,
+  input	       d_killed,
+  output       d_valid_o,
+  output       d_busy,
 
-  output		      decoded_insn_t d_op
+  output       decoded_insn_t d_op
 			 );
 
    wire			      d_clken;
@@ -326,7 +345,7 @@ module decode (
    // Purely combinatorial decode
    decode_comb comb (
      .d_din (d_din), .d_insn_16(d_insn_16), .d_pred_taken(d_pred_taken),
-     .d_pc (d_pc & core.PC_MASK), .op(c_op)
+     .d_pc (d_pc & core.PC_MASK), .d_mcontext(d_mcontext), .op(c_op)
      );
 
    // Additional, sequence-dependent

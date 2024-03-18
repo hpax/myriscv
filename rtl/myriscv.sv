@@ -3,7 +3,7 @@
 module core (rst_n, clk, clken,
 	     ctr_time, ctr_cycle, ctr_instret,
 	     io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready,io_rdata,
-	     irq, intack, buserr
+	     irq, irq_enable, irq_edge, intack, buserr
 	     );
    parameter    bit WITH_Zba		= 1'b1;
    parameter    bit WITH_Zcf		= 1'b1;
@@ -19,7 +19,7 @@ module core (rst_n, clk, clken,
 
    parameter    bit TRAP_BADINSN	= 1'b1;
    parameter    bit TRAP_BADALU		= 1'b1;
-   parameter    bit TRAP_BADPC		= 1'b0;
+   parameter    bit TRAP_BADPC		= 1'b1;
 
    parameter    logic [31:0] PC_MASK	= 32'h41ff_fffe;
    parameter    logic [31:0] RESET_PC	= 32'h0000_0010;
@@ -29,10 +29,22 @@ module core (rst_n, clk, clken,
    parameter    logic [31:0] MTVEC_RESET	= 32'h0000_0080;
    parameter    logic [31:0] MTVEC_WMASK	= 32'h0;
 
+   // These can be set to any width from 0 (no counter) to 64 (full
+   // architectural counter width.) If CTR_TIME_WIDTH is zero, the
+   // ctr_time port becomes an input port. If CTR_CYCLE_WIDTH is zero,
+   // ctr_cycle is set to equal ctr_time.
    parameter    int	     CTR_TIME_WIDTH	= 40;
    parameter    int	     CTR_CYCLE_WIDTH	=  0;
    parameter    int	     CTR_INSTRET_WIDTH	= 40;
 
+   // If set, these values are reflected (readonly) into the
+   // corresponding CSRs; this does add some logic burden.
+   parameter logic [31:0]    csrval_misa     = 32'h0;
+   parameter logic [31:0]    csrval_vendorid = 32'h0;
+   parameter logic [31:0]    csrval_archid   = 32'h0;
+   parameter logic [31:0]    csrval_impid    = 32'h0;
+
+   // Parameterization for timing tweaks
    parameter	bit	     ALU_EARLY_DECODE   = 1'b0;
    parameter	bit	     PREDICT_JALR_ZERO	= 1'b0;
 
@@ -82,7 +94,17 @@ module core (rst_n, clk, clken,
    input		     io_ready;
    input [31:0]		     io_rdata;
 
-   input [NUM_IRQS:1]	     irq;
+   // irq is the expected IRQ input.
+   //
+   // irq_enable is intended to be used to compile-time disable.
+   // interrupt vectors, but can also be used to suppress otherwise
+   // latched edge-triggered interrupts.
+   //
+   // irq_edge is set to make an input edge-triggered.
+   input tri0 [NUM_IRQS:1]   irq;
+   input tri0 [NUM_IRQS:1]   irq_enable;
+   input tri0 [NUM_IRQS:1]   irq_edge;
+
    output [IRQ_BITS-1:0]     intack;
 
    output reg		     buserr;
@@ -278,10 +300,12 @@ module core (rst_n, clk, clken,
 
 
    // Fetch unit (F stage)
-   wire f_restart;
+   wire	       f_restart;
    wire [31:0] f_restartpc;
+   mcontext_t  f_restart_mcontext;
    wire	       f_stall;
    wire [31:0] d_insn;
+   mcontext_t  d_mcontext;
    wire	       d_insn_16;
    wire	       d_valid_i;
    wire	       d_insn_pred_taken;
@@ -294,6 +318,7 @@ module core (rst_n, clk, clken,
 
      .restart		(f_restart),
      .restart_pc	(f_restartpc),
+     .restart_mcontext  (f_restart_mcontext),
      .ibus_a		(ibus_a),
      .ibus_rdata	(ibus_rdata),
      .ibus_valid	(ibus_valid),
@@ -304,6 +329,7 @@ module core (rst_n, clk, clken,
      .d_insn		(d_insn),
      .d_pred_taken	(d_insn_pred_taken),
      .d_pc		(d_insn_pc),
+     .d_mcontext        (d_mcontext),
      .d_insn_16		(d_insn_16)
      );
 
@@ -323,6 +349,7 @@ module core (rst_n, clk, clken,
      .d_insn_16		(d_insn_16),
      .d_pred_taken	(d_insn_pred_taken),
      .d_pc		(d_insn_pc),
+     .d_mcontext	(d_mcontext),
      .d_valid_i		(d_valid_i),
      .d_stall		(d_stall),
      .d_killed		(d_killed),
@@ -332,12 +359,25 @@ module core (rst_n, clk, clken,
      );
 
    // Interrupt latching
-   reg [NUM_IRQS:1] d_irqs;
+   reg [NUM_IRQS:1] d_irqs;	// Pending IRQs
+   reg [NUM_IRQS:1] d_irq_q;	// irq input delayed (for edge detect)
+   reg [NUM_IRQS:1] d_irq_edge;	// edge detected interrupt latched
+
+   wire [NUM_IRQS:1] d_irqs_clear;
+
    always @(negedge rst_n or posedge clk)
-     if (~rst_n)
-       d_irqs  <= 'b0;
-     else if (clken) begin
-	d_irqs <= irq;
+     if (~rst_n) begin
+	d_irqs     <= 'b0;
+	d_irq_q    <= 'b0;
+	d_irq_edge <= 'b0;
+     end else if (clken) begin
+	logic [NUM_IRQS:1] irq_isedge;
+
+	// Edge-trigger logic
+	d_irq_q    <= irq_edge & irq;
+	d_irq_edge <= irq_edge &
+		      ((d_irq_edge & ~d_irqs_clear) | (irq & ~d_irq_q));
+	d_irqs     <= irq_enable & ((~irq_edge & irq) | d_irq_edge);
      end
 
    // Backend units (E, M, and W stages)
@@ -347,6 +387,7 @@ module core (rst_n, clk, clken,
    wire	       e_valid_o;
    wire	       e_kill;
    wire	[31:0] e_restartpc;
+   mcontext_t  e_restart_mcontext;
    wire	       e_busy;
    wire	       e_rs1_m;
    wire	       e_rs1_w;
@@ -374,6 +415,7 @@ module core (rst_n, clk, clken,
      .d_op		(d_op),
 
      .d_irqs		(d_irqs),
+     .d_irqs_clear      (d_irqs_clear),
      .e_intack		(intack),
 
      .e_valid_i		(e_valid_i),
@@ -382,6 +424,7 @@ module core (rst_n, clk, clken,
      .e_kill		(e_kill),
      .e_op		(e_op),
      .e_restartpc	(e_restartpc),
+     .e_restart_mcontext (e_restart_mcontext),
      .e_busy		(e_busy),
      .e_rs1_m		(e_rs1_m),
      .e_rs1_w		(e_rs1_w),
@@ -410,8 +453,9 @@ module core (rst_n, clk, clken,
      .dbus_ready	(dbus_ready)
      );
 
-   assign f_restartpc = e_restartpc;
-   assign d_killed    = e_kill;
+   assign f_restartpc        = e_restartpc;
+   assign f_restart_mcontext = e_restart_mcontext;
+   assign d_killed           = e_kill;
 
    //
    // Pipeline control

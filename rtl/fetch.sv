@@ -121,8 +121,9 @@ module fetch
    input	     clken,
    input	     rst_n,
 
-   input	     restart, // Killed in the E stage
-   input [31:0]	     restart_pc, // PC to restart from
+   input	     restart,		// Killed in the E stage
+   input [31:0]	     restart_pc,	// PC to restart from
+   input mcontext_t  restart_mcontext,	// Machine context to restart from
    output reg [31:0] ibus_a,
    input [31:0]	     ibus_rdata,
    output reg	     ibus_valid,
@@ -137,6 +138,7 @@ module fetch
    output reg	     d_valid_i,
    output reg	     d_pred_taken,
    output reg [31:0] d_pc,
+   output	     mcontext_t d_mcontext,
    // This flag can be clear for pair of fused 16-bit instructions;
    // the decode stage needs to consider that appropriately.
    output reg	     d_insn_16
@@ -234,6 +236,7 @@ module fetch
 	  d_valid_i	<= 1'b0;
 	  d_pred_taken	<= 1'b0;
 	  d_insn	<= 32'bx;
+	  d_mcontext    <= mcontext_reset();
 	  pref_valid	<= 1'b0;
 	  pref_16	<= 16'bx;
 	  ibus_valid_q	<= 1'b0; // Data not ready yet
@@ -248,6 +251,7 @@ module fetch
 	       d_valid_i	<= 1'b0;
 	       d_pred_taken	<= 1'b0;
 	       d_insn		<= 32'bx;
+	       d_mcontext       <= restart_mcontext;
 	       pref_valid	<= 1'b0;
 	       pref_16		<= 16'bx;
 	       ibus_valid_q	<= 1'b0; // Discard incoming data
