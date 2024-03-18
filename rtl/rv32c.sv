@@ -149,6 +149,7 @@ module rv32c_comb
 		 if (core.WITH_Zcf)
 		   o = insn_s(p1, p2, {i[5], i[12:10], i[6], 2'b0}, 3'b010, STORE_FP);
 
+	       default: o = 32'bx; // For simulation
 	     endcase // unique case (i[15:13])
 	  end // case: 2'b00
 
@@ -238,6 +239,8 @@ module rv32c_comb
 		 o = insn_b(p1, R_ZERO,
 			    $signed({i[12], i[6:5], i[2], i[11:10], i[4:3], 1'b0}),
 			    {2'b00, i[13]}, BRANCH);
+
+	       default: o = 32'bx; // For simulation
 	     endcase // unique casez (i[15:13])
 	  end // case: 2'b10
 
@@ -276,8 +279,12 @@ module rv32c_comb
 	       3'b111:	// C.FLWSP
 		 if (core.WITH_Zcd)
 		   o = insn_s(R_SP, r2, {i[8:7], i[12:9], 2'b0}, 3'b010, STORE_FP);
+
+	       default: o = 32'bx; // For simulation
 	     endcase
-	  end
+	  end // case: 2'b10
+
+	  default: o = 32'bx; // For simulation
 	endcase // unique case (i[1:0])
      end
 endmodule // rv32c_comb
