@@ -43,7 +43,8 @@ module alu_decode
 		  ctl.invert = funct7[5];
 	       end
 	       { 7'b0?1_0000, 3'b??0 }: begin // shXadd, shXsub
-		  if (core.WITH_Zba && (core.WITH_extensions || !funct7[5])) begin
+		  if (core.WITH_Zba &&
+		      (core.WITH_extensions || !funct7[5])) begin
 		     ctl.unit   = ALUSRC_ADD;
 		     ctl.shadd  = op.funct3[2:1];
 		     ctl.invert = funct7[5];
@@ -66,9 +67,9 @@ module alu_decode
 		       if (core.WITH_extensions || ctl.bcop < 3'b011)
 			  ctl.unit = ALUSRC_BITCNT;
 		    end
-		    6'b1_0010?: begin
+		    6'b1_0010?: begin	// SEXT.B/H
 		       ctl.unit = ALUSRC_SHIFT;
-		       ctl.shiftop = { 4'b00_11, op.rs2.r[2:0], 4'b11_1_0 }; // SEXT.B/H
+		       ctl.shiftop = { 4'b00_11, op.rs2.r[2:0], 4'b11_1_0 };
 		    end
 		    6'b0_?????: begin
 		       ctl.unit = ALUSRC_SHIFT;
@@ -455,21 +456,32 @@ module alu #(
    // XXX: it seems combining this with the adder is really slow.
    // Is this better?
    //
-   wire			  cmp_eq  = (src1 == src2);
-   wire			  cmp_lts = $signed(src1) < $signed(src2);
-   wire			  cmp_ltu = src1 < src2;
-   logic		  cmp_lt;
+   wire	  cmp_eq  = (src1 == src2);
+   wire	  cmp_and = ~|(src1 & src2); // a.k.a. "test eq z"
+   wire	  cmp_lts = $signed(src1) < $signed(src2);
+   wire	  cmp_ltu = src1 < src2;
+
+   wire	  cmp_ltx = ctl.cond[1] ? cmp_ltu : cmp_lts;
+   wire	  cmp_lgt = ctl.cond[0] ^ cmp_ltx;
 
    always @(*) begin
-      cmp_lt  = ctl.cond[0] ^ (ctl.cond[1] ? cmp_ltu : cmp_lts);
-      cmp_out = ctl.cond[2] ? cmp_lt : (cmp_eq ^ ctl.cond[0]);
+      logic cmpcond;
+
+      if (ctl.cond[2])
+	cmpcond = cmp_ltx;
+      else if (core.WITH_cmpand & ctl.cond[1])
+	cmpcond = cmp_and;
+      else
+	cmpcond = cmp_eq;
+
+      cmp_out = cmpcond ^ ctl.cond[0];
    end
 
    //
    // Minmax (select) unit
    //
    wire [31:0]		  minmax_out;
-   mux2 #(32) minmax (.d0(src2), .d1(src1), .q(minmax_out), .sel(cmp_lt));
+   mux2 #(32) minmax (.d0(src2), .d1(src1), .q(minmax_out), .sel(cmp_ltx));
 
    //
    // czero (Zicond) unit

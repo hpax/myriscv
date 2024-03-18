@@ -14,6 +14,7 @@ module core (rst_n, clk, clken,
    parameter    bit WITH_Zmmul		= 1'b1;
    parameter    bit WITH_Zicond		= 1'b1;
    parameter    bit WITH_minmax		= 1'b1;
+   parameter    bit WITH_cmpand         = 1'b1; // baeqz, banez
    parameter    bit WITH_extensions	= 1'b1;
    parameter    bit STRICT_UNDEFINED	= 1'b0;
 

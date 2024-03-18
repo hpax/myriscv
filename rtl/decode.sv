@@ -91,7 +91,8 @@ module decode_comb
 	  end
 
 	  BRANCH: begin
-	     if (!core.STRICT_UNDEFINED || op.funct3[2:1] != 2'b01)
+	     if (!core.STRICT_UNDEFINED || core.WITH_cmpand ||
+		 op.funct3[2:1] != 2'b01)
 	       op.itype	  = INSN_BR;
 	     op.rs1_valid = 1'b1;
 	     op.rs2_valid = 1'b1;
