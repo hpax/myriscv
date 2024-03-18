@@ -188,7 +188,6 @@ module backend #(
    reg [31:0] mcause;
    reg [NUM_IRQS:1] mie;
    reg [`USER_CONTEXTS+`SYS_CONTEXTS-1:0] cie; // Context interrupt enable
-   rcontext_t user_context;
 
    //
    // CSR read/write logic
@@ -428,7 +427,6 @@ module backend #(
 	mepc         <= 32'b0;
 	mie          <= 'b0;
 	cie	     <= 'b0;
-	user_context <= CTX_MACHINE;
      end else if (e_clken) begin
 	if (csrw_mtvec)
 	  mtvec <= wmask(e_csr_wval, mtvec_reset, mtvec_wmask);
