@@ -106,9 +106,9 @@ function decoded_insn_t err_op(input [31:0] pc, input i16);
 endfunction
 
 // This returns the true successor pc, without masking!
-function logic [31:0] successor_pc(input decoded_insn_t op);
+function logic [31:0] successor_pc(input decoded_insn_t op, input valid);
    successor_pc = op.pc;
-   if (insn_real(op.itype))
+   if (valid & insn_real(op.itype))
      successor_pc += op.i16 ? 3'd2 : 3'd4;
 endfunction
 

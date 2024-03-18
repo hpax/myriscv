@@ -255,25 +255,41 @@ module backend #(
    // Successor PC (for JAL/JALR and, in the future, branch predict
    // validation.)
    //
-   wire [31:0] e_succ_pc  = successor_pc(e_op);
 
    //
    // Branch, jump, trap and interrupt handling.
    //
    // Traps have the highest priority, followed by interrupts.
    //
+   // e_succ_pc is always the subsequent instruction.
+   // It is used to set the target register of JAL(R).
+   //
+   // e_jump_pc reflects the taken address of jumps.
+   //
+   // e_next_pc reflects jumps, but not traps or interrupts;
+   // it is used to set mepc after an interrupt.
+   //
    // e_restartpc should always reflect the latest instruction
    // executed, in case *another* pipeline stage pulls kill.
    //
+   // For dead cycles, all are equivalent to the current PC.
+   // e_succ_pc and e_next_pc are *not* masked, in order to detect
+   // the BADPC trap.
+   //
    logic [31:0]	trap_mcause;
+   logic [31:0]	e_succ_pc;
    logic [31:0]	e_next_pc;
+   logic [31:0]	e_jump_pc;
 
    always @(*)
      begin
 	e_trap      = 1'b0;
 	e_jump      = 1'b0;	// Mispredicted jump or branch
 	trap_mcause = 32'bx;
-	e_restartpc = e_op.pc & core.PC_MASK;
+	e_succ_pc   = successor_pc(e_op, e_accept);
+	e_jump_pc   = 32'bx;
+	e_next_pc   = e_succ_pc;
+	e_restartpc = e_next_pc & core.PC_MASK;
 
 	if (e_accept) begin
 	   unique case (e_op.itype)
@@ -290,27 +306,21 @@ module backend #(
 		trap_mcause = MCAUSE_BADINSN;
 	     end
 	     INSN_JAL: begin	// JAL, JALR
-		e_jump	 = !e_op.pred_taken;
+		e_jump	  = !e_op.pred_taken;
+		e_jump_pc = e_addr;
 	     end
 	     INSN_BR: begin
-		e_jump	 = e_cmp_out != e_op.pred_taken;
+		e_jump	  = e_cmp_out != e_op.pred_taken;
+		e_jump_pc = e_op.imm; // rs1 is not part of the jump addr!
 	     end
 	     default: begin
 		// No control transfer
 	     end
 	   endcase
 
-	   // e_succ_pc is always the subsequent instruction.
-	   // It is used to set the target register of JAL(R).
-	   //
-	   // e_next_pc reflects jumps, but not traps or interrupts;
-	   // it is used to set mepc after an interrupt.
-	   e_next_pc   = e_succ_pc;
-
-	   // If we didn't predict this, we should have been, and vice
-	   // versa...
+	   // If e_jump is set, a branch was mispredicted...
 	   if (e_jump & !e_op.pred_taken)
-	     e_next_pc = e_addr;
+	     e_next_pc = e_jump_pc;
 
 	   // For an invalid PC, unless we are taking another trap...
 	   if (core.TRAP_BADPC) begin
@@ -323,7 +333,7 @@ module backend #(
 	   if (e_trap)
 	     e_restartpc = mtvec & core.PC_MASK;
 	   else
-	     e_restartpc = e_next_pc;
+	     e_restartpc = e_next_pc & core.PC_MASK;
 	end // if (e_accept)
 
 	if (!e_trap & ~e_busy & e_irq)
