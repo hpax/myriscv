@@ -4,6 +4,9 @@
 // Register file: two read ports, one write port, one clock cycle.
 //
 
+`ifndef ALTERA_RESERVED_QIS
+
+// Generic implementation
 module regfile
   #(
     parameter	  contexts = 1,
@@ -11,20 +14,21 @@ module regfile
     parameter bit zero_init = 1'b1
     )
    (
-    input	       rst_n,
-    input	       clk,
-    input	       clken,
+    input		 rst_n,
+    input		 clk,
+    input		 clken,
 
+    input		 rs_valid,
     input [reg_bits-1:0] rs1,
     input [reg_bits-1:0] rs2,
     input [reg_bits-1:0] rd,
-    input	       rd_wren,
-    input [3:0]	       rd_wbe,
+    input		 rd_wren,
+    input [3:0]		 rd_wbe,
 
-    input [31:0]       rd_data,
+    input [31:0]	 rd_data,
 
-    output [31:0]      rs1_data,
-    output [31:0]      rs2_data
+    output [31:0]	 rs1_data,
+    output [31:0]	 rs2_data
     );
 
    // This is not required to be a power of 2
@@ -37,6 +41,15 @@ module regfile
    initial
      for (int i = 0; i < nregs; i++)
        r[i] <= 32'b0;
+
+   reg [reg_bits-1:0]	rs1_q;
+   reg [reg_bits-1:0]	rs2_q;
+   always @(posedge clk) begin
+      if (rs_valid) begin
+	 rs1_q  <= rs1;
+	 rs2_q  <= rs2;
+      end
+   end
 
    reg [31:0] rs1_dq;
    reg [31:0] rs2_dq;
@@ -55,8 +68,8 @@ module regfile
    // Putting a clken on the read seems to generate a dual-clock
    // memory. Does this need to be fixed?
    always @(posedge clk) begin
-      rs1_dq <= r[rs1];
-      rs2_dq <= r[rs2];
+      rs1_dq <= r[rs1_q];
+      rs2_dq <= r[rs2_q];
       if (clken & rd_wren) begin
 	 if (rd_wbe[0]) r[rd][0] <= rd_data[7:0];
 	 if (rd_wbe[1]) r[rd][1] <= rd_data[15:8];
@@ -66,49 +79,60 @@ module regfile
    end
 endmodule // regfile
 
-`ifdef SKIP
-module alt_regfile
+`else // !`ifndef ALTERA_RESERVED_QIS
+
+// Altera-specific register file implementation
+module regfile
   #(
     parameter	  contexts = 1,
     parameter	  reg_bits = $clog2(contexts)+5,
     parameter bit zero_init = 1'b1
     )
    (
-    input	       rst_n,
-    input	       clk,
-    input	       clken,
+    input		 rst_n,
+    input		 clk,
+    input		 clken,
 
+    input		 rs_valid,
     input [reg_bits-1:0] rs1,
     input [reg_bits-1:0] rs2,
     input [reg_bits-1:0] rd,
-    input	       rd_wren,
-    input [3:0]	       rd_wbe,
+    input		 rd_wren,
+    input [3:0]		 rd_wbe,
 
-    input [31:0]       rd_data,
+    input [31:0]	 rd_data,
 
-    output [31:0]      rs1_data,
-    output [31:0]      rs2_data
+    output [31:0]	 rs1_data,
+    output [31:0]	 rs2_data
     );
 
-   regfile_alt regs1 (
-     .byteena_a	( rd_wbe ),
-     .wren	( rd_wren ),
-     .clock	( clk ),
-     .enable    ( clken ),
-     .wraddress ( rd ),
-     .data	( rd_data ),
-     .rdaddress ( rs1 ),
-     .q         ( rs1_data )
-     );
-   regfile_alt regs2 (
-     .byteena_a	( rd_wbe ),
-     .wren	( rd_wren ),
-     .clock	( clk ),
-     .enable    ( clken ),
-     .wraddress ( rd ),
-     .data	( rd_data ),
-     .rdaddress ( rs2 ),
-     .q         ( rs2_data )
-     );
-endmodule
+   // No 3-port memories, so use two copies
+   alt_regfile r1 (
+		   .aclr		(~rst_n),
+		   .clock		(clk),
+		   .enable		(clken),
+
+		   .wren		(rd_wren),
+		   .byteena_a		(rd_wbe),
+		   .wraddress		(rd),
+
+		   .rd_addressstall	(~rs_valid),
+		   .rdaddress		(rs1),
+		   .q			(rs1_data)
+		   );
+   alt_regfile r2 (
+		   .aclr		(~rst_n),
+		   .clock		(clk),
+		   .enable		(clken),
+
+		   .wren		(rd_wren),
+		   .byteena_a		(rd_wbe),
+		   .wraddress		(rd),
+
+		   .rd_addressstall	(~rs_valid),
+		   .rdaddress		(rs2),
+		   .q			(rs2_data)
+		   );
+endmodule // regfile
+
 `endif

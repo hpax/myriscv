@@ -129,7 +129,7 @@ module decode_comb
 	     op.rs1_valid	= 1'b1;
 	     op.rs2_valid	= i[5];
 	     op.rd_e		= 1'b1;
-	     op.imm	        = i_imm;
+	     op.imm		= i_imm;
 	  end
 
 	  SYSTEM: begin
@@ -187,7 +187,7 @@ module decode_comb
 	     op.rs1_valid	= 1'b1;
 	     op.rs2_valid	= i[5];
 	     op.rd_e		= 1'b1;
-	     op.imm	        = i_imm;
+	     op.imm		= i_imm;
 
 	     unique casez (op.funct3)
 		3'b000: begin	// add.xu
@@ -362,55 +362,72 @@ endmodule
 
 //
 // Quickly extract *possible* source registers for an instruction; this
-// allows the register file lookup to be done mostly in parallel with
-// the proper decode stage. It does not necessarily mean these register
-// values are actually used.
+// allows the register file lookup to be done without having to
+// parse the entire instruction.
 //
 // This is combinatorial, and should be kept as small as possible.
 //
 module decode_srcregs (
   input [31:0] insn,
-  output reg [4:0] rs1,
-  output reg [4:0] rs2
+  input	       mcontext_t mc,
+  output       regnum_t rs1,
+  output       regnum_t rs2
   );
 
    localparam [4:0] R_ZERO = 5'd0;
    localparam [4:0] R_RA   = 5'd1;
    localparam [4:0] R_SP   = 5'd2;
 
-   always @(*)
-     priority casez ({insn[15:13], insn[1:0]})
-       5'b???_11: begin	  // 32-bit instruction
-	  rs1 = insn[19:15];
-	  rs2 = insn[24:20];
-       end
-       5'b000_00: begin		// C.ADDI4SPN
-	  rs1 = R_SP;
-	  rs2 = 5'bx;
-       end
-       5'b???_00: begin		// RVC quadrant 0, memory references
-	  rs1 = { 2'b01, insn[9:7] };
-	  rs2 = { 2'b01, insn[4:2] };
-       end
-       2'b0??_01: begin		// RVC quadrant 1, lower half
-	  rs1 = insn[11:7];
-	  rs2 = { 2'b01, insn[4:2] };
-       end
-       2'b1??_01: begin		// RVC quadrant 1. lower half
-	  rs1 = { 2'b01, insn[9:7] };
-	  rs2 = { 2'b01, insn[4:2] };
-       end
-       2'b?00_10: begin		// RVC quadrant 2, non-SP
-	  rs1 = insn[11:7];
-	  rs2 = insn[6:2];
-       end
-       2'b???_10: begin		// RVC quadrant 2, SP memory references
-	  rs1 = R_SP;
-	  rs2 = insn[6:2];
-       end
-       default: begin
-	  rs1 = 5'bx;
-	  rs2 = 5'bx;
-       end
-     endcase
+   always @(*) begin
+      priority casez ({insn[15:13], insn[1:0]})
+	5'b???_11: begin		// 32-bit instruction
+	   rs1.r = insn[19:15];
+	   rs2.r = insn[24:20];
+	end
+	5'b000_00: begin		// C.ADDI4SPN
+	   rs1.r = R_SP;
+	   rs2.r = 5'bx;
+	end
+	5'b???_00: begin		// RVC quadrant 0, memory references
+	   rs1.r = { 2'b01, insn[9:7] };
+	   rs2.r = { 2'b01, insn[4:2] };
+	end
+	5'b0??_01: begin		// RVC quadrant 1, lower half
+	   rs1.r = insn[11:7];
+	   rs2.r = { 2'b01, insn[4:2] };
+	end
+	5'b10?_01: begin		// RVC quadrant 1.2
+	   rs1.r = { 2'b01, insn[9:7] };
+	   rs2.r = { 2'b01, insn[4:2] };
+	end
+	5'b11?_01: begin		// RVC quadrant 1.3 (branch)
+	   rs1.r = { 2'b01, insn[9:7] };
+	   rs2.r = R_ZERO;
+	end
+	5'b?00_10: begin		// RVC quadrant 2, non-SP
+	   rs1.r = insn[11:7];
+	   rs2.r = insn[6:2];
+	end
+	5'b???_10: begin		// RVC quadrant 2, SP memory references
+	   rs1.r = R_SP;
+	   rs2.r = insn[6:2];
+	end
+	default: begin
+	   rs1.r = 5'bx;
+	   rs2.r = 5'bx;
+	end
+      endcase // priority casez ({insn[15:13], insn[1:0]})
+
+      priority casez ({insn[14:12], insn[6:0]})
+	10'b000_0?01011:	// add.xu
+	  rs1.c = mc.u;
+	default:
+	  rs1.c = mc.m;
+      endcase // priority casez ({insn[14:12], insn[6:0]})
+
+      rs2.c = mc.m;
+   end
+
+   // add.ux doesn't have to be considered, because
+   // rd is not begin decoded here.
 endmodule

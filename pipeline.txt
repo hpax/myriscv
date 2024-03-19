@@ -5,6 +5,10 @@ Pipeline stages:
 	E - Execute (address generation, ALU)
 	M - Memory accress (load, store; late ALU operations)
 	W - Write Back (register file is written)
+	X - Pseudo-stage beyond the end of the pipeline
+
+X is not a stage per se, but a source for bypass data due to the
+register file begin read already during the D stage.
 
 A clocked register is named with the stage for which its output is
 valid for. Combinatorial signals become valid during their signal

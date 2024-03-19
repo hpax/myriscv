@@ -121,9 +121,9 @@ module fetch
    input	     clken,
    input	     rst_n,
 
-   input	     restart,		// Killed in the E stage
-   input [31:0]	     restart_pc,	// PC to restart from
-   input mcontext_t  restart_mcontext,	// Machine context to restart from
+   input	     restart, // Killed in the E stage
+   input [31:0]	     restart_pc, // PC to restart from
+   input	     mcontext_t restart_mcontext, // Machine context to restart from
    output reg [31:0] ibus_a,
    input [31:0]	     ibus_rdata,
    output reg	     ibus_valid,
@@ -141,7 +141,15 @@ module fetch
    output	     mcontext_t d_mcontext,
    // This flag can be clear for pair of fused 16-bit instructions;
    // the decode stage needs to consider that appropriately.
-   output reg	     d_insn_16
+   output reg	     d_insn_16,
+   // Combinatorially decoded rs1 and rs2 registers for the purpose
+   // of early register file access. These are *only* valid during
+   // the cycle f_valid_o is asserted.
+   // XXX: may need to use the addrstall feature of the regfile
+   // hard RAM blocks.
+   output	     f_valid_o,
+   output	     regnum_t f_rs1,
+   output	     regnum_t f_rs2
    );
 
    wire [31:0]	     next_pc;
@@ -226,6 +234,17 @@ module fetch
        ibus_a = next_pc;
      else
        ibus_a = (ibus_a_q + {f1_advance, 2'b00}) & core.PC_MASK;
+
+   // Early register file decode; this should be possible to do
+   // in parallel with the branch prediction decode and possibly
+   // leverage some of the same logic elements.
+   decode_srcregs dsr (
+		       .insn (f2_insn),
+		       .mc   (d_mcontext),
+		       .rs1  (f_rs1),
+		       .rs2  (f_rs2)
+		       );
+   assign f_valid_o = f2_valid & ~f_stalled;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)

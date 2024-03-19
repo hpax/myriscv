@@ -311,6 +311,9 @@ module core (rst_n, clk, clken,
    wire	       d_valid_i;
    wire	       d_insn_pred_taken;
    wire	[31:0] d_insn_pc;
+   wire	       f_valid_o;
+   regnum_t    f_rs1;
+   regnum_t    f_rs2;
 
    fetch fetch (
      .clk		(clk),
@@ -326,6 +329,11 @@ module core (rst_n, clk, clken,
      .ibus_ready	(ibus_ready),
 
      .f_stall		(f_stall),
+
+     .f_valid_o         (f_valid_o),
+     .f_rs1             (f_rs1),
+     .f_rs2             (f_rs2),
+
      .d_valid_i		(d_valid_i),
      .d_insn		(d_insn),
      .d_pred_taken	(d_insn_pred_taken),
@@ -389,8 +397,10 @@ module core (rst_n, clk, clken,
    wire	       e_busy;
    wire	       e_rs1_m;
    wire	       e_rs1_w;
+   wire	       e_rs1_x;
    wire	       e_rs2_m;
    wire	       e_rs2_w;
+   wire	       e_rs2_x;
 
    decoded_insn_t m_op;
    wire	       m_valid_i;
@@ -414,6 +424,10 @@ module core (rst_n, clk, clken,
      .clk		(clk),
      .clken		(clken),
 
+     .f_valid_o		(f_valid_o),
+     .f_rs1		(f_rs1),
+     .f_rs2		(f_rs2),
+
      .d_op		(d_op),
 
      .d_irqs		(d_irqs),
@@ -427,8 +441,10 @@ module core (rst_n, clk, clken,
      .e_busy		(e_busy),
      .e_rs1_m		(e_rs1_m),
      .e_rs1_w		(e_rs1_w),
+     .e_rs1_x		(e_rs1_x),
      .e_rs2_m		(e_rs2_m),
      .e_rs2_w		(e_rs2_w),
+     .e_rs2_x		(e_rs2_x),
 
      .m_valid_i		(m_valid_i),
      .m_stall		(m_stall),
@@ -494,8 +510,10 @@ module core (rst_n, clk, clken,
 
      .e_rs1_m	(e_rs1_m),
      .e_rs1_w	(e_rs1_w),
+     .e_rs1_x	(e_rs1_x),
      .e_rs2_m	(e_rs2_m),
-     .e_rs2_w	(e_rs2_w)
+     .e_rs2_w	(e_rs2_w),
+     .e_rs2_x	(e_rs2_x)
      );
    // Time counter. If CTR_TIME_WIDTH is 0, ctr_time is an input
    // which can be connected to an external counter or set to 0;

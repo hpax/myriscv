@@ -22,6 +22,7 @@ module pipe_ctl #(
   input	     decoded_insn_t d_op,
   output     decoded_insn_t e_op,
   output     decoded_insn_t m_op,
+  output     decoded_insn_t w_op,
 
   input	     d_busy,
   input	     e_busy,
@@ -38,8 +39,10 @@ module pipe_ctl #(
   // Bypass control
   output reg e_rs1_m,
   output reg e_rs1_w,
+  output reg e_rs1_x,
   output reg e_rs2_m,
-  output reg e_rs2_w
+  output reg e_rs2_w,
+  output reg e_rs2_x
 );
 
    function logic regeq (input v1, regnum_t r1, input v2, regnum_t r2);
@@ -73,10 +76,13 @@ module pipe_ctl #(
 	  e_op      <= killed_op();
 	  m_valid_i <= 1'b0;
 	  m_op      <= killed_op();
+	  w_op      <= killed_op();
 	  e_rs1_m   <= 1'b0;
 	  e_rs1_w   <= 1'b0;
+	  e_rs1_x   <= 1'b0;
 	  e_rs2_m   <= 1'b0;
 	  e_rs2_w   <= 1'b0;
+	  e_rs2_x   <= 1'b0;
        end
      else if (clken)
        begin
@@ -97,12 +103,6 @@ module pipe_ctl #(
 	  end else begin
 	     e_valid_i <= d_valid_o;
 	     e_op      <= d_op;
-
-	     // Bypass control (note: _m takes priority over _w!)
-	     e_rs1_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs1_valid, d_op.rs1);
-	     e_rs1_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs1_valid, d_op.rs1);
-	     e_rs2_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs2_valid, d_op.rs2);
-	     e_rs2_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs2_valid, d_op.rs2);
 	  end
 
 	  // A private flag is passed between the E stage to the M
@@ -121,6 +121,23 @@ module pipe_ctl #(
 	     // so it isn't in the register file yet.
 	     m_op.rd_m <= e_op.rd_e | e_op.rd_m;
 	  end
+
+	  // The only thing that is actually used in synthesis
+	  // is the w_op.rd_m and w_op.rd fields for the pipeline
+	  // control, but might as well fill in the whole structure
+	  // to benefit debugging in simulation and/or with Signaltap.
+	  if (m_valid_o)
+	    w_op    <= m_op;
+	  else
+	    w_op    <= null_op(m_op.pc, m_op.mcontext);
+
+	  // Bypass control (note: _m takes priority over _w!)
+	  e_rs1_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs1_valid, d_op.rs1);
+	  e_rs1_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs1_valid, d_op.rs1);
+	  e_rs1_x   <= regeq(w_op.rd_m, w_op.rd, d_op.rs1_valid, d_op.rs1);
+	  e_rs2_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs2_valid, d_op.rs2);
+	  e_rs2_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs2_valid, d_op.rs2);
+	  e_rs2_x   <= regeq(w_op.rd_m, w_op.rd, d_op.rs2_valid, d_op.rs2);
 
        end // else: !if(~rst_n)
 endmodule

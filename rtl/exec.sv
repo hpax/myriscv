@@ -20,61 +20,67 @@ module backend #(
   parameter bit	ALU_EARLY_DECODE
 		)
 (
- input		       rst_n,
- input		       clk,
- input		       clken,
+ input			   rst_n,
+ input			   clk,
+ input			   clken,
 
- input		       decoded_insn_t d_op,
+ input			   decoded_insn_t d_op,
+
+ input			   f_valid_o,
+ input			   regnum_t f_rs1,
+ input			   regnum_t f_rs2,
 
  // IRQ pending bitmask. Note that there is no IRQ 0 since that vector
  // is reserved for exceptions; e_intack == 0 means no interrupt taken.
- input [NUM_IRQS:1]    d_irqs,
+ input [NUM_IRQS:1]	   d_irqs,
  output reg [NUM_IRQS:1]   d_irqs_clear, // Clear edge-triggered interrupts
  output reg [IRQ_BITS-1:0] e_intack,
 
- input		       e_valid_i,
- input		       e_stall,
- input		       decoded_insn_t e_op,
- output reg	       e_valid_o,
- output reg	       m_kill,
- output reg [31:0]     m_restartpc, // Address for the front end after kill
- output mcontext_t     m_restart_mcontext,
- output reg	       e_busy,
- input		       e_rs1_m,
- input		       e_rs1_w,
- input		       e_rs2_m,
- input		       e_rs2_w,
+ input			   e_valid_i,
+ input			   e_stall,
+ input			   decoded_insn_t e_op,
+ output reg		   e_valid_o,
+ output reg		   m_kill,
+ output reg [31:0]	   m_restartpc, // Address for the front end after kill
+ output			   mcontext_t m_restart_mcontext,
+ output reg		   e_busy,
+ input			   e_rs1_m,
+ input			   e_rs1_w,
+ input			   e_rs1_x,
+ input			   e_rs2_m,
+ input			   e_rs2_w,
+ input			   e_rs2_x,
 
- input		       m_valid_i,
- input		       m_stall,
- input		       decoded_insn_t m_op,
- output reg	       m_valid_o,
- output reg	       m_busy,
+ input			   m_valid_i,
+ input			   m_stall,
+ input			   decoded_insn_t m_op,
+ output reg		   m_valid_o,
+ output reg		   m_busy,
 
  // Counters
- input [63:0]	       ctr_time,
- input [63:0]	       ctr_cycle,
- input [63:0]	       ctr_instret,
+ input [63:0]		   ctr_time,
+ input [63:0]		   ctr_cycle,
+ input [63:0]		   ctr_instret,
 
  // Data output, unregistered and registered
- output reg [31:0]     e_dout,
- output reg [31:0]     m_din,
+ output reg [31:0]	   e_dout,
+ output reg [31:0]	   m_din,
 
  // Data bus from ldst unit
- output [31:0]	       dbus_a,
- output		       dbus_valid,
- output		       dbus_wrq,
- output [3:0]	       dbus_wbe,
- output [31:0]	       dbus_wdata,
- input [31:0]	       dbus_rdata,
- input		       dbus_ready
+ output [31:0]		   dbus_a,
+ output			   dbus_valid,
+ output			   dbus_wrq,
+ output [3:0]		   dbus_wbe,
+ output [31:0]		   dbus_wdata,
+ input [31:0]		   dbus_rdata,
+ input			   dbus_ready
  );
 
-   logic	       e_kill;
+   logic	   e_kill;
 
-   wire		       e_clken = clken & (~e_stall | e_busy | e_kill);
-   wire		       m_clken = clken & (~m_stall | m_busy | m_kill);
-   wire		       w_clken = clken & m_valid_o;
+   wire		   e_clken = clken & (~e_stall | e_busy | e_kill);
+   wire		   m_clken = clken & (~m_stall | m_busy | m_kill);
+   wire		   w_clken = clken & m_valid_o;
 
    wire [31:0]	   e_rs1_data;
    wire [31:0]	   e_rs2_data;
@@ -111,10 +117,11 @@ module backend #(
      (
      .rst_n    ( rst_n ),
      .clk      ( clk ),
-     .clken    ( clken ),	// Not w_clken; need to read anyway
-     .rs1      ( d_op.rs1 ),
+     .clken    ( clken ),	// Not any specific stage!
+     .rs_valid ( f_valid_o ),
+     .rs1      ( f_rs1 ),
      .rs1_data ( e_rs1_data ),
-     .rs2      ( d_op.rs2 ),
+     .rs2      ( f_rs2 ),
      .rs2_data ( e_rs2_data ),
      .rd       ( m_op.rd ),
      .rd_data  ( m_dout ),
@@ -132,6 +139,15 @@ module backend #(
 	    if (m_dout_be[3]) w_din[31:24] <= m_dout[31:24];
 	 end
 
+   // X is a pseudo-stage for data forwarding purposes; this allows
+   // the register file to have two clocks and run in parallel
+   // with the D stage. It is a pseudo-stage, because doesn't have
+   // an op structure nor can it be stalled or cancelled.
+   reg [31:0]	      x_din;
+   always @(posedge clk)
+     if (w_clken)
+       x_din   <= w_din;
+
    // GPR bypass network/operand selection
    logic [31:0]	e_src1;
    always @(*)
@@ -141,6 +157,8 @@ module backend #(
        e_src1 = m_din;		// Data now in M stage
      else if (e_rs1_w)
        e_src1 = w_din;		// Data now in W stage
+     else if (e_rs1_x)
+       e_src1 = x_din;		// Data now in X stage
      else
        e_src1 = e_rs1_data;	// Data already in register file
 
@@ -152,6 +170,8 @@ module backend #(
        e_src2 = m_din;		// Data now in M stage
      else if (e_rs2_w)
        e_src2 = w_din;		// Data now in W stage
+     else if (e_rs2_x)
+       e_src2 = x_din;		// Data now in X stage
      else
        e_src2 = e_rs2_data;	// Data already in register file
 
