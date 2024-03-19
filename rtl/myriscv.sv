@@ -48,6 +48,7 @@ module core (rst_n, clk, clken,
    // Parameterization for timing tweaks
    parameter	bit	     ALU_EARLY_DECODE   = 1'b0;
    parameter	bit	     PREDICT_JALR_ZERO	= 1'b0;
+   parameter    bit	     EARLY_RVC          = 1'b1;
 
    // This allows a c.nop inserted for padding to be
    // fused with a previous c.xxx instruction into a

@@ -10,9 +10,6 @@
 
 // Combinatorial decoder
 module decode_comb
-  #(
-    parameter bit DECODE_C       = 1'b1	 // Set to 0 if not desired *OR* done before this logic.
-    )
   (
    input [31:0]	d_din,		// From fetch stage
    input	d_insn_16,	// 16-bit instruction but not a fused pair!
@@ -33,8 +30,8 @@ module decode_comb
    wire [31:0]	 cinst;
    wire		 is_16 = d_insn_16;
 
-   rv32c_comb rv32c (.d(d_din), .q(cinst));
-   assign i = DECODE_C ? cinst : d_din;
+   rv32c_comb rvc (.d(d_din), .q(cinst));
+   assign i = core.EARLY_RVC ? d_din : cinst;
 
    // Immediate formats
    wire signed [31:0] i_imm = $signed(i[31:20]);

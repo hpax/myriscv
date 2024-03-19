@@ -246,6 +246,11 @@ module fetch
 		       );
    assign f_valid_o = f2_valid & ~f_stalled;
 
+   // Early RVC decode, if enabled
+   wire [31:0] f2_decoded_insn;
+   rv32c_comb rvc (.d(f2_insn), .q(f2_decoded_insn));
+   wire [31:0] f2_insn_final = core.EARLY_RVC ? f2_decoded_insn : f2_insn;
+
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
@@ -295,7 +300,7 @@ module fetch
 		    // If f2_valid == 0, this is only a partial
 		    // instruction fetch.
 		    if (f2_valid) begin
-		       d_insn       <= f2_insn;
+		       d_insn       <= f2_insn_final;
 		       d_pc	    <= f2_pc;
 		       d_insn_16    <= f2_is_16;
 		       f2_pc	    <= next_pc;
