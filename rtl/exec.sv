@@ -36,9 +36,9 @@ module backend #(
  input		       e_stall,
  input		       decoded_insn_t e_op,
  output reg	       e_valid_o,
- output reg	       e_kill,
- output reg [31:0]     e_restartpc, // Address for the front end after kill
- output mcontext_t     e_restart_mcontext,
+ output reg	       m_kill,
+ output reg [31:0]     m_restartpc, // Address for the front end after kill
+ output mcontext_t     m_restart_mcontext,
  output reg	       e_busy,
  input		       e_rs1_m,
  input		       e_rs1_w,
@@ -70,8 +70,10 @@ module backend #(
  input		       dbus_ready
  );
 
+   logic	       e_kill;
+
    wire		       e_clken = clken & (~e_stall | e_busy | e_kill);
-   wire		       m_clken = clken & (~m_stall | m_busy);
+   wire		       m_clken = clken & (~m_stall | m_busy | m_kill);
    wire		       w_clken = clken & m_valid_o;
 
    wire [31:0]	   e_rs1_data;
@@ -83,9 +85,21 @@ module backend #(
    logic	   e_trap;
    logic	   e_jump;
 
-   wire   e_accept  = e_valid_i & ~e_busy;
-   assign e_valid_o = e_accept & ~e_trap & ~e_jump;
    assign e_busy    = 1'b0;
+
+   // m_kill will not be reflected in e_valid_i because it ends
+   // up on the wrong side of a register; this could be fixed,
+   // though...
+   wire   e_accept  = e_valid_i & ~e_busy & ~m_kill;
+
+   // This does not consider m_trap due to a speed path.
+   assign e_valid_o = e_accept;
+
+
+   // M-stage pipeline synchronization signals
+   reg	  m_trap;
+
+   wire	  m_accept = m_valid_i & ~m_busy & ~m_trap;
 
    // Latched output to M stage; also used by the bypass network
    always @(posedge clk)
@@ -310,35 +324,41 @@ module backend #(
    // e_succ_pc and e_next_pc are *not* masked, in order to detect
    // the BADPC trap.
    //
-   logic [31:0]	trap_mcause;
+   logic [31:0] e_restartpc;
+   mcontext_t   e_restart_mcontext;
    logic [31:0]	e_succ_pc;
    logic [31:0]	e_next_pc;
    logic [31:0]	e_jump_pc;
+
+   // Values to write to these register IF they are to be written...
+   logic [31:0]	e_mepc;
+   logic [31:0]	e_mcause;
 
    always @(*)
      begin
 	e_trap      = 1'b0;
 	e_jump      = 1'b0;	// Mispredicted jump or branch
-	trap_mcause = 32'bx;
 	e_succ_pc   = successor_pc(e_op, e_accept);
 	e_jump_pc   = 32'bx;
 	e_next_pc   = e_succ_pc;
 	e_restartpc = e_next_pc & core.PC_MASK;
 	e_restart_mcontext = e_op.mcontext;
+	e_mepc      = 32'bx;
+	e_mcause    = 32'bx;
 
 	if (e_accept) begin
 	   unique case (e_op.itype)
 	     INSN_ERR: if (core.TRAP_BADINSN) begin
 		e_trap      = 1'b1;
-		trap_mcause = MCAUSE_BADINSN;
+		e_mcause = MCAUSE_BADINSN;
 	     end
 	     INSN_ECALL: begin	// ECALL, EBREAK
 		e_trap	 = 1'b1;
-		trap_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
+		e_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
 	     end
 	     INSN_ALU: if (core.TRAP_BADALU) begin
 		e_trap	 = e_aluctl.unit == ALUSRC_ERR;
-		trap_mcause = MCAUSE_BADINSN;
+		e_mcause = MCAUSE_BADINSN;
 	     end
 	     INSN_JAL: begin	// JAL, JALR
 		e_jump	  = !e_op.pred_taken;
@@ -380,7 +400,7 @@ module backend #(
 	   if (core.TRAP_BADPC) begin
 	      if (!e_trap && (e_next_pc & ~core.PC_MASK)) begin
 		 e_trap = 1'b1;
-		 trap_mcause = MCAUSE_BADPC;
+		 e_mcause = MCAUSE_BADPC;
 	      end
 	   end
 
@@ -392,12 +412,45 @@ module backend #(
 	   end
 	end // if (e_accept)
 
-	if (!e_trap & ~e_busy & e_irq) begin
-	   e_restartpc   = (mtvec + (e_irq_vector << 2)) & core.PC_MASK;
-	   e_restart_mcontext.m = CTX_MACHINE;
+	if (e_trap)
+	  e_mepc       = e_op.pc & core.PC_MASK;
+	else if (~e_busy & e_irq) begin
+	   e_restartpc = (mtvec + (e_irq_vector << 2)) & core.PC_MASK;
+	   e_mepc      = e_next_pc & core.PC_MASK;
+	   e_mcause    = MCAUSE_IRQ | e_irq_vector;
 	end
 
-	e_kill		= e_trap | (e_irq & ~e_busy) | e_jump;
+	e_kill = e_trap | (e_irq & ~e_busy) | e_jump;
+     end
+
+   //
+   // Register for pipeline kill "think cycle"
+   //
+   // These are notionally in the M stage, but DO NOT depend on
+   // m_valid_i or m_busy; the pipeline will be killed at that point,
+   // and these operations are touching E stage stage not M stage.
+   //
+   reg	       m_xcpt;		// trap or interrupt
+   reg [31:0]  m_mepc;		// epc to be written if m_xcpt
+   reg [31:0]  m_mcause;	// mcause to be written in m_xcpt
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	m_kill		     <= 1'b0;
+	m_trap               <= 1'b0;
+	m_xcpt		     <= 1'b0;
+	m_restartpc	     <= core.RESET_PC & core.PC_MASK;
+	m_restart_mcontext   <= 'bx;
+	m_mepc		     <= 32'bx;
+	m_mcause             <= 32'bx;
+     end else if (clken) begin
+	m_kill		     <= e_kill;
+	m_trap		     <= e_trap;
+	m_xcpt		     <= e_trap | (e_irq & ~e_busy);
+	m_restartpc	     <= e_restartpc & core.PC_MASK;
+	m_restart_mcontext   <= e_restart_mcontext;
+	m_mepc		     <= e_mepc & core.PC_MASK;
+	m_mcause	     <= e_mcause;
      end
 
    // Handle intack and d_irq_clear
@@ -412,13 +465,15 @@ module backend #(
       end
    end
 
-   // XXX: add a "think cycle" for KILL?
-
    //
    // Handle mepc, mcause, mtvec, mie, cie
    //
    wire [31:0] mtvec_reset = core.MTVEC_RESET & core.PC_MASK;
    wire [31:0] mtvec_wmask = core.MTVEC_WMASK & core.PC_MASK;
+
+   //
+   // Flags for delayed updates of mepc, mcause, etc.
+   //
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
@@ -427,23 +482,17 @@ module backend #(
 	mepc         <= 32'b0;
 	mie          <= 'b0;
 	cie	     <= 'b0;
-     end else if (e_clken) begin
+     end else if (clken) begin
 	if (csrw_mtvec)
 	  mtvec <= wmask(e_csr_wval, mtvec_reset, mtvec_wmask);
 
-	// XXX: writing mepc seems to be a frequency limiter; it could
-	// probably be written in the M stage (post-kill) instead.
-	if (e_trap)
-	  mepc  <= e_op.pc & core.PC_MASK;
-	else if (e_irq & ~e_busy)
-	  mepc  <= e_next_pc & core.PC_MASK;
+	if (m_xcpt)
+	  mepc  <= m_mepc;
 	else if (csrw_mepc)
 	  mepc  <= e_csr_wval & core.PC_MASK;
 
-	if (e_trap)
-	  mcause <= trap_mcause;
-	else if (e_irq & ~e_busy)
-	  mcause <= MCAUSE_IRQ | e_irq_vector;
+	if (m_xcpt)
+	  mcause <= m_mcause;
 	else if (csrw_mcause)
 	  mcause <= e_csr_wval & mcause_mask;
 
@@ -473,7 +522,12 @@ module backend #(
    //
    // Load/store unit
    //
-   wire ldst_valid = insn_ldst(e_op.itype);
+
+   // XXX: currently load/store instructions cannot trap; using e_trap
+   // here is a speed path. However, if invalid address exceptions
+   // are added, this needs to be considered here (or in the ldst unit),
+   // or a memory transaction would be initiated.
+   wire ldst_valid = e_accept & insn_ldst(e_op.itype);
 
    wire [31:0] ldst_dout;
    wire [3:0]  ldst_dout_wbe;
@@ -518,12 +572,12 @@ module backend #(
        INSN_MUL: begin
 	  m_dout    = m_mul_o;
 	  m_dout_be = 4'b1111;
-	  m_valid_o = m_valid_i;
+	  m_valid_o = m_accept;
        end
        default: begin
 	  m_dout    = m_din;
 	  m_dout_be = 4'b1111;
-	  m_valid_o = m_valid_i;
+	  m_valid_o = m_accept;
        end
      endcase
 endmodule // execute

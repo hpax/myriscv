@@ -290,11 +290,15 @@ module decode_seq
       op_o = op_i;
 
       // Killed instruction
-      if (d_killed)
-	op_o = killed_op();
-      else if (!d_valid_i)
-	op_o = null_op(op_i.pc, op_i.mcontext);
-      else if (insn_mult(op_o)) begin
+      if (d_killed) begin
+	 op_o.itype = INSN_KILLED;
+	 op_o.rd_e  = 1'b0;
+	 op_o.rd_m  = 1'b0;
+      end else if (!d_valid_i) begin
+	 op_o.itype = INSN_NULL;
+	 op_o.rd_e  = 1'b0;
+	 op_o.rd_m  = 1'b0;
+      end else if (insn_mult(op_o)) begin
 	 // Multiply handling
 	 if (have_mult && !op_i.funct3[1:0] &&
 	   op_i.rs1 == mult_rs1 && op_i.rs2 == mult_rs2) begin

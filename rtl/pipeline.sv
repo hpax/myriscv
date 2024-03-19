@@ -27,7 +27,7 @@ module pipe_ctl #(
   input	     e_busy,
   input	     m_busy,
 
-  input	     e_kill, // Instruction killed in the E stage
+  input	     m_kill, // Instruction killed in the E stage, but delayed one
   output     f_restart,
 
   output     f_stall,
@@ -64,7 +64,7 @@ module pipe_ctl #(
    assign d_stall	= (e_valid_o & e_stall) | e_busy | d_me_hazard;
    assign f_stall	= (d_valid_o & d_stall) | d_busy;
 
-   assign f_restart	= e_kill;
+   assign f_restart	= m_kill;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
@@ -86,7 +86,7 @@ module pipe_ctl #(
 	  //
 	  // For INSN_KILLED, the PC is undefined, and the next valid
 	  // instruction is defined to carry a new canonical PC.
-	  if (e_kill) begin
+	  if (m_kill) begin
 	     e_valid_i <= 1'b0;
 	     e_op      <= killed_op();
 	  end else if (e_busy & e_valid_i) begin
@@ -105,6 +105,8 @@ module pipe_ctl #(
 	     e_rs2_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs2_valid, d_op.rs2);
 	  end
 
+	  // The E stage will deassert e_valid_o if the M stage
+	  // will kill and should not perform any other operations.
 	  if (!e_valid_o) begin
 	     m_valid_i <= 1'b0;
 	     m_op      <= null_op(e_op.pc, e_op.mcontext);

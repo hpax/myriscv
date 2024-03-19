@@ -386,9 +386,6 @@ module core (rst_n, clk, clken,
    wire	       e_valid_i;
    wire	       e_stall;
    wire	       e_valid_o;
-   wire	       e_kill;
-   wire	[31:0] e_restartpc;
-   mcontext_t  e_restart_mcontext;
    wire	       e_busy;
    wire	       e_rs1_m;
    wire	       e_rs1_w;
@@ -400,6 +397,10 @@ module core (rst_n, clk, clken,
    wire	       m_stall;
    wire	       m_valid_o;
    wire	       m_busy;
+
+   wire	       m_kill;
+   wire	[31:0] m_restartpc;
+   mcontext_t  m_restart_mcontext;
 
    wire [31:0] e_dout;
    wire [31:0] m_din;
@@ -422,10 +423,7 @@ module core (rst_n, clk, clken,
      .e_valid_i		(e_valid_i),
      .e_stall		(e_stall),
      .e_valid_o		(e_valid_o),
-     .e_kill		(e_kill),
      .e_op		(e_op),
-     .e_restartpc	(e_restartpc),
-     .e_restart_mcontext (e_restart_mcontext),
      .e_busy		(e_busy),
      .e_rs1_m		(e_rs1_m),
      .e_rs1_w		(e_rs1_w),
@@ -441,6 +439,10 @@ module core (rst_n, clk, clken,
      .e_dout		(e_dout),
      .m_din		(m_din),
 
+     .m_kill		(m_kill),
+     .m_restartpc	(m_restartpc),
+     .m_restart_mcontext (m_restart_mcontext),
+
      .ctr_time          (ctr_time),
      .ctr_cycle		(ctr_cycle),
      .ctr_instret	(ctr_instret),
@@ -454,9 +456,9 @@ module core (rst_n, clk, clken,
      .dbus_ready	(dbus_ready)
      );
 
-   assign f_restartpc        = e_restartpc;
-   assign f_restart_mcontext = e_restart_mcontext;
-   assign d_killed           = e_kill;
+   assign f_restartpc        = m_restartpc;
+   assign f_restart_mcontext = m_restart_mcontext;
+   assign d_killed           = m_kill;
 
    //
    // Pipeline control
@@ -482,7 +484,7 @@ module core (rst_n, clk, clken,
      .e_busy	(e_busy),
      .m_busy	(m_busy),
 
-     .e_kill	(e_kill),
+     .m_kill	(m_kill),
      .f_restart	(f_restart),
 
      .f_stall	(f_stall),
