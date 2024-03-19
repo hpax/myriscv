@@ -415,6 +415,43 @@ module rev
    endgenerate
 endmodule
 
+// Comparator, parallelizing the logic by breaking it down into
+// multiple carry chains for the less than, using the
+// partial equality comparisons. The "endrec" parameter is tweakable,
+// but the value 8 (= 4 chains of 8 bits) appears to give best result
+// on a 4-LUT FPGA.
+module comparator
+  #(parameter width = 32, endrec = 8)
+   (
+  input [width-1:0] a,
+  input [width-1:0] b,
+  output	    lt,
+  output	    eq
+	      );
+
+   localparam	    hw = width >> 1;
+
+   generate
+      if (width <= endrec) begin
+	 assign lt = a < b;
+	 assign eq = a == b;
+      end else begin
+	 wire lt_h;
+	 wire eq_h;
+	 wire lt_l;
+	 wire eq_l;
+
+	 comparator #(.width(hw), .endrec(endrec))
+	 h (.a(a[width-1:hw]), .b(b[width-1:hw]), .lt(lt_h), .eq(eq_h));
+	 comparator #(.width(hw), .endrec(endrec))
+	 l (.a(a[hw-1:0]), .b(b[hw-1:0]), .lt(lt_l), .eq(eq_l));
+
+	 assign eq = eq_h & eq_l;
+	 assign lt = eq_h ? lt_l : lt_h;
+      end
+      endgenerate
+endmodule
+
 //
 // This merges multiple computational blocks.
 // This does not include the bypass logic.
@@ -456,13 +493,16 @@ module alu #(
    // XXX: it seems combining this with the adder is really slow.
    // Is this better?
    //
-   wire	  cmp_eq  = (src1 == src2);
+   wire   cmp_eq;
+   wire	  cmp_ltx;
    wire	  cmp_and = ~|(src1 & src2); // a.k.a. "test eq z"
-   wire	  cmp_lts = $signed(src1) < $signed(src2);
-   wire	  cmp_ltu = src1 < src2;
-
-   wire	  cmp_ltx = ctl.cond[1] ? cmp_ltu : cmp_lts;
    wire	  cmp_lgt = ctl.cond[0] ^ cmp_ltx;
+
+   // For signed comparison, bit-flip both MSBs
+   wire [31:0] sx1 = { src1[31] ^ ~ctl.cond[1], src1[30:0] };
+   wire [31:0] sx2 = { src2[31] ^ ~ctl.cond[1], src2[30:0] };
+
+   comparator comp (.a(sx1), .b(sx2), .lt(cmp_ltx), .eq(cmp_eq));
 
    always @(*) begin
       logic cmpcond;
