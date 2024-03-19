@@ -22,6 +22,9 @@
 // If f2_valid is false, then next_pc reflects the successor PC
 // dependent only on f2_is_16; the instruction data is ignored.
 //
+// XXX: if EARLY_RVC is enabled, would it be better to feed this with
+// the output of the RVC parser?
+//
 module predict_branch
   (
    input [31:0]	     f2_insn,
@@ -55,17 +58,18 @@ module predict_branch
    assign cb_imm[4:3] = i[11:10];
    assign cb_imm[8]   = i[12];
 
+   function logic [31:0] add_pc
+     (
+     input signed [31:0] pc,
+     input signed [31:0] offset
+       );
+      add_pc			     = (pc + offset) & core.PC_MASK;
+   endfunction
+
    always @(*)
      begin
-	logic absolute;
-	logic [31:0] absolute_pc;
-	logic signed [20:0] offset;
-
-	absolute    = 1'b0;
-	absolute_pc = 32'bx;
-	take        = 1'b0;
-	// Normal successor PC
-	offset      = f2_is_16 ? 3'd2 : 3'd4;
+	next_pc = add_pc(f2_pc, f2_is_16 ? 32'd2 : 32'd4);
+	take    = 1'b0;
 
 	if (f2_valid)
 	  unique casez (i[6:0])
@@ -74,12 +78,12 @@ module predict_branch
 		 3'b?01: begin		// C.J(AL)
 		    take   = 1'b1;	// Unconditional
 		    if (take)
-		      offset = cj_imm;
+		      next_pc = add_pc(f2_pc, cj_imm);
 		 end
 		 3'b11?: begin		// C.BEQZ/C.BNEZ
-		    take   = cb_imm < 0;	// Predict taken if backwards
+		    take   = cb_imm[8];	// Predict taken if backwards
 		    if (take)
-		      offset = cb_imm;
+		      next_pc = add_pc(f2_pc, cb_imm);
 		 end
 		 default: begin
 		    // Default
@@ -88,30 +92,24 @@ module predict_branch
 	    end
 	    JAL: begin
 	       take   = 1'b1;		// Unconditional
-	       offset = j_imm;
+	       next_pc = add_pc(f2_pc, j_imm);
 	    end
 	    JALR: begin
 	       if (core.PREDICT_JALR_ZERO && !i[19:12]) begin
 		  // j[al]r addr(zero)
 		  take        = 1'b1;	// Unconditional
-		  absolute    = 1'b1;
-		  absolute_pc = i_imm;
+		  next_pc     = add_pc(32'b0, i_imm);	// Absolute!
 	       end
 	    end
 	    BRANCH: begin
-	       take   = b_imm < 0;	// Predict taken if backwards
+	       take   = b_imm[12];	// Predict taken if backwards
 	       if (take)
-		 offset = b_imm;
+		 next_pc = add_pc(f2_pc, b_imm);
 	    end
 	    default: begin
-	       // Not a transfer or not predicted
+	       // Default
 	    end
 	  endcase // unique casez (i[6:0])
-
-	if (!absolute)
-	  absolute_pc = $signed(f2_pc) + offset;
-
-	next_pc = absolute_pc & core.PC_MASK;
      end
 endmodule
 
