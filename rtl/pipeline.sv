@@ -105,8 +105,10 @@ module pipe_ctl #(
 	     e_rs2_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs2_valid, d_op.rs2);
 	  end
 
-	  // The E stage will deassert e_valid_o if the M stage
-	  // will kill and should not perform any other operations.
+	  // A private flag is passed between the E stage to the M
+	  // stage if the latter should ignore the instruction due to
+	  // it being a trap. e_valid_o will be deasserted after the
+	  // kill proper.
 	  if (!e_valid_o) begin
 	     m_valid_i <= 1'b0;
 	     m_op      <= null_op(e_op.pc, e_op.mcontext);
