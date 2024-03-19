@@ -10,7 +10,7 @@ module pll (
 	    );
 
    altpll #(.inclk0_input_frequency(10000), // Period in ps
-	    .operation_mode ("NO_COMPENSATION"),
+	    .operation_mode ("NORMAL"),
 	    .clk0_divide_by ( 1 ),
 	    .clk0_duty_cycle ( 1 ),
 	    .clk0_multiply_by ( 1 ),
