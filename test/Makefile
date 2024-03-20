@@ -9,7 +9,12 @@ OBJCOPY	= $(CROSS)objcopy
 PERL    = perl
 HEXDUMP	= hexdump
 
-CFLAGS  = -march=rv32imc -O2 -ggdb3
+# gcc seems to not understand Zmmul, but adding m and -mno-div works...
+CFLAGS  = -march=rv32imc_zba_zbb_zbs_zicond_zicsr_zmmul -mabi=ilp32 \
+	 -mno-strict-align -mbranch-cost=2 \
+	-fno-exceptions -malign-data=natural -fshort-enums -fshort-wchar \
+	-fno-pic -fno-pie -frename-registers -ftls-model=local-exec \
+	-mno-div -O3 -ggdb3
 ASFLAGS = -D__ASSEMBLY__
 LDFLAGS	= -T test.ld
 
