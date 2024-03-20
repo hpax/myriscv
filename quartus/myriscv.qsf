@@ -92,7 +92,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/myriscv.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/mult.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/ldst.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/fetch.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/exec.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/backend.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/decode.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/alu.sv
 set_global_assignment -name QIP_FILE regfile_alt.qip
