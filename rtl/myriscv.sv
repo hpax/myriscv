@@ -11,11 +11,13 @@ module core (rst_n, clk, clken,
    parameter    bit WITH_Zcb		= 1'b1;
    parameter    bit WITH_Zcd		= 1'b1;
    parameter    bit WITH_bitcnt         = 1'b1; // clz, ctz, cpop
+   parameter	bit WITH_bitcntinv	= 1'b0; // bit-inverted bitcnt ops
    parameter    bit WITH_Zmmul		= 1'b1;
    parameter    bit WITH_Zicond		= 1'b1;
    parameter    bit WITH_minmax		= 1'b1;
    parameter    bit WITH_cmpand         = 1'b1; // baeqz, banez
-   parameter    bit WITH_extensions	= 1'b1; // shXsub, ...
+   parameter	bit WITH_setext		= 1'b0; // addtional SET operations
+   parameter    bit WITH_Zbasub		= 1'b1; // shXsub
    parameter    bit STRICT_UNDEFINED	= 1'b0; // Strict opcode checking
 
    parameter    bit TRAP_BADINSN	= 1'b1;

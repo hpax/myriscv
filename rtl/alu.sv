@@ -30,7 +30,6 @@ module alu_decode
 	     // A branch is an SET as far as the ALU is
 	     // concerned...
 	     ctl.unit   = ALUSRC_SET;
-	     ctl.invert = 1'b1;		// Compare: always subtract
 	  end
 
 	  INSN_ALU: begin
@@ -48,7 +47,7 @@ module alu_decode
 	       end
 	       { 7'b0?1_0000, 3'b??0 }: begin // shXadd, shXsub
 		  if (core.WITH_Zba &&
-		      (core.WITH_extensions || !funct7[5])) begin
+		      (core.WITH_Zbasub || !funct7[5])) begin
 		     ctl.unit   = ALUSRC_ADD;
 		     ctl.shadd  = op.funct3[2:1];
 		     ctl.invert = funct7[5];
@@ -66,9 +65,9 @@ module alu_decode
 		 end
 	       { 7'b011_0000, ALU_SLL }: begin
 		  unique casez ({!op.rs2_valid, op.rs2.r})
-		    6'b1_?00??: begin // CTZ, CLZ, CPOP (+inverses)
-		       ctl.bcop = {op.rs2.r[4] && op.rs2.r[1:0]};
-		       if (core.WITH_extensions || ctl.bcop < 3'b011)
+		    6'b1_?000?, 6'b1_?0010: begin // CTZ, CLZ, CPOP (+inverses)
+		       ctl.bcop = {op.rs2.r[4], op.rs2.r[1:0]};
+		       if (core.WITH_bitcntinv || !op.rs2.r[4])
 			  ctl.unit = ALUSRC_BITCNT;
 		    end
 		    6'b1_0010?: begin	// SEXT.B/H
@@ -125,11 +124,15 @@ module alu_decode
 		    end
 		  endcase
 	       end
-	       { 7'b000_0000, ALU_SLT },
-		 { 7'b000_0000, ALU_SLTU }: begin
-		    ctl.unit   = ALUSRC_SET;
-		    ctl.invert = 1'b1;		// Compare: always subtract
-		 end
+	       { 7'b000_00??, ALU_SLT },
+	       { 7'b000_00??, ALU_SLTU }: begin
+		  if (core.WITH_setext || !funct7[1:0]) begin
+		     // bits 1:0 in funct7 can be used to obtain the
+		     // other possible condition codes
+		     ctl.cond[2:1]  = funct7[1:0] ^ 2'b01;
+		     ctl.unit	    = ALUSRC_SET;
+		  end
+	       end
 	       { 7'b0?0_0000, ALU_XOR },
 		 { 7'b0?0_0000, ALU_OR },
 		 { 7'b0?0_0000, ALU_AND }: begin
@@ -137,7 +140,7 @@ module alu_decode
 		    ctl.invert = funct7[5];
 		    ctl.bitop  = op.funct3[1:0];
 		 end
-	       { 7'b0000100, ALU_XOR }: begin
+	       { 7'b000_0100, ALU_XOR }: begin
 		  unique casez (op.rs2.r)
 		    5'b00000: begin
 		       ctl.unit = ALUSRC_SHIFT;
@@ -150,7 +153,6 @@ module alu_decode
 	       end
 	       { 7'b000_0101, 3'b1?? }: if (core.WITH_minmax) begin
 		  ctl.unit = ALUSRC_MINMAX;
-		  ctl.invert = 1'b1;		// Compare: always subtract
 	       end
 	       { 7'b000_0111, 3'b1?1 }: if (core.WITH_Zicond) begin
 		  ctl.unit = ALUSRC_ZICOND;
@@ -268,7 +270,8 @@ module bitcnt #(
   input			   ct		// Count trailing
 	    );
 
-   localparam		     hw = width >> 1;
+   localparam		     hw = width >> 1; // Half width
+   localparam		     hb = $clog2(hw); // Half number of bits
 
    generate
       if (width < 2)
@@ -279,14 +282,14 @@ module bitcnt #(
 	begin
 	   wire [hw-1:0]  dl = d[hw-1:0];
 	   wire [hw-1:0]  dh = d[width-1:hw];
-	   wire [$clog2(hw):0]  ql;
-	   wire [$clog2(hw):0]  qh;
+	   wire [hb:0]  ql;
+	   wire [hb:0]  qh;
 
 	   bitcnt #(hw) l (.d(dl), .q(ql), .ones(ones), .cl(cl), .ct(ct));
 	   bitcnt #(hw) h (.d(dh), .q(qh), .ones(ones), .cl(cl), .ct(ct));
 
-	   wire [$clog2(hw):0]	xl = {hw+1{ct | qh[$clog2(hw)]}} & ql;
-	   wire [$clog2(hw):0]	xh = {hw+1{cl | ql[$clog2(hw)]}} & qh;
+	   wire [hb:0]	xl = {hb+1{ct | qh[$clog2(hw)]}} & ql;
+	   wire [hb:0]	xh = {hb+1{cl | ql[$clog2(hw)]}} & qh;
 
 	   assign q = xl + xh;
 	end
@@ -560,13 +563,15 @@ module alu (
    logic [5:0]		  bitcnt_out;
 
    // Separate units implementation
+   wire [31:0]		  bcsrc =
+			  src1 ^ {32{core.WITH_bitcntinv & ctl.bcop[2]}};
    wire [5:0]		  clz_out;
    wire [5:0]		  ctz_out;
    wire [5:0]		  cpop_out;
 
-   clz  #(32) clz  (.d (src1), .q (clz_out));
-   ctz  #(32) ctz  (.d (src1), .q (ctz_out));
-   cpop #(32) cpop (.d (src1), .q (cpop_out));
+   clz  #(32) clz  (.d (bcsrc), .q (clz_out));
+   ctz  #(32) ctz  (.d (bcsrc), .q (ctz_out));
+   cpop #(32) cpop (.d (bcsrc), .q (cpop_out));
 
    // Unified unit implementation
    wire [5:0]		  bitcnt_out_unified;
@@ -575,7 +580,7 @@ module alu (
    wire			  bc_ones = ctl.bcop[2] ^ ctl.bcop[1];
 
    bitcnt #(32) bitcnt (
-     .d		(src1),
+     .d		(src1),			// Inversion handled in-unit
      .q		(bitcnt_out_unified),
      .ones	(bc_ones),		// CPOP, C[TL]O
      .ct	(bc_ct),		// CPOP[Z], CT[ZO]
