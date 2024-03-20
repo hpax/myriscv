@@ -6,17 +6,17 @@ module core (rst_n, clk, clken,
 	     irq, irq_enable, irq_edge, intack, buserr
 	     );
    parameter    bit WITH_Zba		= 1'b1;
+   parameter    bit WITH_Zbb		= 1'b1;
    parameter    bit WITH_Zcf		= 1'b1;
    parameter    bit WITH_Zcb		= 1'b1;
    parameter    bit WITH_Zcd		= 1'b1;
-   parameter    bit WITH_Zbb		= 1'b1;
-   parameter    bit WITH_bitcnt         = 1'b1;
+   parameter    bit WITH_bitcnt         = 1'b1; // clz, ctz, cpop
    parameter    bit WITH_Zmmul		= 1'b1;
    parameter    bit WITH_Zicond		= 1'b1;
    parameter    bit WITH_minmax		= 1'b1;
    parameter    bit WITH_cmpand         = 1'b1; // baeqz, banez
-   parameter    bit WITH_extensions	= 1'b1;
-   parameter    bit STRICT_UNDEFINED	= 1'b0;
+   parameter    bit WITH_extensions	= 1'b1; // shXsub, ...
+   parameter    bit STRICT_UNDEFINED	= 1'b0; // Strict opcode checking
 
    parameter    bit TRAP_BADINSN	= 1'b1;
    parameter    bit TRAP_BADALU		= 1'b1;
@@ -38,8 +38,9 @@ module core (rst_n, clk, clken,
    parameter    int	     CTR_CYCLE_WIDTH	=  0;
    parameter    int	     CTR_INSTRET_WIDTH	= 40;
 
-   // If set, these values are reflected (readonly) into the
-   // corresponding CSRs; this does add some logic burden.
+   // If these values are reflected (readonly) into the
+   // corresponding CSRs; this does add some logic burden
+   // if nonzero.
    parameter logic [31:0]    csrval_misa     = 32'h0;
    parameter logic [31:0]    csrval_vendorid = 32'h0;
    parameter logic [31:0]    csrval_archid   = 32'h0;
@@ -48,13 +49,15 @@ module core (rst_n, clk, clken,
    // Parameterization for timing tweaks
    parameter	bit	     ALU_EARLY_DECODE   = 1'b0;
    parameter	bit	     PREDICT_JALR_ZERO	= 1'b0;
-   parameter    bit	     EARLY_RVC          = 1'b1;
+   parameter    bit	     EARLY_RVC		= 1'b1;
+   parameter	bit	     BITCNT_SEPARATE	= 1'b1;
 
    // This allows a c.nop inserted for padding to be
    // fused with a previous c.xxx instruction into a
    // pseudo-32-bit instruction.
-   parameter	bit	     FUSE_CNOP = 1'b0;
+   parameter	bit	     FUSE_CNOP		= 1'b0;
 
+   // Source file for TCM memory content
    parameter	string	     TCM_INIT_FILE = "";
 
    //

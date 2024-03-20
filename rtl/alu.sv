@@ -1,7 +1,11 @@
 //
 // ALU operations
 //
-// Implements: I Zicond Zba Zbb Zbs
+// Standard extensions: Zba Zbb Zbs Zicond
+// WITH_extensions enables some additional features:
+//	sh[123]sub	- same opcodes as sh[123]add but with funct7[5] = 1
+//	cpopz, cto, clo	- count the inverse; opcodes imm[4] = 1
+//			  -> only available if BITCNT_SEPARATE = 0
 //
 // Note: M/Zmmul is done separately due to timing.
 //
@@ -281,8 +285,8 @@ module bitcnt #(
 	   bitcnt #(hw) l (.d(dl), .q(ql), .ones(ones), .cl(cl), .ct(ct));
 	   bitcnt #(hw) h (.d(dh), .q(qh), .ones(ones), .cl(cl), .ct(ct));
 
-	   wire [$clog2(hw):0]	xl = (ct | qh[$clog2(hw)]) ? ql : 'b0;
-	   wire [$clog2(hw):0]	xh = (cl | ql[$clog2(hw)]) ? qh : 'b0;
+	   wire [$clog2(hw):0]	xl = {hw+1{ct | qh[$clog2(hw)]}} & ql;
+	   wire [$clog2(hw):0]	xh = {hw+1{cl | ql[$clog2(hw)]}} & qh;
 
 	   assign q = xl + xh;
 	end
@@ -290,6 +294,8 @@ module bitcnt #(
 endmodule // bitcnt
 
 // Separate bit count ops
+// XXX: could this simply be implemented by invoking the above with
+// fixed values?
 module clz #(
   parameter width = 32
 	    ) (
@@ -464,9 +470,7 @@ endmodule
 // it makes sense for it to be given two pipeline stages (output data
 // from the M stage.)
 //
-module alu #(
-  parameter bit bitcnt_separate = 1'b1
-		) (
+module alu (
   output reg [31:0] dst,
   output reg	    cmp_out, // Comparator output bypassing output MUX
 
@@ -521,7 +525,7 @@ module alu #(
    // Minmax (select) unit
    //
    wire [31:0]		  minmax_out;
-   mux2 #(32) minmax (.d0(src2), .d1(src1), .q(minmax_out), .sel(cmp_ltx));
+   mux2 #(32) minmax (.d0(src2), .d1(src1), .q(minmax_out), .sel(cmp_lgt));
 
    //
    // czero (Zicond) unit
@@ -545,41 +549,55 @@ module alu #(
 		    .q    (shift_out));
 
    //
-   // Zbb operations
+   // Zbb operations. This contains two implementations; which is used
+   // depends on core.BITCNT_SEPARATE. This can be tweaked to fit
+   // the use case.
+   //
+   // If BITCNT_SEPARATE is false and WITH_extensions is true, the
+   // unified implementation also provides cpopz, cto, clo;
+   // equivalent to a NOT preceding the instruction.
    //
    logic [5:0]		  bitcnt_out;
-   generate
-      if (bitcnt_separate) begin
-	 wire [31:0] clz_out;
-	 wire [31:0] ctz_out;
-	 wire [31:0] cpop_out;
 
-	 clz  #(32) clz  (.d (src1), .q (clz_out));
-	 ctz  #(32) ctz  (.d (src1), .q (ctz_out));
-	 cpop #(32) cpop (.d (src1), .q (cpop_out));
+   // Separate units implementation
+   wire [5:0]		  clz_out;
+   wire [5:0]		  ctz_out;
+   wire [5:0]		  cpop_out;
 
-	 always @(*)
-	   unique case (ctl.bcop)
-	     3'b000: bitcnt_out  = clz_out;
-	     3'b010: bitcnt_out  = ctz_out;
-	     3'b011: bitcnt_out  = cpop_out;
-	     default: bitcnt_out = 32'bx;
-	   endcase
-      end else begin
-	 wire bc_cl   = ~ctl.bcop[0];
-	 wire bc_ct   = ctl.bcop[1] ^ ctl.bcop[0];
-	 wire bc_ones = ctl.bcop[2] ^ ctl.bcop[1];
+   clz  #(32) clz  (.d (src1), .q (clz_out));
+   ctz  #(32) ctz  (.d (src1), .q (ctz_out));
+   cpop #(32) cpop (.d (src1), .q (cpop_out));
 
-	 bitcnt #(32) bitcnt (
-	   .d		(src1),
-	   .q		(bitcnt_out),
-	   .ones	(bc_ones),	// CPOP, C[TL]S
-	   .ct		(bc_ct),	// CPOP[N], CT[ZS]
-	   .cl		(bc_cl)		// CPOP[N], CL[ZS]
-	   );
-      end
-   endgenerate
+   // Unified unit implementation
+   wire [5:0]		  bitcnt_out_unified;
+   wire			  bc_cl   = ~ctl.bcop[0];
+   wire			  bc_ct   = ctl.bcop[1] ^ ctl.bcop[0];
+   wire			  bc_ones = ctl.bcop[2] ^ ctl.bcop[1];
 
+   bitcnt #(32) bitcnt (
+     .d		(src1),
+     .q		(bitcnt_out_unified),
+     .ones	(bc_ones),		// CPOP, C[TL]O
+     .ct	(bc_ct),		// CPOP[Z], CT[ZO]
+     .cl	(bc_cl)			// CPOP[Z], CL[ZO]
+     );
+
+   // bitcnt output
+   always @(*)
+     if (!core.BITCNT_SEPARATE) begin
+	bitcnt_out = bitcnt_out_unified;
+     end else begin
+	unique case (ctl.bcop)
+	  3'b000:  bitcnt_out = clz_out;
+	  3'b010:  bitcnt_out = ctz_out;
+	  3'b011:  bitcnt_out = cpop_out;
+	  default: bitcnt_out = 32'bx;
+	endcase
+     end
+
+   //
+   // orc and reverse operations
+   //
    wire [31:0]		  orc_out;
    orc orc (.d(src1), .q(orc_out));
    wire [31:0]		  rev_out;
