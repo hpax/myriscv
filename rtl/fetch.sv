@@ -68,8 +68,23 @@ module predict_branch
 
    always @(*)
      begin
-	next_pc = add_pc(f2_pc, f2_is_16 ? 32'd2 : 32'd4);
-	take    = 1'b0;
+	logic signed [31:0] bj_offset;
+	logic signed [31:0] bj_pc;
+	logic signed [31:0] cbj_offset;
+	logic signed [31:0] cbj_pc;
+
+	next_pc    = add_pc(f2_pc, f2_is_16 ? 32'd2 : 32'd4);
+	take	   = 1'b0;
+
+	// The B and the J formats, and the CB and CJ formats, are
+	// similar enough that it should be cheap to MUX between them,
+	// especially since only one bit needs to be tested for that
+	// specific MUX...
+	bj_offset  = i[3] ? j_imm : b_imm;
+	bj_pc	   = add_pc(f2_pc, bj_offset);
+
+	cbj_offset = i[14] ? cb_imm : cj_imm;
+	cbj_pc     = add_pc(f2_pc, cbj_offset);
 
 	if (f2_valid)
 	  unique casez (i[6:0])
@@ -78,12 +93,12 @@ module predict_branch
 		 3'b?01: begin		// C.J(AL)
 		    take   = 1'b1;	// Unconditional
 		    if (take)
-		      next_pc = add_pc(f2_pc, cj_imm);
+		      next_pc = cbj_pc;
 		 end
 		 3'b11?: begin		// C.BEQZ/C.BNEZ
 		    take   = cb_imm[8];	// Predict taken if backwards
 		    if (take)
-		      next_pc = add_pc(f2_pc, cb_imm);
+		      next_pc = cbj_pc;
 		 end
 		 default: begin
 		    // Default
@@ -92,19 +107,19 @@ module predict_branch
 	    end
 	    JAL: begin
 	       take   = 1'b1;		// Unconditional
-	       next_pc = add_pc(f2_pc, j_imm);
+	       next_pc = bj_pc;
 	    end
 	    JALR: begin
 	       if (core.PREDICT_JALR_ZERO && !i[19:12]) begin
 		  // j[al]r addr(zero)
-		  take        = 1'b1;	// Unconditional
-		  next_pc     = add_pc(32'b0, i_imm);	// Absolute!
+		  take		= 1'b1;	// Unconditional
+		  next_pc	= add_pc(32'b0, i_imm);	// Absolute!
 	       end
 	    end
 	    BRANCH: begin
 	       take   = b_imm[12];	// Predict taken if backwards
 	       if (take)
-		 next_pc = add_pc(f2_pc, b_imm);
+		 next_pc = bj_pc;
 	    end
 	    default: begin
 	       // Default
