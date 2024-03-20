@@ -69,6 +69,10 @@ module test #(
    assign io_rdata = io_addr + io_sleep_ctr;
    assign io_ready = io_valid && (!io_sleep || !io_sleep_ctr);
 
+   wire [31:0] busaddr = { io_addr[31:2], 2'b00 };
+
+   bit need_nl = 1'b0;
+
    always @(posedge clk)
      begin
 	io_sleeping <= io_sleeping & ~io_ready;
@@ -88,9 +92,19 @@ module test #(
 		dstr[i] = 8'h20;
 	   end
 
-	   $display("(%d) io: %h %s %b %h \"%s\"",
-	     $time/CLOCK, io_addr, io_wrq ? "w" : "r",
-	     io_wbe, data, dstr);
+	   if (io_wrq && io_wbe[3] && busaddr == 32'hffff_fffc) begin
+	      logic [7:0] chr;
+	      chr = io_wdata[31:24];
+	      $write("%c", chr);
+	      need_nl = chr != 8'd10;
+	   end else begin
+	      if (need_nl)
+		$display("");
+	      $display("(%d) io: %h %s %b %h \"%s\"",
+		      $time/CLOCK, io_addr, io_wrq ? "w" : "r",
+		      io_wbe, data, dstr);
+	      need_nl = 1'b0;
+	   end
 
 	   if (io_wrq && io_wbe[0] && io_addr == 32'hffff_fff8)
 	     $stop;		// Simulation break

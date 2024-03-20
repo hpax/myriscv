@@ -3,6 +3,8 @@
 	.option arch,+zbb
 	.option arch,+zbs
 	.option arch,+zicsr
+	.option arch,+zicond
+	.option arch,+zmmul
 
 	TTY  = -1
 	STOP = -8
@@ -55,7 +57,7 @@ test1:
 test1a:
 	.balign 4
 	c.nop
-	la a0,hello1_str
+	la a0,hello2_str
 	lbu a1,(a0)
 	add a0,a0,1
 	beqz a1,2f
@@ -69,7 +71,7 @@ test1a:
 
 	/* Test with load to branch hazard */
 test2:
-	la a0,hello2_str
+	la a0,hello3_str
 	lbu a1,(a0)
 	beqz a1,2f
 1:
@@ -106,7 +108,10 @@ kill_simulation:
 	j kill_simulation
 
 print_crlf:
-	la a0,crlf_str
+	li a0,10
+	sb a0,TTY(zero)
+	ret
+
 print_str:
 	lbu a1,(a0)
 	add a0,a0,1
@@ -116,35 +121,46 @@ print_str:
 	lbu a1,(a0)
 	add a0,a0,1
 	bnez a1,1b
+2:
 	ret
 
 print_hex:
 	li a1,8
-	li a3,0x3a
+	li a4,0x61
+	li a5,0x30-(0x61-10)
 1:
 	ror a0,a0,32-4
 	and a2,a0,15
-	add a2,a2,0x30
-	blt a2,a3,2f
-	add a2,a2,0x61-0x30-10
-2:	sb a2,TTY(zero)
+	add a2,a2,0x61-10
+#if 0
+	bgeu a2,a4,2f
+	add a2,a2,a5
+2:
+#else
+	sltu a3,a2,a4
+	czero.eqz a3,a5,a3
+	add a2,a2,a3
+#endif
+	sb a2,TTY(zero)
 	add a1,a1,-1
 	bnez a1,1b
 	ret
 
 	.section ".rodata.hot","a"
 hello1_str:
-	.asciz "Hello, World #1!\r\n"
+	.asciz "Hello, World #1!\n"
 hello2_str:
-	.asciz "Hello, World #2!\r\n"
+	.asciz "Hello, World #2!\n"
+hello3_str:
+	.asciz "Hello, World #3!\n"
 ebreak_failed_str:
-	.asciz "ERROR: fall through after ebreak\r\n"
+	.asciz "ERROR: fall through after ebreak\n"
 irq_str:
-	.asciz "Interrupt/exception triggered\r\nmepc   = "
+	.asciz "Interrupt/exception triggered!\nmepc   = "
 mcause_str:
-	.asciz "\r\nmcause = "
+	.asciz ", mcause = "
 crlf_str:
-	.asciz "\r\n"
+	.asciz "\n"
 
 	.section ".stack","a"
 	.balign 16
