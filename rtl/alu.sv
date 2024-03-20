@@ -24,6 +24,7 @@ module alu_decode
 	ctl.unit     = ALUSRC_ERR;
 	ctl.shadd    = 2'b00;		// No preshift
 	ctl.cond     = cond_t'(op.funct3);
+	ctl.bcop     = {op.rs2.r[4], op.rs2.r[1:0]};
 
 	unique case (op.itype)
 	  INSN_BR: begin
@@ -65,10 +66,11 @@ module alu_decode
 		 end
 	       { 7'b011_0000, ALU_SLL }: begin
 		  unique casez ({!op.rs2_valid, op.rs2.r})
-		    6'b1_?000?, 6'b1_?0010: begin // CTZ, CLZ, CPOP (+inverses)
-		       ctl.bcop = {op.rs2.r[4], op.rs2.r[1:0]};
-		       if (core.WITH_bitcntinv || !op.rs2.r[4])
-			  ctl.unit = ALUSRC_BITCNT;
+		    6'b1_?00??: begin // CTZ, CLZ, CPOP (+inverses)
+		       if (!core.STRICT_UNDEFINED ||
+			 op.rs2.r[1:0] != 2'b11)
+			 if (core.WITH_bitcntinv || !op.rs2.r[4])
+			   ctl.unit = ALUSRC_BITCNT;
 		    end
 		    6'b1_0010?: begin	// SEXT.B/H
 		       ctl.unit = ALUSRC_SHIFT;
