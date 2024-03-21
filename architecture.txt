@@ -4,9 +4,9 @@ some are hard coded in the design):
 
 Standard options:      (Names in parenteses are implied by the name in
 			front of them)
-			I Zicond Zicsr Zictr Zimop Zmmul
+			I Zicond Zicsr Zictr Zmmul
 			B (Zba Zbb Zbs)
-			C (Zca) Zcb Zcmop
+			C (Zca) Zcb
 
 Private extensions:	WITH_Zbasub: (req. Zba)
 				shXsub	  - shXadd funct7[5] = 1
