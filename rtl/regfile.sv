@@ -4,6 +4,8 @@
 // Register file: two read ports, one write port, one clock cycle.
 //
 
+`include "myriscv.vh"
+
 `ifndef ALTERA_RESERVED_QIS
 
 // Generic implementation
@@ -19,9 +21,9 @@ module regfile
     input		 clken,
 
     input		 rs_valid,
-    input [reg_bits-1:0] rs1,
-    input [reg_bits-1:0] rs2,
-    input [reg_bits-1:0] rd,
+    input regnum_t	 rs1,
+    input regnum_t	 rs2,
+    input regnum_t	 rd,
     input		 rd_wren,
     input [3:0]		 rd_wbe,
 
@@ -42,8 +44,8 @@ module regfile
      for (int i = 0; i < nregs; i++)
        r[i] <= 32'b0;
 
-   reg [reg_bits-1:0]	rs1_q;
-   reg [reg_bits-1:0]	rs2_q;
+   regnum_t	rs1_q;
+   regnum_t	rs2_q;
    always @(posedge clk) begin
       if (rs_valid) begin
 	 rs1_q  <= rs1;
@@ -55,8 +57,8 @@ module regfile
    reg [31:0] rs2_dq;
 
    // Combinatorial clearing on input if zero_init is not available
-   wire	rs1_null = !zero_init && !rs1[4:0];
-   wire rs2_null = !zero_init && !rs2[4:0];
+   wire	rs1_null = !zero_init && !rs1_q.r;
+   wire	rs2_null = !zero_init && !rs2_q.r;
 
    assign rs1_data = rs1_null ? 'b0 : rs1_dq;
    assign rs2_data = rs2_null ? 'b0 : rs2_dq;
@@ -71,6 +73,8 @@ module regfile
       rs1_dq <= r[rs1_q];
       rs2_dq <= r[rs2_q];
       if (clken & rd_wren) begin
+	 if (rd.r == 5'd0 && |rd_wbe)
+	   $display("ERROR: writing to register 0 at t=%0t", $time);
 	 if (rd_wbe[0]) r[rd][0] <= rd_data[7:0];
 	 if (rd_wbe[1]) r[rd][1] <= rd_data[15:8];
 	 if (rd_wbe[2]) r[rd][2] <= rd_data[23:16];
@@ -94,9 +98,9 @@ module regfile
     input		 clken,
 
     input		 rs_valid,
-    input [reg_bits-1:0] rs1,
-    input [reg_bits-1:0] rs2,
-    input [reg_bits-1:0] rd,
+    input regnum_t	 rs1,
+    input regnum_t	 rs2,
+    input regnum_t	 rd,
     input		 rd_wren,
     input [3:0]		 rd_wbe,
 

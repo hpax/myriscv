@@ -46,8 +46,8 @@ typedef enum logic [`CONTEXT_BITS-1:0] {
 } rcontext_t;
 
 typedef struct packed {
-   logic [4:0] r;		// Architectural register number
    rcontext_t c;		// Register context
+   logic [4:0] r;		// Architectural register number
 } regnum_t;
 
 // Machine context that is subject to update/change on a pipeline kill.
