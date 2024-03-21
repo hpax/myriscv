@@ -131,8 +131,10 @@ module alu_decode
 		  if (core.WITH_setext || !funct7[1:0]) begin
 		     // bits 1:0 in funct7 can be used to obtain the
 		     // other possible condition codes
-		     ctl.cond[2:1]  = funct7[1:0] ^ 2'b01;
-		     ctl.unit	    = ALUSRC_SET;
+		     ctl.cond[2] = ~funct7[1];
+		     ctl.cond[1] =  op.funct3[0];
+		     ctl.cond[0] =  funct7[0];
+		     ctl.unit	 = ALUSRC_SET;
 		  end
 	       end
 	       { 7'b0?0_0000, ALU_XOR },
