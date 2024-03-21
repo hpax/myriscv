@@ -390,6 +390,10 @@ module decode_srcregs (
 	   rs1.r = { 2'b01, insn[9:7] };
 	   rs2.r = { 2'b01, insn[4:2] };
 	end
+	5'b010_01: begin		// C.LI
+	   rs1.r = R_ZERO;
+	   rs2.r = 5'bx;
+	end
 	5'b0??_01: begin		// RVC quadrant 1, lower half
 	   rs1.r = insn[11:7];
 	   rs2.r = { 2'b01, insn[4:2] };
