@@ -53,17 +53,21 @@ module ldst (
    reg			      ld_uns;
    reg [3:0][1:0]	      ld_src;
 
+   reg			      dbus_valid_q;
+   reg			      memop_st_q;
+
    assign dbus_a	= use_latched ? latched_a + {upper_word, 2'b00} : addr;
    assign dbus_valid	= rst_n & (valid | busy);
-   assign dbus_wrq	= dbus_valid & memop_st;
-
-   reg			      dbus_valid_q;
+   assign dbus_wrq	= dbus_valid & (use_latched ? memop_st_q : memop_st);
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
 	dbus_valid_q <= 1'b0;
+	memop_st_q   <= 1'b0;
      end else if (clken) begin
 	dbus_valid_q <= dbus_valid;
+	if (~busy)
+	  memop_st_q <= memop_st;
      end
 
    logic		      misaligned_comb;
@@ -84,6 +88,8 @@ module ldst (
 
    reg	upper_word_q;
 
+   // Note: busy contains dbus_valid_q, because it is asserted by the M
+   // stage, but valid is asserted in the E stage.
    assign dout_valid = dbus_valid_q & dbus_ready;
    assign busy	     = dbus_valid_q & (~dbus_ready |
 		       (misaligned_q & ~upper_word_q));
@@ -149,11 +155,11 @@ module ldst (
    logic [31:0] wdata_comb;
    always @(*)
      unique case (addr[1:0])
-       2'b00: wdata_comb = src2;
-       2'b01: wdata_comb = { src2[23:0], src2[7:0]  };
-       2'b10: wdata_comb = { src2[15:0], src2[15:8] };
-       2'b11: wdata_comb = { src2[7:0],  src2[31:8] };
-       default: dbus_wdata = 32'bx;
+       2'b00:   wdata_comb = src2;
+       2'b01:   wdata_comb = { src2[23:0], src2[31:24] };
+       2'b10:   wdata_comb = { src2[15:0], src2[31:16] };
+       2'b11:   wdata_comb = { src2[7:0],  src2[31:8]  };
+       default: wdata_comb = 32'bx;
      endcase // unique casez (addr[1:0])
 
    reg [31:0]	  latched_wdata;

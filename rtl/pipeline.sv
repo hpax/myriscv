@@ -119,7 +119,7 @@ module pipe_ctl #(
 	     m_op      <= e_op;
 	     // Data in the E stage is forwarded to the M stage,
 	     // so it isn't in the register file yet.
-	     m_op.rd_m <= e_op.rd_e | e_op.rd_m;
+	     m_op.rd_m <= e_valid_o & (e_op.rd_e | e_op.rd_m);
 	  end
 
 	  // The only thing that is actually used in synthesis
@@ -128,8 +128,6 @@ module pipe_ctl #(
 	  // to benefit debugging in simulation and/or with Signaltap.
 	  if (m_valid_o)
 	    w_op    <= m_op;
-	  else
-	    w_op    <= null_op(m_op.pc, m_op.mcontext);
 
 	  // Bypass control (note: _m takes priority over _w!)
 	  e_rs1_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs1_valid, d_op.rs1);
