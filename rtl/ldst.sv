@@ -53,9 +53,9 @@ module ldst (
    reg			      ld_uns;
    reg [3:0][1:0]	      ld_src;
 
-   assign dbus_a	= use_latched ? latched_a : addr;
-   assign dbus_valid	= rst_n & valid;
-   assign dbus_wrq	= rst_n & valid & memop_st;
+   assign dbus_a	= use_latched ? latched_a + {upper_word, 2'b00} : addr;
+   assign dbus_valid	= rst_n & (valid | busy);
+   assign dbus_wrq	= dbus_valid & memop_st;
 
    reg			      dbus_valid_q;
 

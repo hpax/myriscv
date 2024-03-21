@@ -95,7 +95,7 @@ module pipe_ctl #(
 	  if (m_kill) begin
 	     e_valid_i <= 1'b0;
 	     e_op      <= killed_op();
-	  end else if (e_busy & e_valid_i) begin
+	  end else if ((e_stall | e_busy) & e_valid_i) begin
 	     // Leave unchanged
 	  end else if (~d_valid_o | d_stall) begin
 	     e_valid_i <= 1'b0;

@@ -105,11 +105,12 @@ module decode_comb
 
 	  MISC_MEM: begin
 	     unique casez (op.funct3)
-	       3'b000,		// FENCE/PAUSE
-	       3'b001: begin	// FENCE.I (Zifencei)
+	       3'b000: begin	// FENCE/PAUSE
 		  op.itype = INSN_NOP;	// Treat as NOP
 	       end
-	       default: begin
+	       3'b001: begin	// FENCE.I (Zifencei)
+		  op.itype = INSN_FENCEI;
+	       end default: begin
 		  op.itype = INSN_ERR;
 	       end
 	     endcase

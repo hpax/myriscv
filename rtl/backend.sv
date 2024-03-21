@@ -350,6 +350,8 @@ module backend #(
    logic [31:0]	e_next_pc;
    logic [31:0]	e_jump_pc;
 
+   logic	e_fencei;
+
    // Values to write to these register IF they are to be written...
    logic [31:0]	e_mepc;
    logic [31:0]	e_mcause;
@@ -358,6 +360,7 @@ module backend #(
      begin
 	e_trap      = 1'b0;
 	e_jump      = 1'b0;	// Mispredicted jump or branch
+	e_fencei    = 1'b0;
 	e_succ_pc   = successor_pc(e_op, e_accept);
 	e_jump_pc   = 32'bx;
 	e_next_pc   = e_succ_pc;
@@ -392,6 +395,9 @@ module backend #(
 		e_jump               = !e_op.pred_taken;
 		e_jump_pc            = mepc;
 		e_restart_mcontext.m = e_restart_mcontext.u;
+	     end
+	     INSN_FENCEI: begin
+		e_fencei		= 1'b1;
 	     end
 	     default: begin
 		if (csrw_user_context) begin
@@ -440,7 +446,7 @@ module backend #(
 	   e_mcause    = MCAUSE_IRQ | e_irq_vector;
 	end
 
-	e_kill = e_trap | (e_irq & ~e_busy) | e_jump;
+	e_kill = e_trap | (e_irq & ~e_busy) | e_jump | e_fencei;
      end
 
    //
@@ -453,24 +459,30 @@ module backend #(
    reg	       m_xcpt;		// trap or interrupt
    reg [31:0]  m_mepc;		// epc to be written if m_xcpt
    reg [31:0]  m_mcause;	// mcause to be written in m_xcpt
+   reg	       m_fencei;	// Don't unkill until the real M stage is done
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	m_kill		     <= 1'b0;
-	m_trap               <= 1'b0;
-	m_xcpt		     <= 1'b0;
-	m_restartpc	     <= core.RESET_PC & core.PC_MASK;
-	m_restart_mcontext   <= 'bx;
-	m_mepc		     <= 32'bx;
-	m_mcause             <= 32'bx;
-     end else if (clken) begin
-	m_kill		     <= e_kill;
-	m_trap		     <= e_trap;
-	m_xcpt		     <= e_trap | (e_irq & ~e_busy);
-	m_restartpc	     <= e_restartpc & core.PC_MASK;
-	m_restart_mcontext   <= e_restart_mcontext;
-	m_mepc		     <= e_mepc & core.PC_MASK;
-	m_mcause	     <= e_mcause;
+	m_kill		   <= 1'b0;
+	m_fencei	   <= 1'b0;
+	m_trap		   <= 1'b0;
+	m_xcpt		   <= 1'b0;
+	m_restartpc	   <= core.RESET_PC & core.PC_MASK;
+	m_restart_mcontext <= mcontext_reset();
+	m_mepc		   <= 32'bx;
+	m_mcause	   <= 32'bx;
+     end else if (clken & ~(m_fencei & (m_busy | m_valid_o))) begin
+	// For FENCE.I, keep asserting kill until the pipeline
+	// is fully drained (the result of the last active instruction
+	// has been accepted into the W stage.)
+	m_kill		   <= e_kill;
+	m_fencei	   <= e_fencei;
+	m_trap		   <= e_trap;
+	m_xcpt		   <= e_trap | (e_irq & ~e_busy);
+	m_restartpc	   <= e_restartpc & core.PC_MASK;
+	m_restart_mcontext <= e_restart_mcontext;
+	m_mepc		   <= e_mepc & core.PC_MASK;
+	m_mcause	   <= e_mcause;
      end
 
    // Handle intack and d_irq_clear

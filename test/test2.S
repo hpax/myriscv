@@ -2,8 +2,9 @@
 	.option arch,+zba
 	.option arch,+zbb
 	.option arch,+zbs
-	.option arch,+zicsr
 	.option arch,+zicond
+	.option arch,+zicsr
+	.option arch,+zifencei
 	.option arch,+zmmul
 
 	TTY  = -1
@@ -80,6 +81,32 @@ test2:
 	lbu a1,(a0)
 	bnez a1,1b
 
+	/* Unaligned memory test */
+unalign_test:
+	la a0,unaligned_str
+	jal print_str
+	la s0,udata_buf
+	lw a0,2(s0)
+	jal print_hex
+	la a0,unaligned_str2
+	jal print_str
+	li a1,0xddccbbaa
+	sw a1,1(s0)
+	lw a0,(s0)
+	lw s1,4(s0)
+	jal print_hex
+	li a0,':
+	sb a0,TTY(zero)
+	mv a0,s1
+	jal print_hex
+	jal print_crlf
+
+	/* What does fence.i actually do */
+	fence.i
+	lw a0,3(s0)	/* Make the M stage busy */
+	fence.i
+
+	/* Done */
 	ebreak
 	la a0,ebreak_failed_str
 	jal print_str
@@ -153,14 +180,22 @@ hello2_str:
 	.asciz "Hello, World #2!\n"
 hello3_str:
 	.asciz "Hello, World #3!\n"
+unaligned_str:
+	.asciz "Unaligned read test:  "
+unaligned_str2:
+	.asciz "\nUnaligned write test: "
 ebreak_failed_str:
 	.asciz "ERROR: fall through after ebreak\n"
 irq_str:
 	.asciz "Interrupt/exception triggered!\nmepc   = "
 mcause_str:
 	.asciz ", mcause = "
-crlf_str:
-	.asciz "\n"
+
+	.section ".sdata","aw"
+	.balign 4
+udata_buf:
+	.word	0x33221100
+	.word	0x77665544
 
 	.section ".stack","a"
 	.balign 16
