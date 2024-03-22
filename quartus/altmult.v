@@ -127,16 +127,15 @@ module altmult (
 		ALTMULT_ADD_component.addnsub_multiplier_pipeline_register1 = "CLOCK0",
 		ALTMULT_ADD_component.addnsub_multiplier_register1 = "UNREGISTERED",
 		ALTMULT_ADD_component.dedicated_multiplier_circuitry = "AUTO",
-		ALTMULT_ADD_component.input_aclr_a0 = "UNUSED",
-		ALTMULT_ADD_component.input_aclr_b0 = "UNUSED",
-		ALTMULT_ADD_component.input_register_a0 = "CLOCK0",
-		ALTMULT_ADD_component.input_register_b0 = "CLOCK0",
+		ALTMULT_ADD_component.input_register_a0 = "UNREGISTERED",
+		ALTMULT_ADD_component.input_register_b0 = "UNREGISTERED",
 		ALTMULT_ADD_component.input_source_a0 = "DATAA",
 		ALTMULT_ADD_component.input_source_b0 = "DATAB",
 		ALTMULT_ADD_component.intended_device_family = "Cyclone IV E",
 		ALTMULT_ADD_component.lpm_type = "altmult_add",
 		ALTMULT_ADD_component.multiplier1_direction = "ADD",
-		ALTMULT_ADD_component.multiplier_register0 = "UNREGISTERED",
+		ALTMULT_ADD_component.multiplier_aclr0 = "UNUSED",
+		ALTMULT_ADD_component.multiplier_register0 = "CLOCK0",
 		ALTMULT_ADD_component.number_of_multipliers = 1,
 		ALTMULT_ADD_component.output_register = "UNREGISTERED",
 		ALTMULT_ADD_component.port_addnsub1 = "PORT_UNUSED",
@@ -182,9 +181,9 @@ endmodule
 // Retrieval info: PRIVATE: IMPL_STYLE_DEFAULT NUMERIC "1"
 // Retrieval info: PRIVATE: IMPL_STYLE_LCELL NUMERIC "0"
 // Retrieval info: PRIVATE: INTENDED_DEVICE_FAMILY STRING "Cyclone IV E"
-// Retrieval info: PRIVATE: MULT_REGA0 NUMERIC "1"
-// Retrieval info: PRIVATE: MULT_REGB0 NUMERIC "1"
-// Retrieval info: PRIVATE: MULT_REGOUT0 NUMERIC "0"
+// Retrieval info: PRIVATE: MULT_REGA0 NUMERIC "0"
+// Retrieval info: PRIVATE: MULT_REGB0 NUMERIC "0"
+// Retrieval info: PRIVATE: MULT_REGOUT0 NUMERIC "1"
 // Retrieval info: PRIVATE: NUM_MULT STRING "1"
 // Retrieval info: PRIVATE: OP1 STRING "Add"
 // Retrieval info: PRIVATE: OP3 STRING "Add"
@@ -229,16 +228,15 @@ endmodule
 // Retrieval info: CONSTANT: ADDNSUB_MULTIPLIER_PIPELINE_REGISTER1 STRING "CLOCK0"
 // Retrieval info: CONSTANT: ADDNSUB_MULTIPLIER_REGISTER1 STRING "UNREGISTERED"
 // Retrieval info: CONSTANT: DEDICATED_MULTIPLIER_CIRCUITRY STRING "AUTO"
-// Retrieval info: CONSTANT: INPUT_ACLR_A0 STRING "UNUSED"
-// Retrieval info: CONSTANT: INPUT_ACLR_B0 STRING "UNUSED"
-// Retrieval info: CONSTANT: INPUT_REGISTER_A0 STRING "CLOCK0"
-// Retrieval info: CONSTANT: INPUT_REGISTER_B0 STRING "CLOCK0"
+// Retrieval info: CONSTANT: INPUT_REGISTER_A0 STRING "UNREGISTERED"
+// Retrieval info: CONSTANT: INPUT_REGISTER_B0 STRING "UNREGISTERED"
 // Retrieval info: CONSTANT: INPUT_SOURCE_A0 STRING "DATAA"
 // Retrieval info: CONSTANT: INPUT_SOURCE_B0 STRING "DATAB"
 // Retrieval info: CONSTANT: INTENDED_DEVICE_FAMILY STRING "Cyclone IV E"
 // Retrieval info: CONSTANT: LPM_TYPE STRING "altmult_add"
 // Retrieval info: CONSTANT: MULTIPLIER1_DIRECTION STRING "ADD"
-// Retrieval info: CONSTANT: MULTIPLIER_REGISTER0 STRING "UNREGISTERED"
+// Retrieval info: CONSTANT: MULTIPLIER_ACLR0 STRING "UNUSED"
+// Retrieval info: CONSTANT: MULTIPLIER_REGISTER0 STRING "CLOCK0"
 // Retrieval info: CONSTANT: NUMBER_OF_MULTIPLIERS NUMERIC "1"
 // Retrieval info: CONSTANT: OUTPUT_REGISTER STRING "UNREGISTERED"
 // Retrieval info: CONSTANT: PORT_ADDNSUB1 STRING "PORT_UNUSED"

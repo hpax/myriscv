@@ -14,7 +14,7 @@
 
 `ifdef ALTERA_RESERVED_QIS
 // This seems worse than the generic result?!
-// `define ALTERA_MULT 1
+`define ALTERA_MULT 1
 `endif
 
 module mult
