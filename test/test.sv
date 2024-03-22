@@ -2,6 +2,8 @@
 // Very simple test bench
 //
 
+`timescale 1 ps / 1 ps
+
 module test #(
   parameter int	NUM_IRQS = 31
    );

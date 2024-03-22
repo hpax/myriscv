@@ -101,6 +101,18 @@ unalign_test:
 	jal print_hex
 	jal print_crlf
 
+	/* Multiply me harder? */
+	la a0,mult_str
+	jal print_str
+	li a4,0x8dbbc2c2
+	li a5,0x16fc68b9
+	mulhu a0,a4,a5
+	mul s0,a4,a5
+	jal print_hex
+	mv a0,s0
+	jal print_hex
+	jal print_crlf
+
 	/* What does fence.i actually do */
 	fence.i
 	lw a0,3(s0)	/* Make the M stage busy */
@@ -184,6 +196,8 @@ unaligned_str:
 	.asciz "Unaligned read test:  "
 unaligned_str2:
 	.asciz "\nUnaligned write test: "
+mult_str:
+	.asciz "Multiply test, expect 0cb9e18b16c68e32: "
 ebreak_failed_str:
 	.asciz "ERROR: fall through after ebreak\n"
 irq_str:
