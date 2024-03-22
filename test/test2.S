@@ -92,8 +92,8 @@ unalign_test:
 	jal print_str
 	li a1,0xddccbbaa
 	sw a1,1(s0)
-	lw a0,(s0)
-	lw s1,4(s0)
+	lw s1,(s0)
+	lw a0,4(s0)
 	jal print_hex
 	li a0,':
 	sb a0,TTY(zero)

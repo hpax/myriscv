@@ -7,4 +7,4 @@ add wave /cpu/backend/*
 wave zoom range 15ns 30ns
 view structure
 view signals
-run 1 us
+run 3 us
