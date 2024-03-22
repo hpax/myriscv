@@ -54,6 +54,9 @@ module core (rst_n, clk, clken,
    parameter    bit	     EARLY_RVC		= 1'b1;
    parameter	bit	     BITCNT_SEPARATE	= 1'b1;
 
+   // Allow cached multiply forwarding for latency
+   parameter	bit	     FORWARD_MUL	= 1'b1;
+
    // This allows a c.nop inserted for padding to be
    // fused with a previous c.xxx instruction into a
    // pseudo-32-bit instruction.

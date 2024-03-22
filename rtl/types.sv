@@ -17,8 +17,8 @@ typedef enum logic [3:0] {
 	INSN_NULL   = 4'b0001,	// Branch bubble
 	INSN_NOP    = 4'b0010,	// No-op instruction (unless decoded as ALU)
 	INSN_ALU    = 4'b0011,	// ALU instruction
-	INSN_MUL    = 4'b0100,	// True multiply
-	INSN_MULL   = 4'b0101,	// MULH -> MULL forward
+	INSN_MULL   = 4'b0100,	// Multiply low
+	INSN_MULH   = 4'b0101,	// Multiply high
 	INSN_LD     = 4'b0110,	// Memory load
 	INSN_ST     = 4'b0111,	// Memory store
 	INSN_CSR    = 4'b1000,	// CSR instruction
@@ -36,6 +36,9 @@ endfunction
 function logic insn_real(input insn_type_t insn);
    // Not INSN_KILLED or INSN_NULL
    insn_real = |insn[3:1];
+endfunction
+function logic insn_mult(input insn_type_t insn);
+   insn_mult = insn[3:1] == 3'b010;
 endfunction
 
 // Register bank and machine mode context

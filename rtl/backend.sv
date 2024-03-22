@@ -205,13 +205,13 @@ module backend #(
      .src1(e_src1), .src2(e_src2), .ctl(e_aluctl));
 
    // Multiplier
-   wire [31:0] m_mul_o;
+   wire [31:0] m_mulh_o;
    wire [31:0] m_mull_o;
    multiplier mult (.rst_n(rst_n), .clk(clk),
-     .e_valid(e_clken && e_op.itype == INSN_MUL),
+     .e_valid(e_clken & insn_mult(e_op.itype) & ~e_op.rd_e),
      .e_op(e_op.funct3[1:0]),
      .e_src1(e_src1), .e_src2(e_src2),
-     .m_mul_o(m_mul_o), .m_mull_o(m_mull_o));
+     .m_mulh_o(m_mulh_o), .m_mull_o(m_mull_o));
 
    //
    // CSR registers
@@ -542,14 +542,24 @@ module backend #(
    //
    // E stage output data MUX
    //
-   always @(*)
-     unique case (e_op.itype)
-       INSN_ALU:  e_dout = e_alu_out;
-       INSN_MULL: e_dout = m_mull_o;
-       INSN_JAL:  e_dout = e_succ_pc;
-       INSN_CSR:  e_dout = e_csr_rval;
-       default:   e_dout = 32'bx; // No output, or delivered from M stage
-     endcase
+   always @(*) begin
+      // No output, or delivered from M stage
+      e_dout = 32'bx;
+      unique case (e_op.itype)
+	INSN_ALU:
+	  e_dout = e_alu_out;
+	INSN_MULL:
+	  if (core.WITH_Zmmul & core.FORWARD_MUL) e_dout = m_mull_o;
+	INSN_MULH:
+	  if (core.WITH_Zmmul & core.FORWARD_MUL) e_dout = m_mulh_o;
+	INSN_JAL:
+	  e_dout = e_succ_pc;
+	INSN_CSR:
+	  e_dout = e_csr_rval;
+	default:
+	  e_dout = 32'bx; // Suppress warning
+      endcase
+   end
 
    //
    // Load/store unit
@@ -594,22 +604,28 @@ module backend #(
    //
    // M stage output MUX
    //
-   always @(*)
-     unique case (m_op.itype)
+   always @(*) begin
+      m_dout	= m_din;
+      m_dout_be = 4'b1111;
+      m_valid_o = m_accept;
+
+      unique case (m_op.itype)
        INSN_LD: begin
 	  m_dout    = ldst_dout;
 	  m_dout_be = ldst_dout_wbe;
 	  m_valid_o = ldst_dout_valid;
        end
-       INSN_MUL: begin
-	  m_dout    = m_mul_o;
-	  m_dout_be = 4'b1111;
-	  m_valid_o = m_accept;
+       INSN_MULL: begin
+	  if (core.WITH_Zmmul)
+	    m_dout  = m_mull_o;
+       end
+       INSN_MULH: begin
+	  if (core.WITH_Zmmul)
+	    m_dout  = m_mulh_o;
        end
        default: begin
-	  m_dout    = m_din;
-	  m_dout_be = 4'b1111;
-	  m_valid_o = m_accept;
+	  // See above
        end
-     endcase
+      endcase
+   end
 endmodule // execute

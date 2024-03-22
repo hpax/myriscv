@@ -17,6 +17,8 @@
 `define ALTERA_MULT 1
 `endif
 
+`ifdef NORMAL
+
 module mult
   #(
     parameter width = 32,
@@ -91,6 +93,8 @@ module mult
    assign ql = l_q;
 endmodule // mult
 
+`endif
+
 module multiplier
   #(
         parameter width = 32
@@ -104,13 +108,12 @@ module multiplier
   input [width-1:0]  e_src2,
   input [1:0]	     e_op,	// MULL, MULH, MULHSU, MULHU
 
-  output [width-1:0] m_mul_o,	// Main output
+  output [width-1:0] m_mulh_o,	// Main output
   output [width-1:0] m_mull_o	// Can be forwarded to E on a subsequent MULL
   );
 
    wire		       e_ssign1 = ~&e_op;	// MULL, MULH, MULHSU
    wire		       e_ssign2 = ~e_op[1];	// MULL, MULH
-   wire		       e_high = |e_op;		// MULH, MULHSU, MULHU
 
    mult mult (
      .rst_n	( rst_n ),
@@ -120,8 +123,89 @@ module multiplier
      .ssign1	( e_ssign1 ),
      .src2	( e_src2 ),
      .ssign2	( e_ssign2 ),
-     .high	( e_high ),
-     .q		( m_mul_o ),
+     .qh	( m_mulh_o ),
      .ql	( m_mull_o )
      );
+endmodule
+
+// Implementation which defers all the adds to the second clock.
+module mult
+  #(
+    parameter width = 32
+    )
+   (
+  input			 rst_n,
+  input			 clk,
+  input			 clken,
+
+  input [width-1:0]	 src1,
+  input			 ssign1, // src1 is signed
+  input [width-1:0]	 src2,
+  input			 ssign2, // src2 is signed
+  input			 high, // q should contains the high half result
+
+  output	[width-1:0] ql,
+  output	[width-1:0] qh
+    );
+
+   logic [31:0]		    ll;
+   logic [31:0]		    hl;
+   logic [31:0]		    lh;
+   logic [31:0]		    hh;
+
+   altmult16 mul_ll (
+     .clock0 (clk),
+     .ena0 (clken),
+     .dataa_0 (src1[15:0]),
+     .datab_0 (src2[15:0]),
+     .signa (1'b0),
+     .signb (1'b0),
+     .result (ll)
+     );
+
+   altmult16 mul_lh (
+     .clock0 (clk),
+     .ena0 (clken),
+     .dataa_0 (src1[15:0]),
+     .datab_0 (src2[31:16]),
+     .signa (1'b0),
+     .signb (ssign2),
+     .result (lh)
+     );
+
+   altmult16 mul_hl (
+     .clock0 (clk),
+     .ena0 (clken),
+     .dataa_0 (src1[31:16]),
+     .datab_0 (src2[15:0]),
+     .signa (ssign1),
+     .signb (1'b0),
+     .result (hl)
+     );
+
+   altmult16 mul_hh (
+     .clock0 (clk),
+     .ena0 (clken),
+     .dataa_0 (src1[31:16]),
+     .datab_0 (src2[31:16]),
+     .signa (ssign1),
+     .signb (ssign2),
+     .result (hh)
+     );
+
+   reg		ssign1_q;
+   reg		ssign2_q;
+   always @(posedge clk)
+     if (clken) begin
+	ssign1_q <= ssign1;
+	ssign2_q <= ssign2;
+     end
+
+   wire [32:0] qlow  = ll + { lh[15:0], 16'b0 } + { hl[15:0], 16'b0 };
+   wire signed [16:0] lhs = { lh[31] & ssign2_q, lh[31:16] };
+   wire signed [16:0] hls = { hl[31] & ssign1_q, hl[31:16] };
+   wire signed [17:0] hllh = lhs + hls;
+
+   assign ql = qlow[31:0];
+   assign qh = $signed(hh + qlow[32]) + hllh;
 endmodule

@@ -123,11 +123,18 @@ module decode_comb
 	  end
 
 	  OP, OP_IMM: begin
-	     op.itype		= INSN_ALU;
-	     op.rs1_valid	= 1'b1;
-	     op.rs2_valid	= i[5];
-	     op.rd_e		= 1'b1;
-	     op.imm		= i_imm;
+	     op.itype			  = INSN_ALU;
+	     op.rs1_valid		  = 1'b1;
+	     op.rs2_valid		  = i[5];
+	     op.rd_e			  = 1'b1;
+	     op.imm			  = i_imm;
+
+	     if (core.WITH_Zmmul &&
+	       op.rs2_valid && op.funct7 == 7'b000_0001 && ~op.funct3[2])
+	       if (|op.funct3[1:0])
+		 op.itype = INSN_MULH;
+	       else
+		 op.itype = INSN_MULL;
 	  end
 
 	  SYSTEM: begin
@@ -248,53 +255,52 @@ module decode_seq
    // can safely use the result of a previous multiply; this is
    // allows MULH* to forward the low half of the result to MUL in
    // the E stage rather than M stage.
-   function logic insn_mult(input decoded_insn_t op);
-      // The combinatorial decode leaves a multiply as INSN_ALU.
-      insn_mult = (op.itype == INSN_ALU) &
-		  op.rs1_valid & op.rs2_valid &
-		  (op.funct7 == 7'b000_0001) & !op.funct3[2];
-   endfunction
-
    reg		have_mult;
    regnum_t	mult_rs1;
    regnum_t	mult_rs2;
+   reg [1:0]	mulhifunc;
+   logic [1:0]	mulhifunc_c;
 
    always @(negedge rst_n or posedge clk)
-     if (~rst_n)
-       begin
+     if (~rst_n) begin
 	  have_mult <= 1'b0;
 	  mult_rs1  <= 'bx;
 	  mult_rs2  <= 'bx;
-       end
-     else if (d_clken)
-       begin
-	  if (d_killed) begin
-	     // State rolled back
-	     have_mult <= 1'b0;
-	     mult_rs1  <= 'bx;
-	     mult_rs2  <= 'bx;
-	  end else if (op_o.itype == INSN_MUL) begin
-	     if (op_o.rd != op_o.rs1 && op_o.rd != op_o.rs2) begin
-		have_mult <= 1'b1;
-		mult_rs1  <= op_o.rs1;
-		mult_rs2  <= op_o.rs2;
-	     end else begin
-		have_mult <= 1'b0;
-		mult_rs1  <= 'bx;
-		mult_rs2  <= 'bx;
-	     end
-	  end else if ((op_o.rd_e | op_o.rd_m) &&
-	    (!have_mult || op_o.rd == mult_rs1 || op_o.rd == mult_rs2)) begin
-	     // Input registers clobbered
-	     // The have_mult clause is for the benefit of simulation
-	     have_mult <= 1'b0;
-	     mult_rs1  <= 'bx;
-	     mult_rs2  <= 'bx;
-	  end
-       end // if (d_clken)
+	  mulhifunc <= 2'bx;
+     end else if (d_clken) begin
+	if (core.FORWARD_MUL) begin
+	   if (d_killed) begin
+	      // State rolled back
+	      have_mult <= 1'b0;
+	      mult_rs1  <= 'bx;
+	      mult_rs2  <= 'bx;
+	      mulhifunc <= 2'bx;
+	   end else if (insn_mult(op_o.itype)) begin
+	      if (op_o.rd != op_o.rs1 && op_o.rd != op_o.rs2) begin
+		 have_mult <= 1'b1;
+		 mult_rs1  <= op_o.rs1;
+		 mult_rs2  <= op_o.rs2;
+		 mulhifunc <= mulhifunc_c;
+	      end else begin
+		 have_mult <= 1'b0;
+		 mult_rs1  <= 'bx;
+		 mult_rs2  <= 'bx;
+		 mulhifunc <= 2'bx;
+	      end
+	   end else if ((op_o.rd_e | op_o.rd_m) &&
+	     (op_o.rd == mult_rs1 || op_o.rd == mult_rs2)) begin
+	      // Input registers clobbered
+	      have_mult <= 1'b0;
+	      mult_rs1  <= 'bx;
+	      mult_rs2  <= 'bx;
+	      mulhifunc <= 2'bx;
+	   end
+	end
+     end
 
    always @(*) begin
       op_o = op_i;
+      mulhifunc_c = 2'bx;
 
       // Killed instruction
       if (d_killed) begin
@@ -305,19 +311,21 @@ module decode_seq
 	 op_o.itype = INSN_NULL;
 	 op_o.rd_e  = 1'b0;
 	 op_o.rd_m  = 1'b0;
-      end else if (insn_mult(op_o)) begin
+      end else if (insn_mult(op_o.itype)) begin
+	 // MUL -> MULH (default to assuming signed)
 	 // Multiply handling
-	 if (have_mult && !op_i.funct3[1:0] &&
+	 if (core.FORWARD_MUL &&
+	   have_mult && (!op_i.funct3[1:0] || op_i.funct3[1:0] == mulhifunc) &&
 	   op_i.rs1 == mult_rs1 && op_i.rs2 == mult_rs2) begin
 	    // Can forward old multiply low result
-	    op_o.itype = INSN_MULL;
+	    mulhifunc_c = mulhifunc; // Not actually doing the multiply
 	 end else begin
-	    // Need to actually multiply
-	    op_o.itype = INSN_MUL;
 	    // Move the output to the M stage. Note that
 	    // using op_i.rd_e here handles the case of rd == x0.
-	    op_o.rd_m = op_i.rd_e;	  // Output in M stage
-	    op_o.rd_e = 1'b0;
+	    op_o.rd_m	= op_i.rd_e;	  // Output in M stage
+	    op_o.rd_e	= 1'b0;
+	    // For MUL, cache a signed result
+	    mulhifunc_c = { op_i.funct3[1], op_i.funct3[0] | ~op_i.funct3[1] };
 	 end
       end
    end
