@@ -217,6 +217,15 @@ module decode_comb
 	     op.rd_m = 1'b0;
 	  end
 
+	// For the benefit of the fast register decoder, squash reading
+	// rs1 if it is zero. It is not safe to do the same for rs2, without
+	// introducing additional logic, as there are cases where
+	// rs2 can be valid (including being x0) and there also is an
+	// immediate, which would be muxed into src2. If !rs1_valid, however,
+	// rs1 *itself* is the immediate, and therefore zero.
+	if (!op.rs1.r)
+	  op.rs1_valid = 1'b0;
+
 	// Give the synthesizer a bit more flexibility
 	if (op.itype == INSN_ERR)
 	  op = err_op(op.pc, op.i16, op.mcontext);
@@ -364,6 +373,8 @@ endmodule
 // parse the entire instruction.
 //
 // This is combinatorial, and should be kept as small as possible.
+// For RVC instructions, this is allowed to put a value in rs1 that
+// ought to be zero (for C.LI and C.MV), but *not* rs2!
 //
 module decode_srcregs (
   input [31:0] insn,
@@ -389,10 +400,6 @@ module decode_srcregs (
 	5'b???_00: begin		// RVC quadrant 0, memory references
 	   rs1.r = { 2'b01, insn[9:7] };
 	   rs2.r = { 2'b01, insn[4:2] };
-	end
-	5'b010_01: begin		// C.LI
-	   rs1.r = R_ZERO;
-	   rs2.r = 5'bx;
 	end
 	5'b0??_01: begin		// RVC quadrant 1, lower half
 	   rs1.r = insn[11:7];
