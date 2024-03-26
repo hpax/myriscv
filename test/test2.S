@@ -102,6 +102,7 @@ unalign_test:
 	jal print_crlf
 
 	/* Multiply me harder? */
+	/* Test with forwarding */
 	la a0,mult_str
 	jal print_str
 	li a4,0x8dbbc2c2
@@ -113,9 +114,30 @@ unalign_test:
 	jal print_hex
 	jal print_crlf
 
+	/* Test without forwarding */
+	la a0,mult_str
+	jal print_str
+	li s0,0x8dbbc2c2
+	li s1,0x16fc68b9
+	mulhu a0,s0,s1
+	jal print_hex
+	mul a0,s0,s1
+	jal print_hex
+	jal print_crlf
+
+	/* Test writing to and running from external memory */
+	li a0,0x80824531		// li a0,12; ret
+	la s0,0x40000000
+	sw a0,(s0)
+	fence.i
+	li a0,0
+	jalr (s0)
+	call print_hex
+	call print_crlf
+
 	/* What does fence.i actually do */
 	fence.i
-	lw a0,3(s0)	/* Make the M stage busy */
+	lw a0,3(zero)	/* Make the M stage busy */
 	fence.i
 
 	/* Done */

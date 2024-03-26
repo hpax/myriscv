@@ -9,6 +9,7 @@ module test #(
    );
 
    localparam int IRQ_BITS = $clog2(NUM_IRQS+1);
+   localparam int ram_size_bits = 25;
 
    logic	rst_n;
    logic	clk;
@@ -22,13 +23,37 @@ module test #(
    wire		io_ready;
    wire [31:0]	io_rdata;
 
+   wire [ram_size_bits-1:0]	mem_addr;
+   wire [31:0]	mem_wdata;
+   wire		mem_valid;
+   wire		mem_wrq;
+   wire [3:0]	mem_wbe;
+   wire		mem_ready;
+   wire [31:0]	mem_rdata;
+
    logic [NUM_IRQS:1] irq;
    wire [IRQ_BITS-1:0]	intack;
 
    wire			buserr;
 
+   //
+   // Clock and reset
+   //
    assign clken = 1'b1;
+   localparam int	CLOCK = 1000;
 
+   initial
+     begin
+	clk       <= 1'b1;
+	rst_n	  <= 1'b0;
+	#(10*CLOCK) rst_n <= 1'b1;
+     end
+
+   always #(CLOCK >> 1) clk <= ~clk;
+
+   //
+   // CPU core with TCM
+   //
    core #(.TCM_INIT_FILE ("/home/hpa/hwhacks/riscv/myriscv/test/test2.hex"))
    cpu (
      .rst_n	( rst_n ),
@@ -43,22 +68,38 @@ module test #(
      .io_ready	( io_ready ),
      .io_rdata	( io_rdata ),
 
+     .mem_addr	( mem_addr ),
+     .mem_wdata	( mem_wdata ),
+     .mem_valid	( mem_valid ),
+     .mem_wrq	( mem_wrq ),
+     .mem_wbe	( mem_wbe ),
+     .mem_ready	( mem_ready ),
+     .mem_rdata	( mem_rdata ),
+
      .irq	( irq ),
      .intack	( intack ),
 
      .buserr	( buserr )
      );
 
-   localparam int	CLOCK = 1000;
+   // External memory
 
-   initial
-     begin
-	clk       <= 1'b1;
-	rst_n	  <= 1'b0;
-	#(16*CLOCK) rst_n <= 1'b1;
-     end
+   extmem #(.ram_bits( ram_size_bits ), .size_bits ( 16 ))
+   extmem (
+     .rst_n	( rst_n ),
+     .clk	( clk ),
+     .mem_a	( mem_addr ),
+     .mem_wdata ( mem_wdata ),
+     .mem_valid ( mem_valid ),
+     .mem_wrq   ( mem_wrq ),
+     .mem_wbe   ( mem_wbe ),
+     .mem_ready ( mem_ready ),
+     .mem_rdata ( mem_rdata ),
+     .mem_a_o   ( ),
+     .mem_wr_o  ( )
+     );
 
-   always #(CLOCK >> 1) clk <= ~clk;
+   // I/O
 
    assign irq = 'b0;
    assign io_rdata = io_addr;

@@ -2,9 +2,10 @@
 
 module core (rst_n, clk, clken,
 	     ctr_time, ctr_cycle, ctr_instret,
-	     io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready,io_rdata,
-	     irq, irq_enable, irq_edge, intack, buserr
-	     );
+  mem_addr, mem_wdata, mem_valid, mem_wrq, mem_wbe, mem_ready, mem_rdata,
+  io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready,io_rdata,
+  irq, irq_enable, irq_edge, intack, buserr
+  );
    parameter    bit WITH_Zba		= 1'b1;
    parameter    bit WITH_Zbb		= 1'b1;
    parameter    bit WITH_Zcf		= 1'b1;
@@ -13,6 +14,7 @@ module core (rst_n, clk, clken,
    parameter    bit WITH_bitcnt         = 1'b1; // clz, ctz, cpop
    parameter	bit WITH_bitcntinv	= 1'b0; // bit-inverted bitcnt ops
    parameter    bit WITH_Zmmul		= 1'b1;
+   parameter	bit WITH_div		= 1'b0;
    parameter    bit WITH_Zicond		= 1'b1;
    parameter    bit WITH_minmax		= 1'b1;
    parameter    bit WITH_cmpand         = 1'b1; // baeqz, banez
@@ -82,7 +84,7 @@ module core (rst_n, clk, clken,
    parameter    logic [31:0] tcm_base		= 32'h0000_0000;
    parameter    int	     tcm_size_bits	= 14;
    parameter    logic [31:0] ram_base		= 32'h4000_0000;
-   parameter    int	     ram_size_bits	= 0;
+   parameter    int	     ram_size_bits	= 25;
    parameter	logic [31:0] io_base		= 32'h8000_0000;
 
    // What reading from a nonexistent memory spaces returns
@@ -104,6 +106,14 @@ module core (rst_n, clk, clken,
    input		     io_ready;
    input [31:0]		     io_rdata;
 
+   output reg [ram_size_bits-1:0]	     mem_addr;
+   output reg [31:0]	     mem_wdata;
+   output reg		     mem_valid;
+   output reg		     mem_wrq;
+   output reg [3:0]	     mem_wbe;
+   input		     mem_ready;
+   input [31:0]		     mem_rdata;
+
    // irq is the expected IRQ input.
    //
    // irq_enable is intended to be used to compile-time disable.
@@ -123,10 +133,9 @@ module core (rst_n, clk, clken,
    wire			     ibus_valid;
    logic [31:0]		     ibus_rdata;
    wire [31:0]		     ibus_rdata_tcm;
-   wire [31:0]		     ibus_rdata_ram;
    wire			     ibus_ready;
    wire			     ibus_ready_tcm;
-   wire			     ibus_ready_ram;
+   reg			     ibus_ready_mem;
 
    wire [31:0]		     dbus_a;
    wire [31:0]		     dbus_wdata;
@@ -135,21 +144,20 @@ module core (rst_n, clk, clken,
    wire [3:0]		     dbus_wbe;
    logic [31:0]		     dbus_rdata;
    wire [31:0]		     dbus_rdata_tcm;
-   wire [31:0]		     dbus_rdata_ram;
    reg  [31:0]		     dbus_rdata_io;
    wire			     dbus_ready;
    wire			     dbus_ready_tcm;
-   wire			     dbus_ready_ram;
+   reg			     dbus_ready_mem;
    reg			     dbus_ready_io;
 
    logic		     dbus_err_sel;
    logic		     dbus_tcm_sel;
-   logic		     dbus_ram_sel;
+   logic		     dbus_mem_sel;
    logic		     dbus_io_sel;
 
    logic		     ibus_err_sel;
    logic		     ibus_tcm_sel;
-   logic		     ibus_ram_sel;
+   logic		     ibus_mem_sel;
 
    //
    // Memory map decode
@@ -158,7 +166,7 @@ module core (rst_n, clk, clken,
      begin
 	dbus_err_sel = 1'b0;
 	dbus_tcm_sel = 1'b0;
-	dbus_ram_sel = 1'b0;
+	dbus_mem_sel = 1'b0;
 	dbus_io_sel  = 1'b0;
 	if (dbus_valid) begin
 	   if (dbus_a < tcm_base)
@@ -166,14 +174,14 @@ module core (rst_n, clk, clken,
 	   else if (dbus_a < ram_base)
 	     dbus_tcm_sel = tcm_size_bits > 0;
 	   else if (dbus_a < io_base)
-	     dbus_ram_sel = ram_size_bits > 0;
+	     dbus_mem_sel = ram_size_bits > 0;
 	   else
 	     dbus_io_sel = 1'b1;
 	end
 
 	ibus_err_sel = 1'b0;
 	ibus_tcm_sel = 1'b0;
-	ibus_ram_sel = 1'b0;
+	ibus_mem_sel = 1'b0;
 	// Instruction fetches from I/O are not supported
 
 	if (ibus_valid) begin
@@ -182,9 +190,18 @@ module core (rst_n, clk, clken,
 	   else if (ibus_a < ram_base)
 	     ibus_tcm_sel = tcm_size_bits > 0;
 	   else if (ibus_a < io_base)
-	     ibus_ram_sel = ram_size_bits > 0;
+	     ibus_mem_sel = ram_size_bits > 0;
+	   else
+	     ibus_err_sel = 1'b1;
 	end
      end
+
+   // Bus error
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n)
+       buserr <= 1'b0;
+     else
+       buserr <= ibus_err_sel | dbus_err_sel;
 
    // This is necessary to avoid a combinatorial path
    reg dbus_ready_err;
@@ -208,13 +225,13 @@ module core (rst_n, clk, clken,
 	   .clk		(clk),
 	   .clken	(clken),
 	   .ibus_a	(ibus_a),
-	   .ibus_valid	(ibus_valid),
+	   .ibus_valid	(ibus_tcm_sel),
 	   .ibus_rdata	(ibus_rdata_tcm),
 	   .ibus_ready	(ibus_ready_tcm),
 
 	   .dbus_a	(dbus_a),
-	   .dbus_valid	(dbus_valid),
-	   .dbus_wrq	(dbus_wrq & dbus_tcm_sel),
+	   .dbus_valid	(dbus_tcm_sel),
+	   .dbus_wrq	(dbus_wrq),
 	   .dbus_wbe	(dbus_wbe),
 	   .dbus_wdata	(dbus_wdata),
 	   .dbus_rdata	(dbus_rdata_tcm),
@@ -228,11 +245,59 @@ module core (rst_n, clk, clken,
       end
    endgenerate
 
-   // XXX: implement cache/RAM interface
-   assign dbus_rdata_ram = 32'bx;
-   assign dbus_ready_ram = 1'b0;
-   assign ibus_rdata_ram = 32'bx;
-   assign ibus_ready_ram = 1'b0;
+   // Memory bus
+   reg [31:0] dbus_rdata_mem;
+   reg [31:0] ibus_rdata_mem;
+
+   generate
+      if (!ram_size_bits) begin
+	 assign dbus_ready_mem	= 1'b0;
+	 assign ibus_ready_mem	= 1'b0;
+      end else begin
+	 reg mem_is_dbus;
+
+	 always @(negedge rst_n or posedge clk)
+	   if (~rst_n) begin
+	      mem_valid      <= 1'b0;
+	      mem_wrq	     <= 1'bx;
+	      mem_wbe	     <= 4'bx;
+	      mem_is_dbus    <= 1'bx;
+	      mem_addr	     <= 'bx;
+	      mem_wdata      <= 32'bx;
+	      dbus_ready_mem <= 1'b0;
+	      ibus_ready_mem <= 1'b0;
+	   end else if (clken) begin
+	      dbus_ready_mem <= 1'b0;
+	      ibus_ready_mem <= 1'b0;
+
+	      // The data bus gets priority!
+	      if (~mem_valid & dbus_mem_sel) begin
+		 mem_addr  <= dbus_a[ram_size_bits-1:0];
+		 mem_is_dbus <= 1'b1;
+		 mem_valid <= 1'b1;
+		 mem_wrq   <= dbus_wrq;
+		 mem_wdata <= dbus_wdata;
+		 mem_wbe   <= dbus_wbe;
+	      end else if (~mem_valid & ibus_mem_sel) begin
+		 mem_addr    <= ibus_a[ram_size_bits-1:0];
+		 mem_is_dbus <= 1'b0;
+		 mem_valid   <= 1'b1;
+		 mem_wrq     <= 1'b0;
+		 mem_wdata   <= 32'bx;
+		 mem_wbe     <= 4'bx;
+	      end else if (mem_valid & mem_ready) begin
+		 mem_valid	<= 1'b0;
+		 mem_wrq	<= 1'bx;
+		 mem_wbe	<= 4'bx;
+		 mem_is_dbus	<= 1'bx;
+		 mem_addr	<= 'bx;
+		 mem_wdata	<= 32'bx;
+		 dbus_ready_mem <= mem_is_dbus & dbus_mem_sel;
+		 ibus_ready_mem <= ~mem_is_dbus & ibus_mem_sel;
+	      end
+	   end
+      end
+   endgenerate
 
    // I/O bus
    always @(negedge rst_n or posedge clk)
@@ -242,9 +307,7 @@ module core (rst_n, clk, clken,
 	io_valid     <= 1'b0;
 	io_wrq	     <= 1'b0;
 	io_wbe	     <= 'b0;
-	buserr       <= 1'b0;
      end else if (clken) begin
-	buserr <= dbus_valid & (dbus_a < tcm_base);
 	dbus_ready_io <= 1'b0;
 
 	if (~io_valid & dbus_io_sel) begin
@@ -262,49 +325,59 @@ module core (rst_n, clk, clken,
 	end
      end
 
+   reg dbus_ready_q;
+   reg ibus_ready_q;
+
    assign dbus_ready = dbus_ready_err | dbus_ready_io |
-		       dbus_ready_tcm | dbus_ready_ram;
-   assign ibus_ready = ibus_ready_err | ibus_ready_tcm | ibus_ready_ram;
+		       dbus_ready_tcm | dbus_ready_mem;
+   assign ibus_ready = ibus_ready_err | ibus_ready_tcm | ibus_ready_mem;
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	dbus_ready_q <= 1'b0;
+	ibus_ready_q <= 1'b0;
+     end else begin
+	dbus_ready_q <= dbus_ready & dbus_valid;
+	ibus_ready_q <= ibus_ready & ibus_valid;
+     end
 
    reg dbus_io_sel_q;
-   reg dbus_ram_sel_q;
+   reg dbus_mem_sel_q;
    reg dbus_tcm_sel_q;
 
-   reg ibus_ram_sel_q;
+   reg ibus_mem_sel_q;
    reg ibus_tcm_sel_q;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
 	dbus_io_sel_q  <= 1'bx;
-	dbus_ram_sel_q <= 1'bx;
+	dbus_mem_sel_q <= 1'bx;
 	dbus_tcm_sel_q <= 1'bx;
 
-	ibus_ram_sel_q <= 1'bx;
+	ibus_mem_sel_q <= 1'bx;
 	ibus_tcm_sel_q <= 1'bx;
      end else if (clken) begin
 	dbus_io_sel_q  <= dbus_io_sel;
-	dbus_ram_sel_q <= dbus_ram_sel;
+	dbus_mem_sel_q <= dbus_mem_sel;
 	dbus_tcm_sel_q <= dbus_tcm_sel;
 
-	ibus_ram_sel_q <= ibus_ram_sel;
+	ibus_mem_sel_q <= ibus_mem_sel;
 	ibus_tcm_sel_q <= ibus_tcm_sel;
      end
 
    always @(*)
      begin
-	unique case ({dbus_io_sel_q, dbus_ram_sel_q, dbus_tcm_sel_q})
-	  3'b000: dbus_rdata  = INVALID_DATA;
+	unique case ({dbus_io_sel_q, dbus_mem_sel_q, dbus_tcm_sel_q})
 	  3'b001: dbus_rdata  = dbus_rdata_tcm;
-	  3'b010: dbus_rdata  = dbus_rdata_ram;
+	  3'b010: dbus_rdata  = mem_rdata;
 	  3'b100: dbus_rdata  = dbus_rdata_io;
-	  default: dbus_rdata = 32'bx;
+	  default: dbus_rdata = INVALID_DATA;
 	endcase
 
-	unique case ({ibus_ram_sel_q, ibus_tcm_sel_q})
-	  2'b00: ibus_rdata   = INVALID_DATA;
+	unique case ({ibus_mem_sel_q, ibus_tcm_sel_q})
 	  2'b01: ibus_rdata   = ibus_rdata_tcm;
-	  2'b10: ibus_rdata   = ibus_rdata_ram;
-	  default: ibus_rdata = 32'bx;
+	  2'b10: ibus_rdata   = mem_rdata;
+	  default: ibus_rdata = INVALID_DATA;
 	endcase
      end
 

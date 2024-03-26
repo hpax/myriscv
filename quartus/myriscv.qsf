@@ -66,6 +66,7 @@ set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id test
 set_global_assignment -name EDA_TEST_BENCH_RUN_SIM_FOR "1 ms" -section_id test
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME test -section_id test
 set_global_assignment -name EDA_TEST_BENCH_FILE ../test/test.sv -section_id test -hdl_version SystemVerilog_2005
+set_global_assignment -name EDA_TEST_BENCH_FILE ../test/extmem.sv -section_id test -hdl_version SystemVerilog_2005
 set_global_assignment -name EDA_MAINTAIN_DESIGN_HIERARCHY ON -section_id eda_simulation
 set_global_assignment -name VERILOG_INPUT_VERSION SYSTEMVERILOG_2005
 set_global_assignment -name VERILOG_SHOW_LMF_MAPPING_MESSAGES OFF

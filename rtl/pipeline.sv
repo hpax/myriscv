@@ -95,7 +95,7 @@ module pipe_ctl #(
 	  if (m_kill) begin
 	     e_valid_i <= 1'b0;
 	     e_op      <= killed_op();
-	  end else if ((e_stall | e_busy) & e_valid_i) begin
+	  end else if ((e_stall & e_valid_i) | e_busy) begin
 	     // Leave unchanged
 	  end else if (~d_valid_o | d_stall) begin
 	     e_valid_i <= 1'b0;
@@ -130,12 +130,29 @@ module pipe_ctl #(
 	    w_op    <= m_op;
 
 	  // Bypass control (note: _m takes priority over _w!)
-	  e_rs1_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs1_valid, d_op.rs1);
-	  e_rs1_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs1_valid, d_op.rs1);
-	  e_rs1_x   <= regeq(w_op.rd_m, w_op.rd, d_op.rs1_valid, d_op.rs1);
-	  e_rs2_m   <= regeq(e_op.rd_e, e_op.rd, d_op.rs2_valid, d_op.rs2);
-	  e_rs2_w   <= regeq(m_op.rd_m, m_op.rd, d_op.rs2_valid, d_op.rs2);
-	  e_rs2_x   <= regeq(w_op.rd_m, w_op.rd, d_op.rs2_valid, d_op.rs2);
-
+	  if (m_kill) begin
+	     e_rs1_m <= 1'bx;
+	     e_rs1_w <= 1'bx;
+	     e_rs1_x <= 1'bx;
+	     e_rs2_m <= 1'bx;
+	     e_rs2_w <= 1'bx;
+	     e_rs2_x <= 1'bx;
+	  end else if ((e_stall & e_valid_i) | e_busy) begin
+	     // E stage not advancing, maintain its data input.
+	     // This could also be done by latching e_src1 and e_src2...
+	     e_rs1_m <= 1'b0;
+	     e_rs1_w <= regeq(m_op.rd_m, m_op.rd, e_op.rs1_valid, e_op.rs1);
+	     e_rs1_x <= regeq(w_op.rd_m, w_op.rd, e_op.rs1_valid, e_op.rs1);
+	     e_rs2_m <= 1'b0;
+	     e_rs2_w <= regeq(m_op.rd_m, m_op.rd, e_op.rs2_valid, e_op.rs2);
+	     e_rs2_x <= regeq(w_op.rd_m, w_op.rd, e_op.rs2_valid, e_op.rs2);
+	  end else begin
+	     e_rs1_m <= regeq(e_op.rd_e, e_op.rd, d_op.rs1_valid, d_op.rs1);
+	     e_rs1_w <= regeq(m_op.rd_m, m_op.rd, d_op.rs1_valid, d_op.rs1);
+	     e_rs1_x <= regeq(w_op.rd_m, w_op.rd, d_op.rs1_valid, d_op.rs1);
+	     e_rs2_m <= regeq(e_op.rd_e, e_op.rd, d_op.rs2_valid, d_op.rs2);
+	     e_rs2_w <= regeq(m_op.rd_m, m_op.rd, d_op.rs2_valid, d_op.rs2);
+	     e_rs2_x <= regeq(w_op.rd_m, w_op.rd, d_op.rs2_valid, d_op.rs2);
+	  end
        end // else: !if(~rst_n)
 endmodule

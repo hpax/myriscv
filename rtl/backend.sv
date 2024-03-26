@@ -109,7 +109,7 @@ module backend #(
 
    // Latched output to M stage; also used by the bypass network
    always @(posedge clk)
-     if (m_clken)
+     if (e_clken)
        m_din <= e_dout;
 
    // Register file
@@ -143,9 +143,10 @@ module backend #(
    // the register file to have two clocks and run in parallel
    // with the D stage. It is a pseudo-stage, because doesn't have
    // an op structure nor can it be stalled or cancelled.
+   wire x_clken = clken;	// The X stage cannot stall
    reg [31:0]	      x_din;
    always @(posedge clk)
-     if (w_clken)
+     if (x_clken)
        x_din   <= w_din;
 
    // GPR bypass network/operand selection
