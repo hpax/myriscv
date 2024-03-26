@@ -3,18 +3,7 @@
 `ifndef _TYPES_SV
 `define _TYPES_SV 1
 
-//
-// Note:
-// INSN_KILLED means an interruption in the flow of control, the PC
-// of the instruction packet is invalid, but the next valid instruction
-// received in the pipeline will contain a canonical (guaranteed
-// non-speculative) PC.
-// INSN_NULL means that PC should not be advanced.
-// INSN_NOP means the PC should be advanced normally.
-//
 typedef enum logic [3:0] {
-	INSN_KILLED = 4'b0000,	// Killed instruction
-	INSN_NULL   = 4'b0001,	// Branch bubble
 	INSN_NOP    = 4'b0010,	// No-op instruction (unless decoded as ALU)
 	INSN_ALU    = 4'b0011,	// ALU instruction
 	INSN_MULL   = 4'b0100,	// Multiply low
@@ -26,8 +15,9 @@ typedef enum logic [3:0] {
 	INSN_BR     = 4'b1011,  // Conditional branch
 	INSN_MRET   = 4'b1100,	// MRET, SRET
 	INSN_FENCEI = 4'b1101,	// Completion fence
-	INSN_ECALL  = 4'b1110,	// ECALL, EBREAK (trap)
-	INSN_ERR    = 4'b1111	// Invalid instruction (trap)
+	INSN_ECALL  = 4'b1110,	// ECALL, EBREAK
+	INSN_ERR    = 4'b1111,	// Invalid instruction (trap)
+	INSN_X	    = 4'bxxxx
 } insn_type_t;
 
 function logic insn_ldst(input insn_type_t insn);
@@ -67,6 +57,8 @@ function mcontext_t mcontext_reset;
 endfunction // mcontext_reset
 
 typedef struct packed {
+   logic         undead;	// It is an executable instruction
+
    insn_type_t   itype;
 
    regnum_t	 rd;		// 5-bit register number
@@ -79,6 +71,7 @@ typedef struct packed {
    logic signed [31:0] imm;	// Decoded immediate (almost always signed!)
 
    logic  [31:0] pc;		// Address of this instruction
+   logic	 pc_valid;	// This PC is meaningful, even if undead=0!
    logic	 i16;		// Compressed (16-bit) instruction
    mcontext_t	 mcontext;	// Machine context
 
@@ -95,50 +88,58 @@ typedef struct packed {
 } decoded_insn_t;
 
 function decoded_insn_t dummy_op(
+  input	       undead,
   input	       insn_type_t itype,
   input [31:0] pc,
+  input	       pc_valid,
   input	       i16,
   input	       mcontext_t mcontext
   );
-   dummy_op.itype	= itype;
-   dummy_op.rd		= 'bx;
-   dummy_op.rd_e	= 1'b0;
-   dummy_op.rd_m	= 1'b0;
-   dummy_op.rs1		= 'bx;
-   dummy_op.rs1_valid	= 1'b0;
-   dummy_op.rs2		= 'bx;
-   dummy_op.rs2_valid	= 1'b0;
-   dummy_op.imm		= 'bx;
-   dummy_op.funct3	= 'bx;
-   dummy_op.funct7	= 'bx;
+   dummy_op.undead     = undead;
+   dummy_op.itype      = itype;
+   dummy_op.rd	       = 'bx;
+   dummy_op.rd_e       = 1'b0;
+   dummy_op.rd_m       = 1'b0;
+   dummy_op.rs1        = 'bx;
+   dummy_op.rs1_valid  = 1'b0;
+   dummy_op.rs2        = 'bx;
+   dummy_op.rs2_valid  = 1'b0;
+   dummy_op.imm        = 'bx;
+   dummy_op.funct3     = 'bx;
+   dummy_op.funct7     = 'bx;
 
-   dummy_op.csrr	= 1'b0;
-   dummy_op.csrw	= 1'b0;
+   dummy_op.csrr       = 1'b0;
+   dummy_op.csrw       = 1'b0;
 
-   dummy_op.pc		= pc;
-   dummy_op.i16		= i16;
-   dummy_op.mcontext    = mcontext;
-   dummy_op.pred_taken	= 1'b0;
+   dummy_op.pc	       = pc;
+   dummy_op.pc_valid   = pc_valid;
+   dummy_op.i16        = i16;
+   dummy_op.mcontext   = mcontext;
+   dummy_op.pred_taken = 1'b0;
 endfunction
 
 function decoded_insn_t killed_op;
-   killed_op = dummy_op(INSN_KILLED, 32'bx, 1'bx, 'bx);
+   killed_op = dummy_op(1'b0, INSN_X, 32'bx, 1'b0, 1'bx, 'bx);
 endfunction
 
 function decoded_insn_t null_op(input [31:0] pc, input mcontext_t mcontext);
-   null_op = dummy_op(INSN_NULL, pc, 1'bx, mcontext);
+   null_op = dummy_op(1'b0, INSN_X, pc, 1'b1, 1'bx, mcontext);
 endfunction
 
 function decoded_insn_t err_op(input [31:0] pc, input i16,
 			       input mcontext_t mcontext);
-   err_op = dummy_op(INSN_ERR, pc, i16, mcontext);
+   err_op = dummy_op(1'b1, INSN_ERR, pc, 1'b1, i16, mcontext);
 endfunction
 
 // This returns the true successor pc, without masking!
 function logic [31:0] successor_pc(input decoded_insn_t op, input valid);
-   successor_pc = op.pc;
-   if (valid & insn_real(op.itype))
-     successor_pc += op.i16 ? 3'd2 : 3'd4;
+   if (~op.pc_valid) begin
+      successor_pc = 32'bx;
+   end else begin
+      successor_pc = op.pc;
+      if (valid & op.undead)
+	successor_pc += op.i16 ? 3'd2 : 3'd4;
+   end
 endfunction
 
 //

@@ -86,23 +86,30 @@ module pipe_ctl #(
        end
      else if (clken)
        begin
-	  // Note: for INSN_NULL, a dummy op, PC still should reflect the
-	  // expected next instruction; the E stage is allowed throw a
-	  // branch mispredict kill otherwise.
+
+	  // If the undead flag is clear, this is a dead instruction.
+	  // Even if the undead flag is clear, if pc_valid is set, the
+	  // PC still should reflect the expected next instruction;
+	  // the E stage is allowed throw a branch mispredict kill
+	  // otherwise.
 	  //
-	  // For INSN_KILLED, the PC is undefined, and the next valid
-	  // instruction is defined to carry a new canonical PC.
+	  // If pc_valid = 0, the PC is undefined, but the next
+	  // instruction with pc_valid = 1 is *required* to carry a
+	  // new canonical (non-speculative) PC.
 	  if (m_kill) begin
-	     e_valid_i <= 1'b0;
-	     e_op      <= killed_op();
+	     e_valid_i   <= 1'b0;
+	     e_op        <= killed_op();
 	  end else if ((e_stall & e_valid_i) | e_busy) begin
 	     // Leave unchanged
-	  end else if (~d_valid_o | d_stall) begin
-	     e_valid_i <= 1'b0;
-	     e_op      <= null_op(d_op.pc, d_op.mcontext);
 	  end else begin
-	     e_valid_i <= d_valid_o;
+	     e_valid_i <= 1'b1;
 	     e_op      <= d_op;
+	     if (~d_valid_o | d_stall) begin
+		e_valid_i   <= 1'b0;
+		e_op.undead <= 1'b0;
+		e_op.rd_e   <= 1'b0;
+		e_op.rd_m   <= 1'b0;
+	     end
 	  end
 
 	  // A private flag is passed between the E stage to the M
@@ -110,8 +117,10 @@ module pipe_ctl #(
 	  // it being a trap. e_valid_o will be deasserted after the
 	  // kill proper.
 	  if (!e_valid_o) begin
-	     m_valid_i <= 1'b0;
-	     m_op      <= null_op(e_op.pc, e_op.mcontext);
+	     m_valid_i	 <= 1'b0;
+	     m_op	 <= e_op;
+	     m_op.undead <= 1'b0;
+	     m_op.rd_m   <= 1'b0;
 	  end else if (m_busy | (m_stall & m_valid_i)) begin
 	     // Leave unchanged
 	  end else begin

@@ -45,11 +45,13 @@ module decode_comb
    always @(*)
      begin
 	op	      = 'bx;
-	op.i16        = is_16;
+	op.i16	      = is_16;
 	op.mcontext   = d_mcontext;
 
+	op.undead     = 1'b1;	// It is assumed to be a real instruction
 	op.itype      = INSN_ERR;
 	op.pc	      = d_pc & core.PC_MASK;
+	op.pc_valid   = 1'b1;
 	op.rd.r       = i[11:7];
 	op.rd.c       = op.mcontext.m;
 	op.rd_e       = 1'b0;
@@ -304,13 +306,14 @@ module decode_seq
 
       // Killed instruction
       if (d_killed) begin
-	 op_o.itype = INSN_KILLED;
-	 op_o.rd_e  = 1'b0;
-	 op_o.rd_m  = 1'b0;
+	 op_o.undead   = 1'b0;
+	 op_o.pc_valid = 1'b0;
+	 op_o.rd_e     = 1'b0;
+	 op_o.rd_m     = 1'b0;
       end else if (!d_valid_i) begin
-	 op_o.itype = INSN_NULL;
-	 op_o.rd_e  = 1'b0;
-	 op_o.rd_m  = 1'b0;
+	 op_o.undead = 1'b0;
+	 op_o.rd_e   = 1'b0;
+	 op_o.rd_m   = 1'b0;
       end else if (insn_mult(op_o.itype)) begin
 	 // MUL -> MULH (default to assuming signed)
 	 // Multiply handling
