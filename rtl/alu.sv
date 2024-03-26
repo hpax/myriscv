@@ -430,11 +430,11 @@ endmodule
 
 // Comparator, parallelizing the logic by breaking it down into
 // multiple carry chains for the less than, using the
-// partial equality comparisons. The "endrec" parameter is tweakable,
-// but the value 8 (= 4 chains of 8 bits) appears to give best result
+// partial equality comparisons. The "chains" parameter is tweakable,
+// but the value 4 appears to give best result
 // on a 4-LUT FPGA.
 module comparator
-  #(parameter width = 32, endrec = 8)
+  #(parameter width = 32, chains = 6)
    (
   input [width-1:0] a,
   input [width-1:0] b,
@@ -442,27 +442,30 @@ module comparator
   output	    eq
 	      );
 
-   localparam	    hw = width >> 1;
+   localparam	    bpc = (width + chains - 1)/chains;
 
-   generate
-      if (width <= endrec) begin
-	 assign lt = a < b;
-	 assign eq = a == b;
-      end else begin
-	 wire lt_h;
-	 wire eq_h;
-	 wire lt_l;
-	 wire eq_l;
+   wire [chains-1:0][bpc-1:0] ac = a;
+   wire [chains-1:0][bpc-1:0] bc = b;
 
-	 comparator #(.width(hw), .endrec(endrec))
-	 h (.a(a[width-1:hw]), .b(b[width-1:hw]), .lt(lt_h), .eq(eq_h));
-	 comparator #(.width(hw), .endrec(endrec))
-	 l (.a(a[hw-1:0]), .b(b[hw-1:0]), .lt(lt_l), .eq(eq_l));
+   wire [chains-1:0]	      ltc;
+   wire [chains-1:0]	      eqc;
 
-	 assign eq = eq_h & eq_l;
-	 assign lt = eq_h ? lt_l : lt_h;
+   always @(*) begin
+      for (int i = 0; i < chains; i++) begin
+	 ltc[i] = ac[i] < bc[i];
+	 eqc[i] = ac[i] == bc[i];
       end
-      endgenerate
+   end
+
+   always @(*) begin
+      lt	= 1'b0;
+      eq	= 1'b1;
+
+      for (int i = 0; i < chains; i++) begin
+	 lt = eqc[i] ? lt : ltc[i];
+	 eq = eq & eqc[i];
+      end
+   end
 endmodule
 
 //
