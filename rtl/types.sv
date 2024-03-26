@@ -4,12 +4,16 @@
 `define _TYPES_SV 1
 
 typedef enum logic [3:0] {
-	INSN_NOP    = 4'b0010,	// No-op instruction (unless decoded as ALU)
-	INSN_ALU    = 4'b0011,	// ALU instruction
-	INSN_MULL   = 4'b0100,	// Multiply low
-	INSN_MULH   = 4'b0101,	// Multiply high
-	INSN_LD     = 4'b0110,	// Memory load
-	INSN_ST     = 4'b0111,	// Memory store
+	INSN_NOP    = 4'b0000,	// No-op instruction (unless decoded as ALU)
+	INSN_ALU    = 4'b0001,	// ALU instruction
+	// These low bit of these must be maintained.
+	INSN_MULL   = 4'b0010,	// Multiply low
+	INSN_MULH   = 4'b0011,	// Multiply high
+	// The low 2 bits of the following must be maintained.
+	INSN_LD     = 4'b0100,	// Memory load
+	INSN_ST     = 4'b0101,	// Memory store
+	INSN_CBO    = 4'b0110,	// Cache block operation
+	// 4'b0111 is exclusively RESERVED for another memory operation!
 	INSN_CSR    = 4'b1000,	// CSR instruction
 	INSN_JAL    = 4'b1010,	// JAL, JALR
 	INSN_BR     = 4'b1011,  // Conditional branch
@@ -20,15 +24,11 @@ typedef enum logic [3:0] {
 	INSN_X	    = 4'bxxxx
 } insn_type_t;
 
-function logic insn_ldst(input insn_type_t insn);
-   insn_ldst = insn[3:1] == 3'b011;
-endfunction
-function logic insn_real(input insn_type_t insn);
-   // Not INSN_KILLED or INSN_NULL
-   insn_real = |insn[3:1];
+function logic insn_mem(input insn_type_t insn);
+   insn_mem = insn[3:2] == INSN_LD[3:2]; // CBO, LD, ST
 endfunction
 function logic insn_mult(input insn_type_t insn);
-   insn_mult = insn[3:1] == 3'b010;
+   insn_mult = insn[3:1] == INSN_MULL[3:1];
 endfunction
 
 // Register bank and machine mode context

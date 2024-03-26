@@ -1,35 +1,52 @@
 This core implements the RV32I architecture, with the following
 options (some of which can be enabled or disabled with parameters;
-some are hard coded in the design):
+some are hard coded in the design).
+
+Many CSRs are either optional or plain omitted (read as zero); see below.
 
 Standard options:      (Names in parenteses are implied by the name in
 			front of them)
-			I Zicond Zicsr Zictr Zmmul
+			I Zicbom Zicond Zicsr Zictr Zmmul
 			B (Zba Zbb Zbs)
 			C (Zca) Zcb
 
-Private extensions:	WITH_Zbasub: (req. Zba)
+Private extensions:	The Zicbom instructions (cbo.*):
+				The cbo.* instructions allow a memory
+				offset to be specified, using the S
+				instruction format. The standard form
+				of these instructions always have all
+				the bits of the S immediate set to
+				zero, so the standard form is still
+				valid.
+
+			WITH_Zbasub: (req. Zba)
 				shXsub	  - shXadd funct7[5] = 1
+
 			WITH_setext:
 				New SET instructions (no immediate forms):
 				sge	- slt  funct7[1:0] = 10
 				sgeu	- sltu funct7[1:0] = 10
 				seq	- slt  funct7[1:0] = 01
 				sne	- slt  funct7[1:0] = 11
+
 			WITH_cmpand:
 				Condition "AND and equal zero" ("testz")
 				baeqz	- funct3 = 010
 				banez	- funct3 = 011
+
 			WITH_cmpand + WITH_setext:
 				saeqz	- sltu funct7[1:0] = 01
 				sanez	- sltu funct7[1:0] = 11
+
 			WITH_bitcntinv (requires Zbb):
 				Count the opposite polarity of bits:
 				clo	- clz   rs2[4] = 1
 				cto	- ctz   rs2[4] = 1
 				cpopz	- cpop  rs2[4] = 1
+
 			Without STRICT_UNDEFINED:
 				c.ecall	- opcode 0x8002
+
 			With FUSE_CNOP:
 				An RVC instruction immediately
 				followed by c.nop, as is sometimes
@@ -45,4 +62,3 @@ Private extensions:	WITH_Zbasub: (req. Zba)
 			be assigned opcodes (not there yet).
 
 <-- Describe task/trap/interrupt handling -->
-

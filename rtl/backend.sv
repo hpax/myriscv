@@ -69,6 +69,7 @@ module backend #(
  // Data bus from ldst unit
  output [31:0]		   dbus_a,
  output			   dbus_valid,
+ output			   dbus_cbo,
  output			   dbus_wrq,
  output [3:0]		   dbus_wbe,
  output [31:0]		   dbus_wdata,
@@ -570,7 +571,7 @@ module backend #(
    // here is a speed path. However, if invalid address exceptions
    // are added, this needs to be considered here (or in the ldst unit),
    // or a memory transaction would be initiated.
-   wire ldst_valid = e_accept & insn_ldst(e_op.itype);
+   wire ldst_valid = e_accept & insn_mem(e_op.itype);
 
    wire [31:0] ldst_dout;
    wire [3:0]  ldst_dout_wbe;
@@ -582,6 +583,8 @@ module backend #(
      .clk		(clk),
      .clken		(clken),
      .valid		(ldst_valid),
+     .memop_cbo		(e_op.itype[1]),
+     .memop_cbo_op	(e_op.rs2.r),
      .memop_st		(e_op.itype[0]),
      .memop_ldu		(e_op.funct3[2]),
      .size		(e_op.funct3[1:0]),
@@ -593,6 +596,7 @@ module backend #(
      .busy		(ldst_busy),
      .dbus_a		(dbus_a),
      .dbus_valid	(dbus_valid),
+     .dbus_cbo		(dbus_cbo),
      .dbus_wrq		(dbus_wrq),
      .dbus_wbe		(dbus_wbe),
      .dbus_wdata	(dbus_wdata),

@@ -76,7 +76,7 @@ module decode_comb
 	       || (op.funct3 != 3'b011 && op.funct3[2:1] != 2'b11))
 	       op.itype      = INSN_LD;
 
-	     op.rd_m = 1'b1;
+	     op.rd_m	     = 1'b1;
 	     op.rs1_valid    = 1'b1;
 	     op.imm	     = i_imm;
 	  end
@@ -106,12 +106,21 @@ module decode_comb
 	  end
 
 	  MISC_MEM: begin
+	     op.imm = 32'bx;
 	     unique casez (op.funct3)
 	       3'b000: begin	// FENCE/PAUSE
 		  op.itype = INSN_NOP;	// Treat as NOP
 	       end
 	       3'b001: begin	// FENCE.I (Zifencei)
 		  op.itype = INSN_FENCEI;
+	       end
+	       3'b010: begin	// Cache block operations
+		  // Treat this as a store-format instruction (which means
+		  // permitting an address offset as an extension.)
+		  // rs2.r contains the actual cache operation.
+		  op.itype	= INSN_CBO;
+		  op.imm	= s_imm;
+		  op.rs1_valid	= 1'b1;
 	       end default: begin
 		  op.itype = INSN_ERR;
 	       end

@@ -30,6 +30,10 @@ module test #(
    wire [3:0]	mem_wbe;
    wire		mem_ready;
    wire [31:0]	mem_rdata;
+   wire		mem_cbo;
+   wire [ram_size_bits-1:0] mem_addr_i;
+   logic		    mem_wr;
+   logic		    mem_cpu;
 
    logic [NUM_IRQS:1] irq;
    wire [IRQ_BITS-1:0]	intack;
@@ -71,10 +75,14 @@ module test #(
      .mem_addr	( mem_addr ),
      .mem_wdata	( mem_wdata ),
      .mem_valid	( mem_valid ),
+     .mem_cbo	( mem_cbo ),
      .mem_wrq	( mem_wrq ),
      .mem_wbe	( mem_wbe ),
      .mem_ready	( mem_ready ),
      .mem_rdata	( mem_rdata ),
+     .mem_addr_i ( mem_addr_i ),
+     .mem_wr	( mem_wr ),
+     .mem_cpu	( mem_cpu ),
 
      .irq	( irq ),
      .intack	( intack ),
@@ -83,6 +91,9 @@ module test #(
      );
 
    // External memory
+
+   // No DMA support at the moment...
+   assign mem_cpu = 1'b1;
 
    extmem #(.ram_bits( ram_size_bits ), .size_bits ( 16 ))
    extmem (
@@ -95,8 +106,8 @@ module test #(
      .mem_wbe   ( mem_wbe ),
      .mem_ready ( mem_ready ),
      .mem_rdata ( mem_rdata ),
-     .mem_a_o   ( ),
-     .mem_wr_o  ( )
+     .mem_a_o   ( mem_addr_i ),
+     .mem_wr_o  ( mem_wr )
      );
 
    // I/O

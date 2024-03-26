@@ -32,8 +32,7 @@ module extmem
    reg [3:0]		mem_wbe_q;
 
    reg			busy;
-   reg			act_dmem;
-   reg [1:0]		wait_ctr;
+   reg [2:0]		wait_ctr; // Simulate dram delay
 
    wire [ram_bits-1:2]	mword = mem_a_o[ram_bits-1:2];
 
@@ -46,12 +45,12 @@ module extmem
 	wait_ctr  <= 2'b0;
 	mem_a_o   <= 'bx;
 	mem_wr_o  <= 1'b0;
-	act_dmem  <= 1'bx;
 	mem_wbe_q   <= 4'bx;
 	mem_wdata_q <= 32'bx;
 	mem_valid_q <= 1'b0;
      end else begin
 	mem_valid_q <= mem_valid;
+	mem_wr_o <= 1'b0;	// This should be a single cycle strobe
 
 	wait_ctr    <= wait_ctr + busy;
 	if (busy) begin
@@ -61,24 +60,22 @@ module extmem
 	      if (mem_wbe_q[2]) mem[mword][2] <= mem_wdata_q[23:16];
 	      if (mem_wbe_q[3]) mem[mword][3] <= mem_wdata_q[31:24];
 
-	      mem_rdata   <= mem[mword];
-	      busy <= 1'b0;
+	      mem_wr_o	<= |mem_wbe_q;
+	      mem_rdata <= mem[mword];
+	      busy	<= 1'b0;
 	   end
 	end else begin
-	   logic imem_req;
-	   logic dmem_req;
-
-	   mem_a_o   <= 'bx;
+	   mem_a_o     <= 'bx;
 	   mem_wbe_q   <= 4'bx;
 	   mem_wdata_q <= 32'bx;
-	   mem_wr_o  <= 1'b0;
+	   mem_wr_o    <= 1'b0;
 
 	   if (mem_valid & ~mem_ready) begin
-	      busy	<= 1'b1;
-	      mem_a_o	<= mem_a;
-	      mem_wr_o  <= mem_wrq;
-	      mem_wbe_q	<= mem_wrq ? mem_wbe : 4'b0;
-	      mem_wdata_q <= mem_wdata;
+	      busy		<= 1'b1;
+	      mem_a_o		<= mem_a;
+	      mem_a_o[1:0]      <= 2'b00;
+	      mem_wbe_q		<= mem_wrq ? mem_wbe : 4'b0;
+	      mem_wdata_q	<= mem_wdata;
 	   end
 	end
      end
