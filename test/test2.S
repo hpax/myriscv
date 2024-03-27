@@ -126,6 +126,8 @@ unalign_test:
 	jal print_crlf
 
 	/* Test writing to and running from external memory */
+	la a0,extmem1_str
+	jal print_str
 	li a0,0x80824531		// li a0,12; ret
 	la s0,0x40000000
 	sw a0,(s0)
@@ -142,7 +144,39 @@ unalign_test:
 	lw a0,3(zero)	/* Make the M stage busy */
 	fence.i
 
+	/* icache test: put a bunch of "add a0,a0,1" instructions in external
+	 * memory, then run twice and compare the speed.
+	 * Writing to address -16 generates a time stamp on the
+	 * simulation console.
+	 */
+	la a0,icache_str
+	jal print_str
+
+	li a0,0x00150513	// addi a0,a0,1
+	mv a1,s0
+	add a2,a1,256*4
+1:
+	sw a0,(a1)
+	add a1,a1,4
+	bne a1,a2,1b
+
+	li a0,0x00008067	// ret
+	sw a0,(a1)
+
+	fence.i
+
+	li s1,5			// Loop count
+	li a0,0
+	sw a0,-16(zero)
+2:
+	add s1,s1,-1
+	jalr (s0)
+	sw a0,-16(zero)
+	bnez s1,2b
+
 	/* Done */
+	la a0,done_str
+	jal print_str
 	ebreak
 	la a0,ebreak_failed_str
 	jal print_str
@@ -222,6 +256,12 @@ unaligned_str2:
 	.asciz "\nUnaligned write test: "
 mult_str:
 	.asciz "Multiply test, expect 0cb9e18b16c68e32: "
+extmem1_str:
+	.asciz "External memory test: "
+icache_str:
+	.asciz "Icache test, second time should be faster: "
+done_str:
+	.asciz "Tests done, running EBREAK.\n"
 ebreak_failed_str:
 	.asciz "ERROR: fall through after ebreak\n"
 irq_str:
