@@ -96,6 +96,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/fetch.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/backend.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/decode.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/alu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/icache.sv
 set_global_assignment -name QIP_FILE regfile_alt.qip
 set_global_assignment -name QIP_FILE tcm_alt.qip
 set_global_assignment -name QIP_FILE altmult.qip

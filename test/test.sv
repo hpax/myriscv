@@ -30,7 +30,6 @@ module test #(
    wire [3:0]	mem_wbe;
    wire		mem_ready;
    wire [31:0]	mem_rdata;
-   wire		mem_cbo;
    wire [ram_size_bits-1:0] mem_addr_i;
    logic		    mem_wr;
    logic		    mem_cpu;
@@ -75,7 +74,6 @@ module test #(
      .mem_addr	( mem_addr ),
      .mem_wdata	( mem_wdata ),
      .mem_valid	( mem_valid ),
-     .mem_cbo	( mem_cbo ),
      .mem_wrq	( mem_wrq ),
      .mem_wbe	( mem_wbe ),
      .mem_ready	( mem_ready ),

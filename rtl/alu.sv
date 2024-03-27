@@ -438,8 +438,8 @@ module comparator
    (
   input [width-1:0] a,
   input [width-1:0] b,
-  output	    lt,
-  output	    eq
+  output reg	    lt,
+  output reg	    eq
 	      );
 
    localparam	    bpc = (width + chains - 1)/chains;
@@ -447,8 +447,8 @@ module comparator
    wire [chains-1:0][bpc-1:0] ac = a;
    wire [chains-1:0][bpc-1:0] bc = b;
 
-   wire [chains-1:0]	      ltc;
-   wire [chains-1:0]	      eqc;
+   logic [chains-1:0]	      ltc;
+   logic [chains-1:0]	      eqc;
 
    always @(*) begin
       for (int i = 0; i < chains; i++) begin

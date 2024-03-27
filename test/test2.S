@@ -131,7 +131,9 @@ unalign_test:
 	sw a0,(s0)
 	fence.i
 	li a0,0
-	jalr (s0)
+	jalr (s0)			// Should be uncached
+	jalr (s0)			// Should be cached
+	jalr (s0)			// Should be cached w/o overrun?
 	call print_hex
 	call print_crlf
 

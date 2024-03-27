@@ -15,7 +15,7 @@ module icache
   #(
   parameter ram_bits,
   parameter line_bits = 2,	// Only one supported right now
-  parameter row_bits  = 10,	// = 2^12 bytes = 4K
+  parameter row_bits  = 10	// = 2^12 bytes = 4K
 	    )
    (
     input		  rst_n,
@@ -24,91 +24,108 @@ module icache
 
     input [31:0]	  ibus_a,
     input		  ibus_valid,
-    output [31:0]	  ibus_rdata,
+    output reg [31:0]	  ibus_rdata,
     output		  ibus_ready,
 
     // Important: imem_a_i must equal imem_a when imem_ready is high!
     // This is done by simply having imem_a_i trace the address bus on
     // the actual RAM interface and strobe imem_rdata or imem_inval
     // accordingly.
-    input [imem_bits-1:0] imem_a_i,
+    input [ram_bits-1:0]  imem_a_i,
     input		  imem_inval,
 
-    output [imem_bits-1:0] imem_a,
-    output		  imem_valid,
+    output reg [ram_bits-1:0] imem_a,
+    output reg		  imem_valid,
     input		  imem_ready,
     input [31:0]	  imem_rdata);
 
-   localparam		  tag_bits = imem_bits - row_bits - line_bits;
+   localparam		  tag_bits = ram_bits - row_bits - line_bits;
    localparam		  rows = 1 << row_bits;
+   localparam		  linesize = 8 << line_bits;
 
-   reg [tag_bits:0]	  tag_mem [0:rows-1];
-   reg [line_bits-1:0]	  data_mem[0:rows-1];
+   reg   [tag_bits-1:0]	  tag_mem  [0:rows-1];
+   reg   [linesize-1:0]	  data_mem [0:rows-1];
    reg			  valid_mem[0:rows-1];
 
-   wire [row_bits-1:0]	  ibus_row = ibus_a[row_bits+line_bits-1:line_bits];
-   wire [tag_bits:0]	  ibus_tag; // Tag contains the valid bit, too
-   wire [tag_bits:0]	  imem_tag;
+   wire  [row_bits-1:0]	  ibus_row = ibus_a[row_bits+line_bits-1:line_bits];
+   wire  [tag_bits-1:0]	  ibus_tag = ibus_a[ram_bits-1:ram_bits-tag_bits];
+   logic [tag_bits-1:0]	  ibus_tag_cmp;
 
-   wire [row_bits-1:0]	  tag_wrow = imem_a[row_bits+line_bits-1:line_bits];
-   wire			  tag_we   = imem_valid & imem_ready;
-   wire [tag_bits:0]	  tag_wtag = imem_a[imem_bits-1:imem_bits-tag_bits];
+   wire  [row_bits-1:0]	  imem_row = imem_a_i[row_bits+line_bits-1:line_bits];
+   wire  [tag_bits-1:0]	  imem_tag = imem_a_i[ram_bits-1:ram_bits-tag_bits];
+   logic [tag_bits-1:0]	  imem_tag_cmp;
 
-   always @(posedge clk) begin
-      ibus_tag <= tag_mem[ibus_row];
-      imem_tag <= tag_mem[tag_wrow];
-      if (tag_we)
-	tag_mem[tag_wrow] <= tag_wtag;
+   wire			  have_data = imem_valid & imem_ready;
+
+   // If this is not inherently true then the icache will need to be
+   // explicitly flushed through write operations before leaving
+   // TCM memory, or anything can happen...
+   initial begin
+      for (int i = 0; i < rows; i++)
+	valid_mem[i] = 1'b0;
    end
 
-   wire data_we = imem_valid & imem_ready;
-   wire [31:0] data_wdata = imem_rdata;
+   always @(posedge clk) begin
+      ibus_tag_cmp <= tag_mem[ibus_row];
+      imem_tag_cmp <= tag_mem[imem_row];
+      if (have_data)
+	tag_mem[imem_row] <= imem_tag;
+   end
 
    always @(posedge clk) begin
       ibus_rdata <= data_mem[ibus_row];
-      if (data_we)
-	data_mem[tag_waddr] <= imem_rdata;
+      if (have_data)
+	data_mem[imem_row] <= imem_rdata;
    end
 
-   reg [row_bits-1:0] cvalid_wrow;
+   reg [tag_bits-1:0] cvalid_tag;
+   reg [row_bits-1:0] cvalid_row;
+   reg		      imem_inval_q;
+   reg		      have_data_q;
    reg		      cvalid_we;
    reg		      cvalid_set;
-   reg [tag_bits-1:0] imem_tag_match;
 
    logic	      cvalid_ibus;
 
    always @(posedge clk) begin
-      imem_tag_match <= imem_a[imem_bits-1:imem_bits-tag_bits];
-      cvalid_wrow     <= tag_wrow;
-      cvalid_we       <= tag_we | (imem_imem & (imem_tag == imem_tag_match));
-      cvalid_set      <= tag_we;
+      cvalid_tag   <= imem_tag;
+      cvalid_row   <= imem_row;
+      imem_inval_q <= imem_inval;
+      have_data_q  <= have_data;
+   end
+
+   always @(*) begin
+      cvalid_we  = have_data_q | (imem_inval_q & (cvalid_tag == imem_tag_cmp));
+      cvalid_set = have_data_q;
    end
 
    always @(posedge clk) begin
       cvalid_ibus <= valid_mem[ibus_row];
       if (cvalid_we)
-	valid_mem[cvalid_wrow] <= cvalid_set;
+	valid_mem[cvalid_row] <= cvalid_set;
    end
 
+   reg [tag_bits-1:0] ibus_tag_q;
    reg ibus_valid_q;
 
-   assign ibus_match = cvalid_ibus &
-		       (ibus_tag == ibus_a[imem_bits-1:imem_bits-tag_bits]);
+   wire   ibus_match = cvalid_ibus & (ibus_tag_q == ibus_tag_cmp);
    assign ibus_ready = ibus_valid_q & ibus_match;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
 	ibus_valid_q <= 1'b0;
+	ibus_tag_q   <= 'bx;
 	imem_valid   <= 1'b0;
 	imem_a	     <= 'bx;
      end else if (clken) begin
 	ibus_valid_q <= ibus_valid;
+	ibus_tag_q   <= ibus_tag;
 
 	if (imem_valid) begin
 	   imem_valid <= ~imem_ready;
 	end else if (ibus_valid_q & ~ibus_match) begin
 	   imem_valid <= 1'b1;
-	   imem_a     <= ibus_a[imem_bits-1:0];
+	   imem_a     <= ibus_a[ram_bits-1:0];
 	end
      end
 endmodule

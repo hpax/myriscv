@@ -38,12 +38,23 @@ module benchmark (
 	    input	  io_ready,
 	    input [31:0]  io_rdata,
 	    input [31:1]  irq_in,
-	    output [4:0]  intack
+	    output [4:0]  intack,
+
+	    output [25:0] mem_addr,
+	    output [31:0] mem_wdata,
+	    output	  mem_valid,
+	    output	  mem_wrq,
+	    output [3:0]  mem_wbe,
+	    input	  mem_ready,
+	    input [31:0]  mem_rdata,
+	    input	  mem_cpu,
+	    input	  mem_wr,
+	    input [25:0]  mem_addr_i
 	    );
 
    wire		   prst_n;
    wire		   pclk;
-   
+
    // Run the clock through a PLL to clean it up
    pll pll (.rst_n_i(rst_n), .clk_i(clk), .rst_n_o(prst_n), .clk_o(pclk));
 
@@ -73,9 +84,20 @@ module benchmark (
 	     .io_wbe		(io_wbe),
 	     .io_ready		(io_ready),
 	     .io_rdata		(io_rdata),
+     .mem_addr (mem_addr),
+     .mem_wdata (mem_wdata),
+     .mem_valid (mem_valid),
+     .mem_wrq (mem_wrq),
+     .mem_wbe (mem_wbe),
+     .mem_ready (mem_ready),
+     .mem_rdata (mem_rdata),
+     .mem_wr (mem_wr),
+     .mem_cpu (mem_cpu),
+     .mem_addr_i (mem_addr_i),
+
 	     .irq		(irq),
-	     .irq_enable	(~32'b1),
-	     .irq_edge		(32'b0),
+	     .irq_enable	(31'b1),
+	     .irq_edge		(31'b0),
 	     .intack		(intack),
 	     .buserr		( )
 	     );
