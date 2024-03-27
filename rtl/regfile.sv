@@ -37,19 +37,19 @@ module regfile
    localparam int       nregs = contexts << 5;
    reg [3:0][7:0]	r[0:nregs-1];
 
-   // Noete: the core will never try to read or write to GPR register 0.
+   // Noete: the core will never try to write to GPR register 0.
    // (otherwise the bypass network would try to forward dummy x0
    // writes.)
    initial
      for (int i = 0; i < nregs; i++)
-       r[i] <= 32'b0;
+       r[i] <= zero_init ? 32'b0 : 32'bx;
 
-   regnum_t	rs1_q;
-   regnum_t	rs2_q;
+   reg rs1_zero;
+   reg rs2_zero;
    always @(posedge clk) begin
       if (rs_valid) begin
-	 rs1_q  <= rs1;
-	 rs2_q  <= rs2;
+	 rs1_zero  <= ~|rs1.r;
+	 rs2_zero  <= ~|rs2.r;
       end
    end
 
@@ -57,8 +57,8 @@ module regfile
    reg [31:0] rs2_dq;
 
    // Combinatorial clearing on input if zero_init is not available
-   wire	rs1_null = !zero_init && !rs1_q.r;
-   wire	rs2_null = !zero_init && !rs2_q.r;
+   wire	      rs1_null = !zero_init & rs1_zero;
+   wire	      rs2_null = !zero_init & rs2_zero;
 
    assign rs1_data = rs1_null ? 'b0 : rs1_dq;
    assign rs2_data = rs2_null ? 'b0 : rs2_dq;
@@ -70,8 +70,10 @@ module regfile
    // Putting a clken on the read seems to generate a dual-clock
    // memory. Does this need to be fixed?
    always @(posedge clk) begin
-      rs1_dq <= r[rs1_q];
-      rs2_dq <= r[rs2_q];
+      if (rs_valid) begin
+	 rs1_dq <= r[rs1];
+	 rs2_dq <= r[rs2];
+      end
       if (clken & rd_wren) begin
 	 if (rd.r == 5'd0 && |rd_wbe)
 	   $display("ERROR: writing to register 0 at t=%0t", $time);

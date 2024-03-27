@@ -17,7 +17,8 @@ endfunction
 module backend #(
   parameter int	NUM_IRQS,
   parameter int	IRQ_BITS,
-  parameter bit	ALU_EARLY_DECODE
+  parameter bit	ALU_EARLY_DECODE,
+  parameter bit EARLY_BYPASS_MUX
 		)
 (
  input			   rst_n,
@@ -44,12 +45,12 @@ module backend #(
  output reg [31:0]	   m_restartpc, // Address for the front end after kill
  output			   mcontext_t m_restart_mcontext,
  output reg		   e_busy,
- input			   e_rs1_m,
- input			   e_rs1_w,
- input			   e_rs1_x,
- input			   e_rs2_m,
- input			   e_rs2_w,
- input			   e_rs2_x,
+ input			   d_rs1_e,
+ input			   d_rs1_m,
+ input			   d_rs1_w,
+ input			   d_rs2_e,
+ input			   d_rs2_m,
+ input			   d_rs2_w,
 
  input			   m_valid_i,
  input			   m_stall,
@@ -83,8 +84,8 @@ module backend #(
    wire		   m_clken = clken & (~m_stall | m_busy | m_kill);
    wire		   w_clken = clken & m_valid_o;
 
-   wire [31:0]	   e_rs1_data;
-   wire [31:0]	   e_rs2_data;
+   wire [31:0]	   d_rs1_data;
+   wire [31:0]	   d_rs2_data;
    reg [31:0]	   m_dout;
    reg [3:0]	   m_dout_be;
 
@@ -121,9 +122,9 @@ module backend #(
      .clken    ( clken ),	// Not any specific stage!
      .rs_valid ( f_valid_o ),
      .rs1      ( f_rs1 ),
-     .rs1_data ( e_rs1_data ),
+     .rs1_data ( d_rs1_data ),
      .rs2      ( f_rs2 ),
-     .rs2_data ( e_rs2_data ),
+     .rs2_data ( d_rs2_data ),
      .rd       ( m_op.rd ),
      .rd_data  ( m_dout ),
      .rd_wren  ( m_valid_o & m_op.rd_m ),
@@ -139,43 +140,120 @@ module backend #(
 	    if (m_dout_be[2]) w_din[23:16] <= m_dout[23:16];
 	    if (m_dout_be[3]) w_din[31:24] <= m_dout[31:24];
 	 end
-
-   // X is a pseudo-stage for data forwarding purposes; this allows
-   // the register file to have two clocks and run in parallel
-   // with the D stage. It is a pseudo-stage, because doesn't have
-   // an op structure nor can it be stalled or cancelled.
-   wire x_clken = clken;	// The X stage cannot stall
-   reg [31:0]	      x_din;
-   always @(posedge clk)
-     if (x_clken)
-       x_din   <= w_din;
+   wire [31:0] w_dout = w_din;
 
    // GPR bypass network/operand selection
-   logic [31:0]	e_src1;
-   always @(*)
-     if (!e_op.rs1_valid)
-       e_src1 = e_op.rs1.r;	// rs1 is uimm5 or void
-     else if (e_rs1_m)
-       e_src1 = m_din;		// Data now in M stage
-     else if (e_rs1_w)
-       e_src1 = w_din;		// Data now in W stage
-     else if (e_rs1_x)
-       e_src1 = x_din;		// Data now in X stage
-     else
-       e_src1 = e_rs1_data;	// Data already in register file
+   wire		      d_src_hold = (e_valid_i & e_stall) | e_busy;
 
-   logic [31:0]	e_src2;
-   always @(*)
-     if (!e_op.rs2_valid)
-       e_src2 = e_op.imm;
-     else if (e_rs2_m)
-       e_src2 = m_din;		// Data now in M stage
-     else if (e_rs2_w)
-       e_src2 = w_din;		// Data now in W stage
-     else if (e_rs2_x)
-       e_src2 = x_din;		// Data now in X stage
-     else
-       e_src2 = e_rs2_data;	// Data already in register file
+   logic [31:0] e_src1;
+   logic [31:0] e_src2;
+
+   generate
+      if (EARLY_BYPASS_MUX) begin
+	always @(negedge rst_n or posedge clk)
+	  if (~rst_n) begin
+	     e_src1 <= 32'bx;
+	     e_src2 <= 32'bx;
+	  end else begin
+	     if (d_src_hold)
+	       e_src1 <= e_src1;	// Do not update
+	     if (!d_op.rs1_valid)
+	       e_src1 <= d_op.rs1.r;	// rs1 is uimm5 or void
+	     else if (d_rs1_e)
+	       e_src1 <= e_dout;	// Data comes from the E stage
+	     else if (d_rs1_m)
+	       e_src1 <= m_dout;	// Data comes from the M stage
+	     else if (d_rs1_w)
+	       e_src1 <= w_dout;	// Data comes from the W stage
+	     else
+	       e_src1 <= d_rs1_data;	// Data comes from the register file
+
+	     if (d_src_hold)
+	       e_src2 <= e_src2;	// Do not update
+	     if (!d_op.rs2_valid)
+	       e_src2 <= d_op.imm;	// rs2 is uimm5 or void
+	     else if (d_rs2_e)
+	       e_src2 <= e_dout;	// Data comes from the E stage
+	     else if (d_rs2_m)
+	       e_src2 <= m_dout;	// Data comes from the M stage
+	     else if (d_rs2_w)
+	       e_src2 <= w_dout;	// Data comes from the W stage
+	     else
+	       e_src2 <= d_rs2_data;	// Data comes from the register file
+	  end
+      end else begin
+	 // Late MUX
+	 reg e_src_hold;
+	 reg e_rs1_m;
+	 reg e_rs1_w;
+	 reg e_rs1_x;
+	 reg e_rs2_m;
+	 reg e_rs2_w;
+	 reg e_rs2_x;
+	 reg [31:0] e_src1_q;
+	 reg [31:0] e_src2_q;
+	 reg [31:0] x_din;	// X = pseudo-stage after the W stage
+
+	 // These two should hopefully get packed into the regfile blocks...
+	 reg [31:0] e_rs1_data;
+	 reg [31:0] e_rs2_data;
+
+	always @(negedge rst_n or posedge clk)
+	  if (~rst_n) begin
+	     x_din	<= 32'bx;
+	     e_src1_q	<= 32'bx;
+	     e_src2_q	<= 32'bx;
+	     e_src_hold <= 1'bx;
+	     e_rs1_m	<= 1'bx;
+	     e_rs1_w	<= 1'bx;
+	     e_rs1_x	<= 1'bx;
+	     e_rs2_m	<= 1'bx;
+	     e_rs2_w	<= 1'bx;
+	     e_rs2_x	<= 1'bx;
+	  end else if (clken) begin
+	     e_rs1_data <= d_rs1_data;
+	     e_rs2_data <= d_rs2_data;
+	     x_din	<= w_dout;
+	     e_src1_q	<= e_src1;
+	     e_src2_q	<= e_src2;
+	     e_src_hold <= d_src_hold;
+	     e_rs1_m	<= d_rs1_e;
+	     e_rs1_w	<= d_rs1_m;
+	     e_rs1_x	<= d_rs1_w;
+	     e_rs2_m	<= d_rs2_e;
+	     e_rs2_w	<= d_rs2_m;
+	     e_rs2_x	<= d_rs2_w;
+	  end
+
+	 always @(*) begin
+	    if (e_src_hold)
+	       e_src1 = e_src1_q;
+	     if (!e_op.rs1_valid)
+	       e_src1 = e_op.rs1.r;	// rs1 is uimm5 or void
+	     else if (e_rs1_m)
+	       e_src1 = m_din;
+	     else if (e_rs1_w)
+	       e_src1 = w_din;
+	     else if (e_rs1_x)
+	       e_src1 = x_din;
+	     else
+	       e_src1 = e_rs1_data;	// Data comes from the register file
+
+	    if (e_src_hold)
+	       e_src2 = e_src2_q;
+	     if (!e_op.rs2_valid)
+	       e_src2 = e_op.imm;
+	     else if (e_rs2_m)
+	       e_src2 = m_din;
+	     else if (e_rs2_w)
+	       e_src2 = w_din;
+	     else if (e_rs2_x)
+	       e_src2 = x_din;
+	     else
+	       e_src2 = e_rs2_data;	// Data comes from the register file
+	 end
+      end
+   endgenerate
 
    //
    // AGU adder; separate adder for performance reasons.

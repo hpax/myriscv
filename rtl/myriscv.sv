@@ -56,6 +56,7 @@ module core (rst_n, clk, clken,
    parameter	bit	     PREDICT_JALR_ZERO	= 1'b0;
    parameter    bit	     EARLY_RVC		= 1'b1;
    parameter	bit	     BITCNT_SEPARATE	= 1'b1;
+   parameter	bit	     EARLY_BYPASS_MUX	= 1'b0;
 
    // Allow cached multiply forwarding for latency
    parameter	bit	     FORWARD_MUL	= 1'b1;
@@ -517,12 +518,12 @@ module core (rst_n, clk, clken,
    wire	       e_stall;
    wire	       e_valid_o;
    wire	       e_busy;
-   wire	       e_rs1_m;
-   wire	       e_rs1_w;
-   wire	       e_rs1_x;
-   wire	       e_rs2_m;
-   wire	       e_rs2_w;
-   wire	       e_rs2_x;
+   wire	       d_rs1_e;
+   wire	       d_rs1_m;
+   wire	       d_rs1_w;
+   wire	       d_rs2_e;
+   wire	       d_rs2_m;
+   wire	       d_rs2_w;
 
    decoded_insn_t m_op;
    wire	       m_valid_i;
@@ -540,7 +541,8 @@ module core (rst_n, clk, clken,
    backend
      #(.NUM_IRQS	 ( NUM_IRQS ),
        .IRQ_BITS	 ( IRQ_BITS ),
-       .ALU_EARLY_DECODE ( ALU_EARLY_DECODE )
+       .ALU_EARLY_DECODE ( ALU_EARLY_DECODE ),
+       .EARLY_BYPASS_MUX ( EARLY_BYPASS_MUX )
        ) backend (
      .rst_n		(rst_n),
      .clk		(clk),
@@ -561,12 +563,12 @@ module core (rst_n, clk, clken,
      .e_valid_o		(e_valid_o),
      .e_op		(e_op),
      .e_busy		(e_busy),
-     .e_rs1_m		(e_rs1_m),
-     .e_rs1_w		(e_rs1_w),
-     .e_rs1_x		(e_rs1_x),
-     .e_rs2_m		(e_rs2_m),
-     .e_rs2_w		(e_rs2_w),
-     .e_rs2_x		(e_rs2_x),
+     .d_rs1_e		(d_rs1_e),
+     .d_rs1_m		(d_rs1_m),
+     .d_rs1_w		(d_rs1_w),
+     .d_rs2_e		(d_rs2_e),
+     .d_rs2_m		(d_rs2_m),
+     .d_rs2_w		(d_rs2_w),
 
      .m_valid_i		(m_valid_i),
      .m_stall		(m_stall),
@@ -631,12 +633,12 @@ module core (rst_n, clk, clken,
      .e_stall	(e_stall),
      .m_stall   (m_stall),
 
-     .e_rs1_m	(e_rs1_m),
-     .e_rs1_w	(e_rs1_w),
-     .e_rs1_x	(e_rs1_x),
-     .e_rs2_m	(e_rs2_m),
-     .e_rs2_w	(e_rs2_w),
-     .e_rs2_x	(e_rs2_x)
+     .d_rs1_e	(d_rs1_e),
+     .d_rs1_m	(d_rs1_m),
+     .d_rs1_w	(d_rs1_w),
+     .d_rs2_e	(d_rs2_e),
+     .d_rs2_m	(d_rs2_m),
+     .d_rs2_w	(d_rs2_w)
      );
    // Time counter. If CTR_TIME_WIDTH is 0, ctr_time is an input
    // which can be connected to an external counter or set to 0;
