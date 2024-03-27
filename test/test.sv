@@ -147,6 +147,10 @@ module test #(
 	   if (io_wrq && io_wbe[3] && busaddr == 32'hffff_fffc) begin
 	      logic [7:0] chr;
 	      chr = io_wdata[31:24];
+	      if (!need_nl) begin
+		 // Print a timestamp prefix at the beginning of the line
+		 $write("(%d) ", $time/CLOCK);
+	      end
 	      $write("%c", chr);
 	      need_nl = chr != 8'd10;
 	   end else begin

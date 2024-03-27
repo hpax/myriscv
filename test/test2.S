@@ -10,6 +10,15 @@
 	TTY  = -1
 	STOP = -8
 
+	// Warning: clobbers a0, t0
+	.macro print str
+	.pushsection ".rodata.hot","a"
+999:	.asciz "\str"
+	.popsection
+	la a0,999b
+	jal print_str
+	.endm
+
 	.section ".null","a"
 	.balign 4
 	.globl ___NULL
@@ -82,6 +91,8 @@ test2:
 	bnez a1,1b
 
 	/* Unaligned memory test */
+	.option norvc
+	.balign 4
 unalign_test:
 	la a0,unaligned_str
 	jal print_str
@@ -115,6 +126,7 @@ unalign_test:
 	jal print_hex
 
 	jal print_crlf
+	.option rvc
 
 	/* Multiply me harder? */
 	/* Test with forwarding */
@@ -184,14 +196,12 @@ unalign_test:
 	fence.i
 
 	/* icache test: put a bunch of "add a0,a0,1" instructions in external
-	 * memory, then run twice and compare the speed.
+	 * memory, then run several times and compare the time.
 	 * Writing to address -16 generates a time stamp on the
 	 * simulation console.
 	 */
-	la a0,icache_str
-	jal print_str
-
 	li a0,0x00150513	// addi a0,a0,1
+	li s3,0x00008067	// ret
 	mv a1,s0
 	add a2,a1,256*4
 1:
@@ -199,10 +209,29 @@ unalign_test:
 	add a1,a1,4
 	bne a1,a2,1b
 
-	li a0,0x00008067	// ret
+	sw s3,(a1)		// ret
+
+	/*
+	 * This set of instructions are add a0,a0,2; the addresses are
+	 * intended to conflict to test eviction on tag mismatch.
+	 */
+	li a0,0x00250513	// addi a0,a0,2
+	li a1,4096		// Conflicting offset - modify as needed
+
+	add s2,a1,s0
+	mv a1,s2
+	add a2,s2,256*4
+1:
 	sw a0,(a1)
+	add a1,a1,4
+	bne a1,a2,1b
+
+	sw s3,(a1)		// ret
 
 	fence.i
+
+	/* Initial speed test */
+	print "Icache speed test (increment by 0x100):\n"
 
 	li s1,5			// Loop count
 	li a0,0
@@ -213,7 +242,45 @@ unalign_test:
 	sw a0,-16(zero)
 	bnez s1,2b
 
-	/* Done */
+	/* Cache conflict test */
+	print "Icache conflict test (increment by 0x200):\n"
+
+	li s1,5			// Loop count
+	li a0,0
+	sw a0,-16(zero)
+2:
+	add s1,s1,-1
+	jalr (s2)
+	sw a0,-16(zero)
+	bnez s1,2b
+
+	/* Cache overwrite test */
+	/* Overwriting existing code, should cause icache invalidation */
+
+	print "Icache overwrite test (increment by 0x400):\n"
+
+	li a0,0x00450513	// addi a0,a0,4
+	mv a1,s2
+	add a2,a1,256*4
+1:
+	sw a0,(a1)
+	add a1,a1,4
+	bne a1,a2,1b
+
+	// ret should already be there, so this tests that, too...
+
+	fence.i
+
+	li s1,5			// Loop count
+	li a0,0
+	sw a0,-16(zero)
+2:
+	add s1,s1,-1
+	jalr (s2)
+	sw a0,-16(zero)
+	bnez s1,2b
+
+	/* Done with tests */
 	la a0,done_str
 	jal print_str
 	ebreak
@@ -249,18 +316,25 @@ print_crlf:
 	ret
 
 print_str:
-	lbu a1,(a0)
+	lbu t0,(a0)
 	add a0,a0,1
-	beqz a1,2f
+	beqz t0,2f
 1:
-	sb a1,TTY(zero)
-	lbu a1,(a0)
+	sb t0,TTY(zero)
+	lbu t0,(a0)
 	add a0,a0,1
-	bnez a1,1b
+	bnez t0,1b
 2:
 	ret
 
 print_hex:
+	add sp,sp,-32
+	sw a1,(sp)
+	sw a2,4(sp)
+	sw a3,8(sp)
+	sw a4,12(sp)
+	sw a5,16(sp)
+
 	li a1,8
 	li a4,0x61
 	li a5,0x30-(0x61-10)
@@ -280,6 +354,14 @@ print_hex:
 	sb a2,TTY(zero)
 	add a1,a1,-1
 	bnez a1,1b
+
+	lw a1,(sp)
+	lw a2,4(sp)
+	lw a3,8(sp)
+	lw a4,12(sp)
+	lw a5,16(sp)
+	add sp,sp,16
+
 	ret
 
 	.section ".rodata.hot","a"
@@ -301,8 +383,6 @@ multsu_str:
 	.asciz "SU Multiply test, expect a72e8eb776c68e32: "
 extmem1_str:
 	.asciz "External memory test: "
-icache_str:
-	.asciz "Icache test, second time should be faster: "
 done_str:
 	.asciz "Tests done, running EBREAK.\n"
 ebreak_failed_str:
