@@ -88,6 +88,20 @@ unalign_test:
 	la s0,udata_buf
 	lw a0,2(s0)
 	jal print_hex
+
+	/* Write test variant 1 */
+	la a0,unaligned_str2
+	jal print_str
+	li a1,0xddccbbaa
+	sw a1,1(s0)
+	lw a0,4(s0)
+	jal print_hex
+	li a0,':
+	sb a0,TTY(zero)
+	lw a0,(s0)
+	jal print_hex
+
+	/* Write test variant 2 */
 	la a0,unaligned_str2
 	jal print_str
 	li a1,0xddccbbaa
@@ -99,6 +113,7 @@ unalign_test:
 	sb a0,TTY(zero)
 	mv a0,s1
 	jal print_hex
+
 	jal print_crlf
 
 	/* Multiply me harder? */
@@ -106,7 +121,7 @@ unalign_test:
 	la a0,mult_str
 	jal print_str
 	li a4,0x8dbbc2c2
-	li a5,0x16fc68b9
+	li a5,0xc6fc68b9
 	mulhu a0,a4,a5
 	mul s0,a4,a5
 	jal print_hex
@@ -118,10 +133,34 @@ unalign_test:
 	la a0,mult_str
 	jal print_str
 	li s0,0x8dbbc2c2
-	li s1,0x16fc68b9
+	li s1,0xc6fc68b9
 	mulhu a0,s0,s1
 	jal print_hex
 	mul a0,s0,s1
+	jal print_hex
+	jal print_crlf
+
+	/* Signed multiply test */
+	la a0,mults_str
+	jal print_str
+	li a4,0x8dbbc2c2
+	li a5,0xc6fc68b9
+	mulh a0,a4,a5
+	mul s0,a4,a5
+	jal print_hex
+	mv a0,s0
+	jal print_hex
+	jal print_crlf
+
+	/* Mixed multiply test */
+	la a0,multsu_str
+	jal print_str
+	li a4,0x8dbbc2c2
+	li a5,0xc6fc68b9
+	mulhsu a0,a4,a5
+	mul s0,a4,a5
+	jal print_hex
+	mv a0,s0
 	jal print_hex
 	jal print_crlf
 
@@ -255,7 +294,11 @@ unaligned_str:
 unaligned_str2:
 	.asciz "\nUnaligned write test: "
 mult_str:
-	.asciz "Multiply test, expect 0cb9e18b16c68e32: "
+	.asciz "UU Multiply test, expect 6e2af77076c68e32: "
+mults_str:
+	.asciz "SS Multiply test, expect 1972cbf576c68e32: "
+multsu_str:
+	.asciz "SU Multiply test, expect a72e8eb776c68e32: "
 extmem1_str:
 	.asciz "External memory test: "
 icache_str:
