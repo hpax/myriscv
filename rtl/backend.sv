@@ -183,74 +183,68 @@ module backend #(
 	  end
       end else begin
 	 // Late MUX
-	 reg e_src_hold;
 	 reg e_rs1_m;
 	 reg e_rs1_w;
-	 reg e_rs1_x;
 	 reg e_rs2_m;
 	 reg e_rs2_w;
-	 reg e_rs2_x;
 	 reg [31:0] e_src1_q;
 	 reg [31:0] e_src2_q;
-	 reg [31:0] x_din;	// X = pseudo-stage after the W stage
-
-	 // These two should hopefully get packed into the regfile blocks...
-	 reg [31:0] e_rs1_data;
-	 reg [31:0] e_rs2_data;
 
 	always @(negedge rst_n or posedge clk)
 	  if (~rst_n) begin
-	     x_din	<= 32'bx;
 	     e_src1_q	<= 32'bx;
 	     e_src2_q	<= 32'bx;
-	     e_src_hold <= 1'bx;
 	     e_rs1_m	<= 1'bx;
 	     e_rs1_w	<= 1'bx;
-	     e_rs1_x	<= 1'bx;
 	     e_rs2_m	<= 1'bx;
 	     e_rs2_w	<= 1'bx;
-	     e_rs2_x	<= 1'bx;
 	  end else if (clken) begin
-	     e_rs1_data <= d_rs1_data;
-	     e_rs2_data <= d_rs2_data;
-	     x_din	<= w_dout;
-	     e_src1_q	<= e_src1;
-	     e_src2_q	<= e_src2;
-	     e_src_hold <= d_src_hold;
-	     e_rs1_m	<= d_rs1_e;
-	     e_rs1_w	<= d_rs1_m;
-	     e_rs1_x	<= d_rs1_w;
-	     e_rs2_m	<= d_rs2_e;
-	     e_rs2_w	<= d_rs2_m;
-	     e_rs2_x	<= d_rs2_w;
+	     if (d_src_hold)
+	       e_src1_q <= e_src1;
+	     else if (~d_op.rs1_valid)
+	       e_src1_q <= d_op.rs1.r;	// rs1 is uimm5 or void
+	     else if (d_rs1_w)
+	       e_src1_q <= w_dout;
+	     else
+	       e_src1_q <= d_rs1_data;
+
+	     if (d_src_hold)
+	       e_src2_q <= e_src2;
+	     else if (~d_op.rs2_valid)
+	       e_src2_q <= d_op.imm;
+	     else if (d_rs2_w)
+	       e_src2_q <= w_dout;
+	     else
+	       e_src2_q <= d_rs2_data;
+
+	     // XXX: this is wrong if the M stage can advance
+	     // while the E stage is busy; in that case we need
+	     // to explicitly re-do the comparison for d_rs*_m
+	     // using e_op when d_src_hold is active. However,
+	     // as of right now, the E stage is never busy (e_busy = 0)
+	     // so this (hack) should be correct.
+	     if (~d_src_hold) begin
+		e_rs1_m <= d_rs1_e;
+		e_rs1_w <= d_rs1_m;
+		e_rs2_m <= d_rs2_e;
+		e_rs2_w <= d_rs2_m;
+	     end
 	  end
 
 	 always @(*) begin
-	    if (e_src_hold)
-	       e_src1 = e_src1_q;
-	     if (!e_op.rs1_valid)
-	       e_src1 = e_op.rs1.r;	// rs1 is uimm5 or void
-	     else if (e_rs1_m)
-	       e_src1 = m_din;
-	     else if (e_rs1_w)
-	       e_src1 = w_din;
-	     else if (e_rs1_x)
-	       e_src1 = x_din;
-	     else
-	       e_src1 = e_rs1_data;	// Data comes from the register file
+	    if (e_rs1_m)
+	      e_src1 = m_din;
+	    else if (e_rs1_w)
+	      e_src1 = w_din;
+	    else
+	      e_src1 = e_src1_q;
 
-	    if (e_src_hold)
-	       e_src2 = e_src2_q;
-	     if (!e_op.rs2_valid)
-	       e_src2 = e_op.imm;
-	     else if (e_rs2_m)
+	    if (e_rs2_m)
 	       e_src2 = m_din;
-	     else if (e_rs2_w)
-	       e_src2 = w_din;
-	     else if (e_rs2_x)
-	       e_src2 = x_din;
-	     else
-	       e_src2 = e_rs2_data;	// Data comes from the register file
+	    else if (e_rs2_w)
+	      e_src2 = w_din;
+	    else
+	      e_src2 = e_src2_q;
 	 end
       end
    endgenerate
