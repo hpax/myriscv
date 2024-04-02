@@ -599,10 +599,10 @@ module alu (
      if (!core.BITCNT_SEPARATE) begin
 	bitcnt_out = bitcnt_out_unified;
      end else begin
-	unique case (ctl.bcop)
-	  3'b000:  bitcnt_out = clz_out;
-	  3'b010:  bitcnt_out = ctz_out;
-	  3'b011:  bitcnt_out = cpop_out;
+	unique case (ctl.bcop[1:0])
+	  2'b00:  bitcnt_out = clz_out;
+	  2'b01:  bitcnt_out = ctz_out;
+	  2'b10:  bitcnt_out = cpop_out;
 	  default: bitcnt_out = 32'bx;
 	endcase
      end
