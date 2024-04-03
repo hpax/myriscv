@@ -4,14 +4,12 @@
 // Dual-ported tightly coupled memory
 //
 
+`include "myriscv.vh"
+
 `define RAW
 
 `ifdef RAW
-module tcm
-  #(
-    parameter	     sizebits = 14, // log2(bytes)
-    parameter string init_file = ""
-    )
+module tcm #(`CONFIG)
    (
     input	      rst_n,
     input	      clk,
@@ -32,17 +30,17 @@ module tcm
     );
 
    // Convert from byte address to word address and strip unused bits
-   wire [sizebits-1:2]	 ia = ibus_a[sizebits-1:2];
-   wire [sizebits-1:2]	 da = dbus_a[sizebits-1:2];
+   wire [tcm_size_bits-1:2]	 ia = ibus_a[tcm_size_bits-1:2];
+   wire [tcm_size_bits-1:2]	 da = dbus_a[tcm_size_bits-1:2];
 
    wire			 wren = rst_n & dbus_valid & dbus_wrq;
 
-   localparam		 nwords = 1 << (sizebits-2);
+   localparam		 nwords = 1 << (tcm_size_bits-2);
    reg [3:0][7:0]	 mem[0:nwords-1];
 
    initial begin
-     if (init_file != "")
-       $readmemh({init_file}, mem);
+     if (TCM_INIT_FILE != "")
+       $readmemh({TCM_INIT_FILE}, mem);
    end
 
    // XXX: clken on the reads breaks something; figure that out

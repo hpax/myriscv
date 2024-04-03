@@ -25,7 +25,7 @@
 // XXX: if EARLY_RVC is enabled, would it be better to feed this with
 // the output of the RVC parser?
 //
-module predict_branch
+module predict_branch #(`CONFIG)
   (
    input [31:0]	     f2_insn,
    input	     f2_is_16,
@@ -63,7 +63,7 @@ module predict_branch
      input signed [31:0] pc,
      input signed [31:0] offset
        );
-      add_pc			     = (pc + offset) & core.PC_MASK;
+      add_pc			     = (pc + offset) & PC_MASK;
    endfunction
 
    always @(*)
@@ -110,7 +110,7 @@ module predict_branch
 	       next_pc = bj_pc;
 	    end
 	    JALR: begin
-	       if (core.PREDICT_JALR_ZERO && !i[19:12]) begin
+	       if (PREDICT_JALR_ZERO && !i[19:12]) begin
 		  // j[al]r addr(zero)
 		  take		= 1'b1;	// Unconditional
 		  next_pc	= add_pc(32'b0, i_imm);	// Absolute!
@@ -128,7 +128,7 @@ module predict_branch
      end
 endmodule
 
-module fetch
+module fetch #(`CONFIG)
   (
    input	     clk,
    input	     clken,
@@ -179,7 +179,7 @@ module fetch
 
    wire		     br_take;
    // Branch prediction
-   predict_branch pred (
+   predict_branch #(`CFG) pred (
      .f2_insn	(f2_insn),
      .f2_is_16	(f2_is_16),
      .f2_valid  (f2_valid),
@@ -226,7 +226,7 @@ module fetch
 	// This skips a c.nop in the second word if we have it
 	// ready...
 	f2_is_16 = !(f2_insn[1:0] == 2'b11) &&
-		   !(core.FUSE_CNOP && f2_have_32 & is_cnop(f2_insn[31:16]));
+		   !(FUSE_CNOP && f2_have_32 & is_cnop(f2_insn[31:16]));
 
 	// Note: this form is written explicitly to handle X correctly
 	f2_valid = f2_have_32 | (f2_have_16 && f2_insn[1:0] != 2'b11);
@@ -246,7 +246,7 @@ module fetch
      if (f2_have_data & br_take)
        ibus_a = next_pc;
      else
-       ibus_a = (ibus_a_q + {f1_advance, 2'b00}) & core.PC_MASK;
+       ibus_a = (ibus_a_q + {f1_advance, 2'b00}) & PC_MASK;
 
    // Early register file decode; this should be possible to do
    // in parallel with the branch prediction decode and possibly
@@ -261,15 +261,15 @@ module fetch
 
    // Early RVC decode, if enabled
    wire [31:0] f2_decoded_insn;
-   rv32c_comb rvc (.d(f2_insn), .q(f2_decoded_insn));
-   wire [31:0] f2_insn_final = core.EARLY_RVC ? f2_decoded_insn : f2_insn;
+   rv32c_comb #(`CFG) rvc (.d(f2_insn), .q(f2_decoded_insn));
+   wire [31:0] f2_insn_final = EARLY_RVC ? f2_decoded_insn : f2_insn;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
-	  d_pc		<= core.RESET_PC & core.PC_MASK;
-	  f2_pc		<= core.RESET_PC & core.PC_MASK;
-	  ibus_a_q      <= core.RESET_PC & core.PC_MASK;
+	  d_pc		<= RESET_PC & PC_MASK;
+	  f2_pc		<= RESET_PC & PC_MASK;
+	  ibus_a_q      <= RESET_PC & PC_MASK;
 	  d_valid_i	<= 1'b0;
 	  d_pred_taken	<= 1'b0;
 	  d_insn	<= 32'bx;
@@ -282,9 +282,9 @@ module fetch
        begin
 	  if (restart)
 	    begin
-	       d_pc		<= restart_pc & core.PC_MASK;
-	       f2_pc		<= restart_pc & core.PC_MASK;
-	       ibus_a_q		<= restart_pc & core.PC_MASK;
+	       d_pc		<= restart_pc & PC_MASK;
+	       f2_pc		<= restart_pc & PC_MASK;
+	       ibus_a_q		<= restart_pc & PC_MASK;
 	       d_valid_i	<= 1'b0;
 	       d_pred_taken	<= 1'b0;
 	       d_insn		<= 32'bx;

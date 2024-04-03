@@ -2,6 +2,7 @@
 `define _MYRISCV_VH 1
 
 `include "config.vh"
+`include "params.vh"
 
 `ifdef MODEL_TECH
 // ModelSim/Questa simulation needs type definitions included here

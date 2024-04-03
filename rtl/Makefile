@@ -6,10 +6,10 @@ PERL = perl
 
 .DELETE_ON_ERROR:
 
-all: config.vh
+all: params.vh
 
-config.vh: config.sv params.pl
+params.vh: params.sv params.pl
 	$(PERL) params.pl $< > $@
 
 clean:
-	rm -f config.vh
+	rm -f params.vh

@@ -14,12 +14,7 @@ function logic [31:0] wmask(
    wmask = (src & mask) | (old & ~mask);
 endfunction
 
-module backend #(
-  parameter int	NUM_IRQS,
-  parameter int	IRQ_BITS,
-  parameter bit	ALU_EARLY_DECODE,
-  parameter bit EARLY_BYPASS_MUX
-		)
+module backend #(`CONFIG)
 (
  input			   rst_n,
  input			   clk,
@@ -115,7 +110,7 @@ module backend #(
        m_din <= e_dout;
 
    // Register file
-   regfile #(.contexts(1 << `CONTEXT_BITS)) regs
+   regfile #(.contexts(1 << CONTEXT_BITS)) regs
      (
      .rst_n    ( rst_n ),
      .clk      ( clk ),
@@ -264,18 +259,18 @@ module backend #(
    generate
       if (ALU_EARLY_DECODE) begin
 	 aluctl_t d_aluctl;
-	 alu_decode alu_decode (.op(d_op), .ctl(d_aluctl));
+	 alu_decode #(`CFG) alu_decode (.op(d_op), .ctl(d_aluctl));
 	 always @(negedge rst_n or posedge clk)
 	   if (~rst_n)
 	     e_aluctl <= 'bx;
 	   else if (e_clken)
 	     e_aluctl <= d_aluctl;
       end else begin
-	 alu_decode alu_decode (.op(e_op), .ctl(e_aluctl));
+	 alu_decode #(`CFG) alu_decode (.op(e_op), .ctl(e_aluctl));
       end
    endgenerate
 
-   alu alu (.dst(e_alu_out), .cmp_out(e_cmp_out),
+   alu #(`CFG) alu (.dst(e_alu_out), .cmp_out(e_cmp_out),
      .src1(e_src1), .src2(e_src2), .ctl(e_aluctl));
 
    // Multiplier
@@ -327,13 +322,13 @@ module backend #(
        CSR_INSTRETH, CSR_MINSTRETH:
 	 e_csr_rval  = ctr_instret[63:32];
        CSR_MISA:
-	 e_csr_rval  = core.csrval_misa;
+	 e_csr_rval  = csrval_misa;
        CSR_MVENDORID:
-	 e_csr_rval  = core.csrval_vendorid;
+	 e_csr_rval  = csrval_vendorid;
        CSR_MARCHID:
-	 e_csr_rval  = core.csrval_archid;
+	 e_csr_rval  = csrval_archid;
        CSR_MIMPID:
-	 e_csr_rval  = core.csrval_impid;
+	 e_csr_rval  = csrval_impid;
        CSR_MIP:
 	 e_csr_rval  = { d_irqs, 1'b0 };
        CSR_MIE:
@@ -438,14 +433,14 @@ module backend #(
 	e_succ_pc   = successor_pc(e_op, e_accept);
 	e_jump_pc   = 32'bx;
 	e_next_pc   = e_succ_pc;
-	e_restartpc = e_next_pc & core.PC_MASK;
+	e_restartpc = e_next_pc & PC_MASK;
 	e_restart_mcontext = e_op.mcontext;
 	e_mepc      = 32'bx;
 	e_mcause    = 32'bx;
 
 	if (e_accept) begin
 	   unique case (e_op.itype)
-	     INSN_ERR: if (core.TRAP_BADINSN) begin
+	     INSN_ERR: if (TRAP_BADINSN) begin
 		e_trap      = 1'b1;
 		e_mcause = MCAUSE_BADINSN;
 	     end
@@ -453,7 +448,7 @@ module backend #(
 		e_trap	 = 1'b1;
 		e_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
 	     end
-	     INSN_ALU: if (core.TRAP_BADALU) begin
+	     INSN_ALU: if (TRAP_BADALU) begin
 		e_trap	 = e_aluctl.unit == ALUSRC_ERR;
 		e_mcause = MCAUSE_BADINSN;
 	     end
@@ -497,26 +492,26 @@ module backend #(
 	     e_next_pc = e_jump_pc;
 
 	   // For an invalid PC, unless we are taking another trap...
-	   if (core.TRAP_BADPC) begin
-	      if (!e_trap && (e_next_pc & ~core.PC_MASK)) begin
+	   if (TRAP_BADPC) begin
+	      if (!e_trap && (e_next_pc & ~PC_MASK)) begin
 		 e_trap = 1'b1;
 		 e_mcause = MCAUSE_BADPC;
 	      end
 	   end
 
 	   if (e_trap) begin
-	      e_restartpc = mtvec & core.PC_MASK;
+	      e_restartpc = mtvec & PC_MASK;
 	      e_restart_mcontext.m = CTX_MACHINE;
 	   end else begin
-	     e_restartpc = e_next_pc & core.PC_MASK;
+	     e_restartpc = e_next_pc & PC_MASK;
 	   end
 	end // if (e_accept)
 
 	if (e_trap)
-	  e_mepc       = e_op.pc & core.PC_MASK;
+	  e_mepc       = e_op.pc & PC_MASK;
 	else if (~e_busy & e_irq) begin
-	   e_restartpc = (mtvec + (e_irq_vector << 2)) & core.PC_MASK;
-	   e_mepc      = e_next_pc & core.PC_MASK;
+	   e_restartpc = (mtvec + (e_irq_vector << 2)) & PC_MASK;
+	   e_mepc      = e_next_pc & PC_MASK;
 	   e_mcause    = MCAUSE_IRQ | e_irq_vector;
 	end
 
@@ -541,7 +536,7 @@ module backend #(
 	m_fencei	   <= 1'b0;
 	m_trap		   <= 1'b0;
 	m_xcpt		   <= 1'b0;
-	m_restartpc	   <= core.RESET_PC & core.PC_MASK;
+	m_restartpc	   <= RESET_PC & PC_MASK;
 	m_restart_mcontext <= mcontext_reset();
 	m_mepc		   <= 32'bx;
 	m_mcause	   <= 32'bx;
@@ -553,9 +548,9 @@ module backend #(
 	m_fencei	   <= e_fencei;
 	m_trap		   <= e_trap;
 	m_xcpt		   <= e_trap | (e_irq & ~e_busy);
-	m_restartpc	   <= e_restartpc & core.PC_MASK;
+	m_restartpc	   <= e_restartpc & PC_MASK;
 	m_restart_mcontext <= e_restart_mcontext;
-	m_mepc		   <= e_mepc & core.PC_MASK;
+	m_mepc		   <= e_mepc & PC_MASK;
 	m_mcause	   <= e_mcause;
      end
 
@@ -574,8 +569,8 @@ module backend #(
    //
    // Handle mepc, mcause, mtvec, mie, cie
    //
-   wire [31:0] mtvec_reset = core.MTVEC_RESET & core.PC_MASK;
-   wire [31:0] mtvec_wmask = core.MTVEC_WMASK & core.PC_MASK;
+   wire [31:0] mtvec_reset = MTVEC_RESET & PC_MASK;
+   wire [31:0] mtvec_wmask = MTVEC_WMASK & PC_MASK;
 
    //
    // Flags for delayed updates of mepc, mcause, etc.
@@ -595,7 +590,7 @@ module backend #(
 	if (m_xcpt)
 	  mepc  <= m_mepc;
 	else if (csrw_mepc)
-	  mepc  <= e_csr_wval & core.PC_MASK;
+	  mepc  <= e_csr_wval & PC_MASK;
 
 	if (m_xcpt)
 	  mcause <= m_mcause;
@@ -623,9 +618,9 @@ module backend #(
 	INSN_ALU:
 	  e_dout = e_alu_out;
 	INSN_MULL:
-	  if (core.WITH_Zmmul & core.FORWARD_MUL) e_dout = m_mull_o;
+	  if (WITH_Zmmul & FORWARD_MUL) e_dout = m_mull_o;
 	INSN_MULH:
-	  if (core.WITH_Zmmul & core.FORWARD_MUL) e_dout = m_mulh_o;
+	  if (WITH_Zmmul & FORWARD_MUL) e_dout = m_mulh_o;
 	INSN_JAL:
 	  e_dout = e_succ_pc;
 	INSN_CSR:
@@ -693,11 +688,11 @@ module backend #(
 	  m_valid_o = ldst_dout_valid;
        end
        INSN_MULL: begin
-	  if (core.WITH_Zmmul)
+	  if (WITH_Zmmul)
 	    m_dout  = m_mull_o;
        end
        INSN_MULH: begin
-	  if (core.WITH_Zmmul)
+	  if (WITH_Zmmul)
 	    m_dout  = m_mulh_o;
        end
        default: begin

@@ -9,7 +9,7 @@
 `include "myriscv.vh"
 
 // Combinatorial decoder
-module decode_comb
+module decode_comb #(`CONFIG)
   (
    input [31:0]	d_din,		// From fetch stage
    input	d_insn_16,	// 16-bit instruction but not a fused pair!
@@ -30,8 +30,8 @@ module decode_comb
    wire [31:0]	 cinst;
    wire		 is_16 = d_insn_16;
 
-   rv32c_comb rvc (.d(d_din), .q(cinst));
-   assign i = core.EARLY_RVC ? d_din : cinst;
+   rv32c_comb #(`CFG) rvc (.d(d_din), .q(cinst));
+   assign i = EARLY_RVC ? d_din : cinst;
 
    // Immediate formats
    wire signed [31:0] i_imm = $signed(i[31:20]);
@@ -39,8 +39,6 @@ module decode_comb
    wire signed [31:0] b_imm = $signed({i[31], i[7], i[30:25], i[11:8], 1'b0});
    wire signed [31:0] j_imm = $signed({i[31], i[19:12], i[20], i[30:21], 1'b0});
    wire signed [31:0] u_imm = $signed({i[31:12], 12'b0});
-
-   wire [`CONTEXT_BITS-1:0] default_context = 'b0;
 
    always @(*)
      begin
@@ -50,7 +48,7 @@ module decode_comb
 
 	op.undead     = 1'b1;	// It is assumed to be a real instruction
 	op.itype      = INSN_ERR;
-	op.pc	      = d_pc & core.PC_MASK;
+	op.pc	      = d_pc & PC_MASK;
 	op.pc_valid   = 1'b1;
 	op.rd.r       = i[11:7];
 	op.rd.c       = op.mcontext.m;
@@ -72,7 +70,7 @@ module decode_comb
 
 	unique case (i[6:0])
 	  LOAD: begin
-	     if (!core.STRICT_UNDEFINED
+	     if (!STRICT_UNDEFINED
 	       || (op.funct3 != 3'b011 && op.funct3[2:1] != 2'b11))
 	       op.itype      = INSN_LD;
 
@@ -90,7 +88,7 @@ module decode_comb
 	  end
 
 	  BRANCH: begin
-	     if (!core.STRICT_UNDEFINED || core.WITH_cmpand ||
+	     if (!STRICT_UNDEFINED || WITH_cmpand ||
 		 op.funct3[2:1] != 2'b01)
 	       op.itype	  = INSN_BR;
 	     op.rs1_valid = 1'b1;
@@ -140,7 +138,7 @@ module decode_comb
 	     op.rd_e			  = 1'b1;
 	     op.imm			  = i_imm;
 
-	     if (core.WITH_Zmmul &&
+	     if (WITH_Zmmul &&
 	       op.rs2_valid && op.funct7 == 7'b000_0001 && ~op.funct3[2])
 	       if (|op.funct3[1:0])
 		 op.itype = INSN_MULH;
@@ -166,12 +164,12 @@ module decode_comb
 		  op.rs1_valid = ~op.funct3[2];
 	       end
 	       10'b0000000_000: begin		// ECALL, EBREAK
-		  if (!core.STRICT_UNDEFINED ||
+		  if (!STRICT_UNDEFINED ||
 		      (!op.rs2.r[4:1] && !op.rs1.r && !op.rd.r))
 		    op.itype = INSN_ECALL;
 	       end
 	       10'b0011000_000:	begin		// MRET
-		  if (!core.STRICT_UNDEFINED ||
+		  if (!STRICT_UNDEFINED ||
 		      (!op.rs2.r == 5'b00010 && !op.rs1.r && !op.rd.r))
 		    op.itype = INSN_MRET;
 	       end
@@ -250,7 +248,7 @@ module decode_comb
      end // always @ (*)
 endmodule
 
-module decode_seq
+module decode_seq #(`CONFIG)
   (
    input  rst_n,
    input  clk,
@@ -279,7 +277,7 @@ module decode_seq
 	  mult_rs2  <= 'bx;
 	  mulhifunc <= 2'bx;
      end else if (d_clken) begin
-	if (core.FORWARD_MUL) begin
+	if (FORWARD_MUL) begin
 	   if (d_killed) begin
 	      // State rolled back
 	      have_mult <= 1'b0;
@@ -326,7 +324,7 @@ module decode_seq
       end else if (insn_mult(op_o.itype)) begin
 	 // MUL -> MULH (default to assuming signed)
 	 // Multiply handling
-	 if (core.FORWARD_MUL &&
+	 if (FORWARD_MUL &&
 	   have_mult && (!op_i.funct3[1:0] || op_i.funct3[1:0] == mulhifunc) &&
 	   op_i.rs1 == mult_rs1 && op_i.rs2 == mult_rs2) begin
 	    // Can forward old multiply low result
@@ -346,7 +344,8 @@ endmodule // decode_seq
 //
 // Decoder pipeline stage
 //
-module decode (
+module decode #(`CONFIG)
+(
   input	       rst_n,
   input	       clk,
   input	       clken,
@@ -375,13 +374,13 @@ module decode (
    decoded_insn_t c_op;		// decode_comb op out
 
    // Purely combinatorial decode
-   decode_comb comb (
+   decode_comb #(`CFG) comb (
      .d_din (d_din), .d_insn_16(d_insn_16), .d_pred_taken(d_pred_taken),
-     .d_pc (d_pc & core.PC_MASK), .d_mcontext(d_mcontext), .op(c_op)
+     .d_pc (d_pc & PC_MASK), .d_mcontext(d_mcontext), .op(c_op)
      );
 
    // Additional, sequence-dependent
-   decode_seq mult (
+   decode_seq #(`CFG) seq (
      .rst_n (rst_n), .clk(clk), .d_clken(d_clken), .d_killed(d_killed),
      .d_valid_i (d_valid_i), .op_i(c_op), .op_o(d_op)
      );
@@ -396,7 +395,8 @@ endmodule
 // For RVC instructions, this is allowed to put a value in rs1 that
 // ought to be zero (for C.LI and C.MV), but *not* rs2!
 //
-module decode_srcregs (
+module decode_srcregs #(`CONFIG)
+(
   input [31:0] insn,
   input	       mcontext_t mc,
   output       regnum_t rs1,

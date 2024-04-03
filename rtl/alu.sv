@@ -12,7 +12,7 @@
 
 `include "myriscv.vh"
 
-module alu_decode
+module alu_decode #(`CONFIG)
 (
     input  decoded_insn_t op,
     output aluctl_t ctl
@@ -47,8 +47,8 @@ module alu_decode
 		  ctl.invert = funct7[5];
 	       end
 	       { 7'b0?1_0000, 3'b??0 }: begin // shXadd, shXsub
-		  if (core.WITH_Zba &&
-		      (core.WITH_Zbasub || !funct7[5])) begin
+		  if (WITH_Zba &&
+		      (WITH_Zbasub || !funct7[5])) begin
 		     ctl.unit   = ALUSRC_ADD;
 		     ctl.shadd  = op.funct3[2:1];
 		     ctl.invert = funct7[5];
@@ -67,9 +67,9 @@ module alu_decode
 	       { 7'b011_0000, ALU_SLL }: begin
 		  unique casez ({!op.rs2_valid, op.rs2.r})
 		    6'b1_?00??: begin // CTZ, CLZ, CPOP (+inverses)
-		       if (!core.STRICT_UNDEFINED ||
+		       if (!STRICT_UNDEFINED ||
 			 op.rs2.r[1:0] != 2'b11)
-			 if (core.WITH_bitcntinv || !op.rs2.r[4])
+			 if (WITH_bitcntinv || !op.rs2.r[4])
 			   ctl.unit = ALUSRC_BITCNT;
 		    end
 		    6'b1_0010?: begin	// SEXT.B/H
@@ -128,7 +128,7 @@ module alu_decode
 	       end
 	       { 7'b000_00??, ALU_SLT },
 	       { 7'b000_00??, ALU_SLTU }: begin
-		  if (core.WITH_setext || !funct7[1:0]) begin
+		  if (WITH_setext || !funct7[1:0]) begin
 		     // bits 1:0 in funct7 can be used to obtain the
 		     // other possible condition codes
 		     ctl.cond[2] = ~funct7[1];
@@ -155,10 +155,10 @@ module alu_decode
 		    end
 		  endcase // unique casez (op.rs2.r)
 	       end
-	       { 7'b000_0101, 3'b1?? }: if (core.WITH_minmax) begin
+	       { 7'b000_0101, 3'b1?? }: if (WITH_minmax) begin
 		  ctl.unit = ALUSRC_MINMAX;
 	       end
-	       { 7'b000_0111, 3'b1?1 }: if (core.WITH_Zicond) begin
+	       { 7'b000_0111, 3'b1?1 }: if (WITH_Zicond) begin
 		  ctl.unit = ALUSRC_ZICOND;
 	       end
 	       default: begin
@@ -468,6 +468,18 @@ module comparator
    end
 endmodule
 
+// Zicond module
+module zicond
+  (
+   output [31:0] dst,
+   input [31:0] src1,
+   input [31:0] src2,
+   input pol
+   );
+
+   assign dst = src1 & {32{pol ^ |src2}};
+endmodule // zicond
+
 //
 // This merges multiple computational blocks.
 // This does not include the bypass logic.
@@ -480,7 +492,8 @@ endmodule
 // it makes sense for it to be given two pipeline stages (output data
 // from the M stage.)
 //
-module alu (
+module alu #(`CONFIG)
+(
   output reg [31:0] dst,
   output reg	    cmp_out, // Comparator output bypassing output MUX
 
@@ -495,7 +508,7 @@ module alu (
    wire			  add_scarry;
 
    adder add (.src1(src1), .src2(invsrc2), .sub(ctl.invert),
-     .src1shift(core.WITH_Zba ? ctl.shadd : 2'b00),
+     .src1shift(WITH_Zba ? ctl.shadd : 2'b00),
      .q (add_out), .ucout(add_ucarry), .scout(add_scarry));
 
    //
@@ -523,7 +536,7 @@ module alu (
 
       if (ctl.cond[2])
 	cmpcond = cmp_ltx;
-      else if (core.WITH_cmpand & ctl.cond[1])
+      else if (WITH_cmpand & ctl.cond[1])
 	cmpcond = cmp_and;
       else
 	cmpcond = cmp_eq;
@@ -541,7 +554,7 @@ module alu (
    // czero (Zicond) unit
    //
    wire [31:0]		  zicond_out;
-   mask #(32) zicond (.d(src1), .q(zicond_out), .enable(ctl.cond[1] ^ |src2));
+   zicond zicond (.dst(zicond_out), .src1(src1), .src2(src2), .pol(ctl.cond[1]));
 
    //
    // Bitwise logic (AND, OR, XOR...)
@@ -560,7 +573,7 @@ module alu (
 
    //
    // Zbb operations. This contains two implementations; which is used
-   // depends on core.BITCNT_SEPARATE. This can be tweaked to fit
+   // depends on BITCNT_SEPARATE. This can be tweaked to fit
    // the use case.
    //
    // If BITCNT_SEPARATE is false and WITH_extensions is true, the
@@ -571,7 +584,7 @@ module alu (
 
    // Separate units implementation
    wire [31:0]		  bcsrc =
-			  src1 ^ {32{core.WITH_bitcntinv & ctl.bcop[2]}};
+			  src1 ^ {32{WITH_bitcntinv & ctl.bcop[2]}};
    wire [5:0]		  clz_out;
    wire [5:0]		  ctz_out;
    wire [5:0]		  cpop_out;
@@ -596,7 +609,7 @@ module alu (
 
    // bitcnt output
    always @(*)
-     if (!core.BITCNT_SEPARATE) begin
+     if (!BITCNT_SEPARATE) begin
 	bitcnt_out = bitcnt_out_unified;
      end else begin
 	unique case (ctl.bcop[1:0])
@@ -625,12 +638,12 @@ module alu (
 	  ALUSRC_ADD:    dst			   = add_out;
 	  ALUSRC_LOGIC:  dst			   = bit_out;
 	  ALUSRC_SET:    dst			   = cmp_out;
-	  ALUSRC_MINMAX: if (core.WITH_minmax) dst = minmax_out;
+	  ALUSRC_MINMAX: if (WITH_minmax) dst = minmax_out;
 	  ALUSRC_SHIFT:  dst			   = shift_out;
-	  ALUSRC_BITCNT: if (core.WITH_bitcnt) dst = bitcnt_out;
+	  ALUSRC_BITCNT: if (WITH_bitcnt) dst = bitcnt_out;
 	  ALUSRC_ORC:    dst			   = orc_out;
 	  ALUSRC_REV:    dst			   = rev_out;
-	  ALUSRC_ZICOND: if (core.WITH_Zicond) dst = zicond_out;
+	  ALUSRC_ZICOND: if (WITH_Zicond) dst = zicond_out;
 	  default:       dst = 'bx;
 	endcase // unique case (alusrc)
      end

@@ -4,9 +4,8 @@
 
 `include "myriscv.vh"
 
-module pipe_ctl #(
-  parameter bit bypass_ctx = 1'b1
-) (
+module pipe_ctl
+(
   input	     rst_n,
   input	     clk,
   input	     clken,
@@ -46,7 +45,7 @@ module pipe_ctl #(
 );
 
    function logic regeq (input v1, regnum_t r1, input v2, regnum_t r2);
-      regeq = v1 & v2 & ((r1.r == r2.r) & (!bypass_ctx || (r1.c == r2.c)));
+      regeq = v1 & v2 & (r1 == r2);
    endfunction
 
    // Bubble due to W -> E forwarding necessary, for the following instruction
