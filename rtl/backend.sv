@@ -277,7 +277,7 @@ module backend #(`CONFIG)
    wire [31:0] m_mulh_o;
    wire [31:0] m_mull_o;
    multiplier mult (.rst_n(rst_n), .clk(clk),
-     .e_valid(clken & e_accept & insn_mult(e_op.itype) & ~e_op.rd_e),
+     .e_valid(clken & e_accept & (e_op.itype == INSN_MUL) & ~e_op.rd_e),
      .e_op(e_op.funct3[1:0]),
      .e_src1(e_src1), .e_src2(e_src2),
      .m_mulh_o(m_mulh_o), .m_mull_o(m_mull_o));
@@ -617,10 +617,9 @@ module backend #(`CONFIG)
       unique case (e_op.itype)
 	INSN_ALU:
 	  e_dout = e_alu_out;
-	INSN_MULL:
-	  if (WITH_Zmmul & FORWARD_MUL) e_dout = m_mull_o;
-	INSN_MULH:
-	  if (WITH_Zmmul & FORWARD_MUL) e_dout = m_mulh_o;
+	INSN_MUL:
+	  if (WITH_Zmmul & FORWARD_MUL)
+	     e_dout = e_op.funct3[1:0] ? m_mulh_o : m_mull_o;
 	INSN_JAL:
 	  e_dout = e_succ_pc;
 	INSN_CSR:
@@ -687,13 +686,9 @@ module backend #(`CONFIG)
 	  m_dout_be = ldst_dout_wbe;
 	  m_valid_o = ldst_dout_valid;
        end
-       INSN_MULL: begin
+       INSN_MUL: begin
 	  if (WITH_Zmmul)
-	    m_dout  = m_mull_o;
-       end
-       INSN_MULH: begin
-	  if (WITH_Zmmul)
-	    m_dout  = m_mulh_o;
+	    m_dout  = e_op.funct3[1:0] ? m_mulh_o : m_mull_o;
        end
        default: begin
 	  // See above

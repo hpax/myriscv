@@ -6,9 +6,8 @@
 typedef enum logic [3:0] {
 	INSN_NOP    = 4'b0000,	// No-op instruction (unless decoded as ALU)
 	INSN_ALU    = 4'b0001,	// ALU instruction
-	// These low bit of these must be maintained.
-	INSN_MULL   = 4'b0010,	// Multiply low
-	INSN_MULH   = 4'b0011,	// Multiply high
+	INSN_MUL    = 4'b0010,	// Multiply
+	// 4'b0011 is reserved for divide
 	// The low 2 bits of the following must be maintained.
 	INSN_LD     = 4'b0100,	// Memory load
 	INSN_ST     = 4'b0101,	// Memory store
@@ -26,9 +25,6 @@ typedef enum logic [3:0] {
 
 function logic insn_mem(input insn_type_t insn);
    insn_mem = insn[3:2] == INSN_LD[3:2]; // CBO, LD, ST
-endfunction
-function logic insn_mult(input insn_type_t insn);
-   insn_mult = insn[3:1] == INSN_MULL[3:1];
 endfunction
 
 // Register bank and machine mode context

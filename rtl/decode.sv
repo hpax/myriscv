@@ -140,10 +140,7 @@ module decode_comb #(`CONFIG)
 
 	     if (WITH_Zmmul &&
 	       op.rs2_valid && op.funct7 == 7'b000_0001 && ~op.funct3[2])
-	       if (|op.funct3[1:0])
-		 op.itype = INSN_MULH;
-	       else
-		 op.itype = INSN_MULL;
+	       op.itype = INSN_MUL;
 	  end
 
 	  SYSTEM: begin
@@ -284,7 +281,7 @@ module decode_seq #(`CONFIG)
 	      mult_rs1  <= 'bx;
 	      mult_rs2  <= 'bx;
 	      mulhifunc <= 2'bx;
-	   end else if (insn_mult(op_o.itype)) begin
+	   end else if (op_o.itype == INSN_MUL) begin
 	      if (op_o.rd != op_o.rs1 && op_o.rd != op_o.rs2) begin
 		 have_mult <= 1'b1;
 		 mult_rs1  <= op_o.rs1;
@@ -321,7 +318,7 @@ module decode_seq #(`CONFIG)
 	 op_o.undead = 1'b0;
 	 op_o.rd_e   = 1'b0;
 	 op_o.rd_m   = 1'b0;
-      end else if (insn_mult(op_o.itype)) begin
+      end else if (op_o.itype == INSN_MUL) begin
 	 // MUL -> MULH (default to assuming signed)
 	 // Multiply handling
 	 if (FORWARD_MUL &&
