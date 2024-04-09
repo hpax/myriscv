@@ -319,10 +319,11 @@ module decode_seq #(`CONFIG)
 	 op_o.rd_e   = 1'b0;
 	 op_o.rd_m   = 1'b0;
       end else if (op_o.itype == INSN_MUL) begin
-	 // MUL -> MULH (default to assuming signed)
-	 // Multiply handling
+	 // Multiply cache handling handling
+	 logic is_mull;
+	 is_mull = !op_i.funct3[1:0];
 	 if (FORWARD_MUL &&
-	   have_mult && (!op_i.funct3[1:0] || op_i.funct3[1:0] == mulhifunc) &&
+	   have_mult && (is_mull || op_i.funct3[1:0] == mulhifunc) &&
 	   op_i.rs1 == mult_rs1 && op_i.rs2 == mult_rs2) begin
 	    // Can forward old multiply low result
 	    mulhifunc_c = mulhifunc; // Not actually doing the multiply
@@ -331,8 +332,9 @@ module decode_seq #(`CONFIG)
 	    // using op_i.rd_e here handles the case of rd == x0.
 	    op_o.rd_m	= op_i.rd_e;	  // Output in M stage
 	    op_o.rd_e	= 1'b0;
-	    // For MUL, cache a signed result
-	    mulhifunc_c = { op_i.funct3[1], op_i.funct3[0] | ~op_i.funct3[1] };
+	    // For MUL, speculatively cache an unsigned result
+	    // (MULHU seems to be the most common form of MULH.)
+	    mulhifunc_c = is_mull ? 2'b11 : op_i.funct3[1:0];
 	 end
       end
    end
