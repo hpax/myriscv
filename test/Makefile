@@ -63,7 +63,7 @@ $(LIB): $(LIBOBJS)
 	$(CC) $(CFLAGS) $(CFLAGS_$<) $(gendeps) -S -o $@ $<
 
 clean:
-	find . $(patsubst %,-name '*%' -o,.hex .bin .elf .o .s .d) -false \
+	find . $(patsubst %,-name '*%' -o,.hex .bin .elf .o .s .d .a) -false \
 		| xargs -rt rm -f
 
 tests.d:
