@@ -36,15 +36,14 @@ LIBOBJS = $(LIBCSRC:.c=.o) $(LIBSSRC:.S=.o)
 
 all: $(TESTHEX)
 
-%.tcm.hex: %.bin
-	$(HEXDUMP) -v -n $(tcm_size) -e '"" 8/4 "%08x " "\n"' $< > $@
+%.hex: %.bin
+	$(HEXDUMP) -v -e '"" 8/4 "%08x " "\n"' $< > $@
 
-%.mem.hex: %.bin
-	$(HEXDUMP) -v -s $$(($(mem_start)-$(tcm_start))) \
-		-e '"" 8/4 "%08x " "\n"' $< > $@
+%.tcm.bin: %.elf
+	$(OBJCOPY) -O binary -R '.dram.*' $< $@
 
-%.bin: %.elf
-	$(OBJCOPY) -O binary $< $@
+%.mem.bin: %.elf
+	$(OBJCOPY) -O binary -j '.dram.*' $< $@
 
 $(LIB): $(LIBOBJS)
 	rm -f $@

@@ -88,6 +88,7 @@ SECTIONS
 		*(.gnu_extab*)
 		*(.exception_ranges*)
 		*(.text.exit .text.exit.*)
+		*(.eh_frame .eh_frame.*)
 		*crtbegin.o(*)
 		*crt0.o(*)
 	}
