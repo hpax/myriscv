@@ -5,6 +5,7 @@ CROSS	= $(realpath ../tools/gnu/bin)/riscv32-hpa-elf-
 AS	= $(CROSS)as
 LD	= $(CROSS)ld
 CC	= $(CROSS)gcc
+AR	= $(CROSS)ar
 OBJCOPY	= $(CROSS)objcopy
 PERL    = perl
 HEXDUMP	= hexdump
@@ -12,7 +13,7 @@ HEXDUMP	= hexdump
 include ../tools/riscv-opts.mk
 
 # gcc seems to not understand Zmmul, but adding m and -mno-div works...
-CFLAGS  = $(riscv_flags)
+CFLAGS  = $(riscv_flags) -I./include
 SFLAGS  = $(CFLAGS) -D__ASSEMBLY__ -Wa,-ahlsm=$*.lst
 LDFLAGS	= $(CFLAGS) -Wl,-T,test.ld -Wl,-Map=$*.map
 
@@ -28,6 +29,11 @@ mem_start  := 0x40000000
 
 .SECONDARY:
 
+LIB = lib/libtest.a
+LIBCSRC = $(wildcard lib/*.c)
+LIBSSRC = $(wildcard lib/*.S)
+LIBOBJS = $(LIBCSRC:.c=.o) $(LIBSSRC:.S=.o)
+
 all: $(TESTHEX)
 
 %.tcm.hex: %.bin
@@ -40,8 +46,12 @@ all: $(TESTHEX)
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
 
-%.elf: test.ld
-	$(CC) $(LDFLAGS) $(LDFLAGS_$@) -o $@ $(OBJS_$@)
+$(LIB): $(LIBOBJS)
+	rm -f $@
+	$(AR) rs $@ $^
+
+%.elf: test.ld $(LIB)
+	$(CC) $(LDFLAGS) $(LDFLAGS_$@) -o $@ $(OBJS_$@) $(LIB)
 
 %.o: %.S
 	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -c -o $@ $<

@@ -9,7 +9,7 @@ OUTPUT_ARCH(riscv)
 ENTRY(___reset)
 EXTERN(_NULL)
 EXTERN(_reset)
-EXTERN(_irq)
+EXTERN(_mtvec)
 
 MEMORY
 {
@@ -109,7 +109,7 @@ SECTIONS
 	}
 
 	.init.irq 0x80 : ALIGN(4) {
-		PROVIDE (___irq = .);
+		PROVIDE (___mtvec = .);
 		KEEP (*(SORT_NONE(.init.irq)))
 	}
 
@@ -211,7 +211,7 @@ SECTIONS
 	_edata = .;
 	_end = .;
 
-	.stack (NOLOAD) : ALIGN(2048) {
+	.stack (NOLOAD) : ALIGN(16) {
 		KEEP (*(.stack))
 	}
 

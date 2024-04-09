@@ -1,0 +1,3 @@
+*.build/
+gnu/
+*.stamp

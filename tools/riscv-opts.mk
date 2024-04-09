@@ -2,13 +2,13 @@
 riscv_tuple	:= riscv32-hpa-elf
 
 # Canonical name for architecture
-riscv_arch	:= rv32ic_zba_zbb_zbs_zicbom_zicond_zicsr_zmmul
+riscv_arch	:= rv32ic_zba_zbb_zbs_zicbom_zicond_zicsr_zifencei_zmmul
 riscv_abi	:= ilp32
 
 # Alternate architecture configurations (with divide, without multiply)
 riscv_archlist	:= $(riscv_arch)-$(riscv-abi)-- \
-	rv32imc_zba_zbb_zbs_zicbom_zicond_zicsr-ilp32-- \
-	rv32ic_zba_zbb_zbs_zicbom_zicond_zicsr-ilp32--
+	rv32imc_zba_zbb_zbs_zicbom_zicond_zicsr_zifencei-ilp32-- \
+	rv32ic_zba_zbb_zbs_zicbom_zicond_zicsr_zifencei-ilp32--
 
 riscv_multilib := $(patsubst \ ,;,$(strip $(riscv_archlist)))
 

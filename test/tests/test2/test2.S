@@ -1,53 +1,8 @@
-	.option arch,rv32imc
-	.option arch,+zba
-	.option arch,+zbb
-	.option arch,+zbs
-	.option arch,+zicond
-	.option arch,+zicsr
-	.option arch,+zifencei
-	.option arch,+zmmul
-
-	TTY  = -1
-	STOP = -8
-
-	// Warning: clobbers a0, t0
-	.macro print str
-	.pushsection ".rodata.hot","a"
-999:	.asciz "\str"
-	.popsection
-	la a0,999b
-	jal print_str
-	.endm
-
-	.section ".null","a"
-	.balign 4
-	.globl ___NULL
-___NULL:
-	.word 0
-
-	.section ".init.reset","ax"
-	.balign 4
-	.globl ___reset
-___reset:
-	.option push
-	.option norelax
-	la sp, ___stack_top
-	la gp, __global_pointer$
-	.option pop
-	.option push
-	j _start
-
-	.section ".init.irq","ax"
-	.globl ___mtvec
-___mtvec:
-	.rept 32
-	.balign 4
-	j _irq_common
-	.endr
+#include "asm.h"
 
 	.section ".text.hot","ax"
-	.globl _start
-_start:
+	.globl __start
+__start:
 
 	/* Test with instruction in the load hazard slot */
 test1:
@@ -56,7 +11,7 @@ test1:
 	add a0,a0,1
 	beqz a1,2f
 1:
-	sb a1,TTY(zero)
+	sb a1,%lo(TTY)(zero)
 	lbu a1,(a0)
 	add a0,a0,1
 	bnez a1,1b
@@ -72,7 +27,7 @@ test1a:
 	add a0,a0,1
 	beqz a1,2f
 1:
-	sb a1,TTY(zero)
+	sb a1,%lo(TTY)(zero)
 	lbu a1,(a0)
 	add a0,a0,1
 	bnez a1,1b
@@ -86,7 +41,7 @@ test2:
 	beqz a1,2f
 1:
 	add a0,a0,1
-	sb a1,TTY(zero)
+	sb a1,%lo(TTY)(zero)
 	lbu a1,(a0)
 	bnez a1,1b
 
@@ -95,90 +50,90 @@ test2:
 	.balign 4
 unalign_test:
 	la a0,unaligned_str
-	jal print_str
+	jal _print_str
 	la s0,udata_buf
 	lw a0,2(s0)
-	jal print_hex
+	jal _print_hex
 
 	/* Write test variant 1 */
 	la a0,unaligned_str2
-	jal print_str
+	jal _print_str
 	li a1,0xddccbbaa
 	sw a1,1(s0)
 	lw a0,4(s0)
-	jal print_hex
+	jal _print_hex
 	li a0,':
-	sb a0,TTY(zero)
+	sb a0,%lo(TTY)(zero)
 	lw a0,(s0)
-	jal print_hex
+	jal _print_hex
 
 	/* Write test variant 2 */
 	la a0,unaligned_str2
-	jal print_str
+	jal _print_str
 	li a1,0xddccbbaa
 	sw a1,1(s0)
 	lw s1,(s0)
 	lw a0,4(s0)
-	jal print_hex
+	jal _print_hex
 	li a0,':
-	sb a0,TTY(zero)
+	sb a0,%lo(TTY)(zero)
 	mv a0,s1
-	jal print_hex
+	jal _print_hex
+	print_crlf
 
-	jal print_crlf
 	.option rvc
 
 	/* Multiply me harder? */
 	/* Test with forwarding */
 	la a0,mult_str
-	jal print_str
+	jal _print_str
 	li a4,0x8dbbc2c2
 	li a5,0xc6fc68b9
 	mulhu a0,a4,a5
 	mul s0,a4,a5
-	jal print_hex
+	jal _print_hex
 	mv a0,s0
-	jal print_hex
-	jal print_crlf
+	jal _print_hex
+	print_crlf
 
 	/* Test without forwarding */
 	la a0,mult_str
-	jal print_str
+	jal _print_str
 	li s0,0x8dbbc2c2
 	li s1,0xc6fc68b9
 	mulhu a0,s0,s1
-	jal print_hex
+	jal _print_hex
 	mul a0,s0,s1
-	jal print_hex
-	jal print_crlf
+	jal _print_hex
+	print_crlf
 
 	/* Signed multiply test */
 	la a0,mults_str
-	jal print_str
+	jal _print_str
 	li a4,0x8dbbc2c2
 	li a5,0xc6fc68b9
 	mulh a0,a4,a5
 	mul s0,a4,a5
-	jal print_hex
+	jal _print_hex
 	mv a0,s0
-	jal print_hex
-	jal print_crlf
+	jal _print_hex
+	print_crlf
 
 	/* Mixed multiply test */
 	la a0,multsu_str
-	jal print_str
+	jal _print_str
 	li a4,0x8dbbc2c2
 	li a5,0xc6fc68b9
 	mulhsu a0,a4,a5
 	mul s0,a4,a5
-	jal print_hex
+	jal _print_hex
 	mv a0,s0
-	jal print_hex
-	jal print_crlf
+	jal _print_hex
+	print_crlf
 
 	/* Test writing to and running from external memory */
 	la a0,extmem1_str
-	jal print_str
+	jal _print_str
 	li a0,0x80824531		// li a0,12; ret
 	la s0,0x40000000
 	sw a0,(s0)
@@ -187,8 +142,8 @@ unalign_test:
 	jalr (s0)			// Should be uncached
 	jalr (s0)			// Should be cached
 	jalr (s0)			// Should be cached w/o overrun?
-	call print_hex
-	call print_crlf
+	call _print_hex
+	print_crlf
 
 	/* What does fence.i actually do */
 	fence.i
@@ -282,85 +237,11 @@ unalign_test:
 
 	/* Done with tests */
 	la a0,done_str
-	jal print_str
+	jal _print_str
 	ebreak
 	la a0,ebreak_failed_str
-	jal print_str
-	j kill_simulation
-
-	.balign 4
-_irq_common:
-	la a0,irq_str
-	jal print_str
-	csrr a0,mepc
-	jal print_hex
-	la a0,mcause_str
-	jal print_str
-	csrr a0,mcause
-	jal print_hex
-	jal print_crlf
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	.balign 4
-kill_simulation:
-	sb zero,STOP(zero)
-	j kill_simulation
-
-print_crlf:
-	li a0,10
-	sb a0,TTY(zero)
-	ret
-
-print_str:
-	lbu t0,(a0)
-	add a0,a0,1
-	beqz t0,2f
-1:
-	sb t0,TTY(zero)
-	lbu t0,(a0)
-	add a0,a0,1
-	bnez t0,1b
-2:
-	ret
-
-print_hex:
-	add sp,sp,-32
-	sw a1,(sp)
-	sw a2,4(sp)
-	sw a3,8(sp)
-	sw a4,12(sp)
-	sw a5,16(sp)
-
-	li a1,8
-	li a4,0x61
-	li a5,0x30-(0x61-10)
-1:
-	ror a0,a0,32-4
-	and a2,a0,15
-	add a2,a2,0x61-10
-#if 0
-	bgeu a2,a4,2f
-	add a2,a2,a5
-2:
-#else
-	sltu a3,a2,a4
-	czero.eqz a3,a5,a3
-	add a2,a2,a3
-#endif
-	sb a2,TTY(zero)
-	add a1,a1,-1
-	bnez a1,1b
-
-	lw a1,(sp)
-	lw a2,4(sp)
-	lw a3,8(sp)
-	lw a4,12(sp)
-	lw a5,16(sp)
-	add sp,sp,16
+	jal _print_str
+	j stop
 
 	ret
 
@@ -387,21 +268,9 @@ done_str:
 	.asciz "Tests done, running EBREAK.\n"
 ebreak_failed_str:
 	.asciz "ERROR: fall through after ebreak\n"
-irq_str:
-	.asciz "Interrupt/exception triggered!\nmepc   = "
-mcause_str:
-	.asciz ", mcause = "
 
 	.section ".sdata","aw"
 	.balign 4
 udata_buf:
 	.word	0x33221100
 	.word	0x77665544
-
-	.section ".stack","a"
-	.balign 16
-	.globl ___stack
-	.globl ___stack_top
-___stack:
-	.space 2048
-___stack_top:
