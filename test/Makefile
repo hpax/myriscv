@@ -1,6 +1,6 @@
 #!/usr/bin/make -R -r
 
-CROSS	= riscv32-unknown-elf-
+CROSS	= $(realpath ../tools/gnu/bin)/riscv32-hpa-elf-
 
 AS	= $(CROSS)as
 LD	= $(CROSS)ld
@@ -9,27 +9,64 @@ OBJCOPY	= $(CROSS)objcopy
 PERL    = perl
 HEXDUMP	= hexdump
 
+include ../tools/riscv-opts.mk
+
 # gcc seems to not understand Zmmul, but adding m and -mno-div works...
-CFLAGS  = -march=rv32imc_zba_zbb_zbs_zicond_zicsr_zmmul -mabi=ilp32 \
-	 -mno-strict-align -mbranch-cost=2 \
-	-fno-exceptions -malign-data=natural -fshort-enums -fshort-wchar \
-	-fno-pic -fno-pie -frename-registers -ftls-model=local-exec \
-	-mno-div -O3 -ggdb3
-ASFLAGS = -D__ASSEMBLY__
-LDFLAGS	= -T test.ld
+CFLAGS  = $(riscv_flags)
+SFLAGS  = $(CFLAGS) -D__ASSEMBLY__ -Wa,-ahlsm=$*.lst
+LDFLAGS	= $(CFLAGS) -Wl,-T,test.ld -Wl,-Map=$*.map
+
+TESTDIRS = $(wildcard tests/*)
+TESTS    = $(foreach d,$(TESTDIRS),$(d)/$(notdir $(d)).elf)
+gendeps = -MD -MF $(@D)/.$(@F).d -MT $@
+
+TESTHEX  = $(TESTS:.elf=.tcm.hex) $(TESTS:.elf=.mem.hex)
+
+tcm_start  := 0
+tcm_size   := 16384
+mem_start  := 0x40000000
 
 .SECONDARY:
 
-all: test1.hex test2.hex
+all: $(TESTHEX)
 
-%.hex: %.bin
-	$(HEXDUMP) -v -e '"" 8/4 "%08x " "\n"' $< > $@
+%.tcm.hex: %.bin
+	$(HEXDUMP) -v -n $(tcm_size) -e '"" 8/4 "%08x " "\n"' $< > $@
+
+%.mem.hex: %.bin
+	$(HEXDUMP) -v -s $$(($(mem_start)-$(tcm_start))) \
+		-e '"" 8/4 "%08x " "\n"' $< > $@
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
 
-%.elf: %.o test.ld
-	$(LD) $(LDFLAGS) -o $@ $<
+%.elf: test.ld
+	$(CC) $(LDFLAGS) $(LDFLAGS_$@) -o $@ $(OBJS_$@)
 
 %.o: %.S
-	$(CC) $(ASFLAGS) -c -o $@ $<
+	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -c -o $@ $<
+
+%.o: %.c
+	$(CC) $(CFLAGS) $(CFLAGS_$<) $(gendeps) -c -o $@ $<
+
+%.s: %.c
+	$(CC) $(CFLAGS) $(CFLAGS_$<) $(gendeps) -S -o $@ $<
+
+clean:
+	find . $(patsubst %,-name '*%' -o,.hex .bin .elf .o .s .d) -false \
+		| xargs -rt rm -f
+
+tests.d:
+	( for d in $(TESTDIRS); do \
+		e="$$d/$$(basename $$d).elf" ; \
+		echo -n "OBJS_$$e =" ; \
+		for s in "$$d"/*.[Sc]; do \
+			echo -n " $${s/%.?/.o}" ; \
+		done ; \
+		echo '' ; \
+		echo "$$e: \$$(OBJS_$$e)" ; \
+	  done ) > $@
+
+-include tests.d
+-include tests/*/*.mk
+-include tests/*/.*.d

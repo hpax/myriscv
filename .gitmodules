@@ -1,0 +1,12 @@
+[submodule "tools/gnusrc/newlib"]
+	path = tools/gnusrc/newlib
+	url = git://git.abc80.org/riscv/tools/newlib-cygwin.git
+	branch = main
+[submodule "tools/gnusrc/binutils"]
+	path = tools/gnusrc/binutils
+	url = git://git.abc80.org/riscv/tools/binutils-gdb.git
+	branch = binutils-2.41-hpa
+[submodule "tools/gnusrc/gcc"]
+	path = tools/gnusrc/gcc
+	url = git://git.abc80.org/riscv/tools/gcc.git
+	branch = releases/gcc-13
