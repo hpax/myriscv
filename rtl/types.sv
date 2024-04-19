@@ -206,4 +206,12 @@ typedef struct packed {
    cond_t      cond;
 } aluctl_t;
 
+typedef struct packed {
+   logic       data;
+   logic       stb;
+   logic       incr;
+   logic       bist;
+   logic       dead;
+} rng_bus_t;
+
 `endif

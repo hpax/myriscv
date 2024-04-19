@@ -5,7 +5,8 @@ module core #(`CONFIG) (rst_n, clk, clken,
   mem_addr, mem_wdata, mem_valid, mem_wrq, mem_wbe,
   mem_ready, mem_rdata, mem_wr, mem_cpu, mem_addr_i,
   io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready,io_rdata,
-  irq, irq_enable, irq_edge, intack, buserr
+  irq, irq_enable, irq_edge, intack, buserr,
+  rng_data, rng_stb, rng_incr, rng_bist, rng_dead, rng_full
   );
 
    input		     rst_n;
@@ -54,6 +55,14 @@ module core #(`CONFIG) (rst_n, clk, clken,
    output [IRQ_BITS-1:0]     intack;
 
    output reg		     buserr;
+
+
+   input		     rng_data;
+   input		     rng_stb;
+   input		     rng_incr;
+   input		     rng_bist;
+   input		     rng_dead;
+   output		     rng_full;
 
    wire [31:0]		     ibus_a;
    wire			     ibus_valid;
@@ -451,6 +460,9 @@ module core #(`CONFIG) (rst_n, clk, clken,
    wire [31:0] e_dout;
    wire [31:0] m_din;
 
+   rng_bus_t   rng;
+   assign rng = { rng_data, rng_stb, rng_incr, rng_bist, rng_dead };
+
    backend
      #(.NUM_IRQS	 ( NUM_IRQS ),
        .IRQ_BITS	 ( IRQ_BITS ),
@@ -499,6 +511,9 @@ module core #(`CONFIG) (rst_n, clk, clken,
      .ctr_time          (ctr_time),
      .ctr_cycle		(ctr_cycle),
      .ctr_instret	(ctr_instret),
+
+     .rng		(rng),
+     .rng_full		(rng_full),
 
      .dbus_a		(dbus_a),
      .dbus_valid	(dbus_valid),

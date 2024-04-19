@@ -58,6 +58,10 @@ module backend #(`CONFIG)
  input [63:0]		   ctr_cycle,
  input [63:0]		   ctr_instret,
 
+ // Random data input
+ input rng_bus_t	   rng,
+ output			   rng_full,
+
  // Data output, unregistered and registered
  output reg [31:0]	   e_dout,
  output reg [31:0]	   m_din,
@@ -282,6 +286,14 @@ module backend #(`CONFIG)
      .e_src1(e_src1), .e_src2(e_src2),
      .m_mulh_o(m_mulh_o), .m_mull_o(m_mull_o));
 
+   // Random number generator
+   logic [31:0] e_rng_out;
+   logic	e_rng_rstb;
+   rng_zkr #(`CFG)
+   rng_zkr (.rst_n(rst_n), .clk(clk), .clken(clken),
+     .rng(rng), .rng_full(rng_full),
+     .rdata(e_rng_out), .rstb(e_rng_rstb));
+
    //
    // CSR registers
    //
@@ -301,49 +313,56 @@ module backend #(`CONFIG)
 
    // For a CSR with read side effects, the read side effect
    // should be conditioned on e_op.csrr.
-   always @(*)
-     unique case (ncsr)
-       CSR_MTVEC:
-	 e_csr_rval  = mtvec;
-       CSR_MEPC:
-	 e_csr_rval  = mepc;
-       CSR_MCAUSE:
-	 e_csr_rval  = mcause;
-       CSR_TIME:
-	 e_csr_rval  = ctr_time[31:0];
-       CSR_TIMEH:
-	 e_csr_rval  = ctr_time[63:32];
-       CSR_CYCLE, CSR_MCYCLE:
-	 e_csr_rval  = ctr_cycle[31:0];
-       CSR_CYCLEH, CSR_MCYCLEH:
-	 e_csr_rval  = ctr_cycle[63:32];
-       CSR_INSTRET,  CSR_MINSTRET:
-	 e_csr_rval  = ctr_instret[31:0];
-       CSR_INSTRETH, CSR_MINSTRETH:
-	 e_csr_rval  = ctr_instret[63:32];
-       CSR_MISA:
-	 e_csr_rval  = csrval_misa;
-       CSR_MVENDORID:
-	 e_csr_rval  = csrval_vendorid;
-       CSR_MARCHID:
-	 e_csr_rval  = csrval_archid;
-       CSR_MIMPID:
-	 e_csr_rval  = csrval_impid;
-       CSR_MIP:
-	 e_csr_rval  = { d_irqs, 1'b0 };
-       CSR_MIE:
-	 e_csr_rval  = { mie, 1'b0 };
-       CSR_MSTATUS:
-	 e_csr_rval  = { 28'b0,
-			 cie[e_op.mcontext.m], 1'b0,
-			 cie[e_op.mcontext.u], 1'b0 };
-       CSR_USER_CONTEXT:
-	 e_csr_rval  = e_op.mcontext.u;
-       CSR_CIE:
-	 e_csr_rval  = cie;
-       default:
-	 e_csr_rval  = 32'b0;
-     endcase
+   always @(*) begin
+      e_rng_rstb = 1'b0;
+
+      unique case (ncsr)
+	CSR_MTVEC:
+	  e_csr_rval  = mtvec;
+	CSR_MEPC:
+	  e_csr_rval  = mepc;
+	CSR_MCAUSE:
+	  e_csr_rval  = mcause;
+	CSR_TIME:
+	  e_csr_rval  = ctr_time[31:0];
+	CSR_TIMEH:
+	  e_csr_rval  = ctr_time[63:32];
+	CSR_CYCLE, CSR_MCYCLE:
+	  e_csr_rval  = ctr_cycle[31:0];
+	CSR_CYCLEH, CSR_MCYCLEH:
+	  e_csr_rval  = ctr_cycle[63:32];
+	CSR_INSTRET,  CSR_MINSTRET:
+	  e_csr_rval  = ctr_instret[31:0];
+	CSR_INSTRETH, CSR_MINSTRETH:
+	  e_csr_rval  = ctr_instret[63:32];
+	CSR_MISA:
+	  e_csr_rval  = csrval_misa;
+	CSR_MVENDORID:
+	  e_csr_rval  = csrval_vendorid;
+	CSR_MARCHID:
+	  e_csr_rval  = csrval_archid;
+	CSR_MIMPID:
+	  e_csr_rval  = csrval_impid;
+	CSR_MIP:
+	  e_csr_rval  = { d_irqs, 1'b0 };
+	CSR_MIE:
+	  e_csr_rval  = { mie, 1'b0 };
+	CSR_MSTATUS:
+	  e_csr_rval  = { 28'b0,
+	  cie[e_op.mcontext.m], 1'b0,
+	  cie[e_op.mcontext.u], 1'b0 };
+	CSR_USER_CONTEXT:
+	  e_csr_rval  = e_op.mcontext.u;
+	CSR_CIE:
+	  e_csr_rval = cie;
+	CSR_SEED: begin
+	   e_csr_rval = e_rng_out;
+	   e_rng_rstb = e_op.csrr | e_op.csrw;
+	end
+	default:
+	  e_csr_rval  = 32'b0;
+      endcase
+   end
 
    always @(*)
      unique casez (e_op.funct3)

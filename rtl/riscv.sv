@@ -69,6 +69,8 @@ typedef enum logic [11:0] {
 	CSR_INSTRET		= 12'hc02,
 	CSR_INSTRETH		= 12'hc82,
 
+	CSR_SEED		= 12'h015,
+
 	CSR_MVENDORID		= 12'hf11,
 	CSR_MARCHID		= 12'hf12,
 	CSR_MIMPID		= 12'hf13,
