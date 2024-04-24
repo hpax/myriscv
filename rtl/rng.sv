@@ -56,7 +56,7 @@ module rng_zkr #(
 
 	if (rng.incr)
 	  ectr <= ectr + ~rng_full; // Saturating counter
-	if (rstb & rng_full)
+	if (rng.dead | rng.bist | (rstb & (status == RNG_ES16)))
 	  ectr <= 5'd0;
 
 	if (rng.dead)
