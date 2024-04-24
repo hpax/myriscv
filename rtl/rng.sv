@@ -56,7 +56,7 @@ module rng_zkr #(
 
 	if (rng.incr)
 	  ectr <= ectr + ~rng_full; // Saturating counter
-	if (rstb)
+	if (rstb & rng_full)
 	  ectr <= 5'd0;
 
 	if (rng.dead)
@@ -69,5 +69,7 @@ module rng_zkr #(
 	  status <= RNG_WAIT;
      end
 
-   assign rdata = { status, 14'b0, acc[15:0] };
+   assign rdata[31:30] = status;
+   assign rdata[28:16] = 14'b0;
+   assign rdata[15:0]  = {16{!Zkr_secure || status == RNG_ES16}} & acc[15:0];
 endmodule

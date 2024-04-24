@@ -23,10 +23,14 @@ parameter bit WITH_Zalrsc	= 1'b1; // LR/SC instructions
 parameter bit WITH_Ziccrse	= 1'b1; // LR/SC guarantee forward progress
 
 parameter bit STRICT_UNDEFINED	= 1'b0; // Strict opcode checking
-
 parameter bit TRAP_BADINSN	= 1'b1;
 parameter bit TRAP_BADALU	= 1'b1;
 parameter bit TRAP_BADPC	= 1'b1;
+
+// If Zkr_secure is set, the entropy register is not visible unless
+// the status field in the SEED CSR is set to ES16. If this is set to 0,
+// this masking is not performed (reduces area cost.)
+parameter bit Zkr_secure        = 1'b0;
 
 // For the Ziccrse instruction, this sets the size as a power of 2 of the
 // maximum constrained instruction sequence. Interrupts are locked out
