@@ -315,7 +315,7 @@ module backend #(`CONFIG)
    wire [11:0]	ncsr = e_op.imm[11:0];
 
    // For a CSR with read side effects, the read side effect
-   // should be conditioned on e_op.csrr.
+   // should be conditioned on e_accept & e_op.csrr.
    always @(*) begin
       e_rng_rstb = 1'b0;
 
@@ -360,7 +360,7 @@ module backend #(`CONFIG)
 	  e_csr_rval = cie;
 	CSR_SEED: begin
 	   e_csr_rval = e_rng_out;
-	   e_rng_rstb = e_op.csrr | e_op.csrw;
+	   e_rng_rstb = e_accept & (e_op.csrr | e_op.csrw);
 	end
 	default:
 	  e_csr_rval  = 32'b0;
