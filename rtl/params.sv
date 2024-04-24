@@ -19,12 +19,20 @@ parameter bit WITH_cmpand       = 1'b1; // baeqz, banez
 parameter bit WITH_setext	= 1'b0; // addtional SET operations
 parameter bit WITH_Zbasub	= 1'b1; // shXsub
 parameter bit WITH_Zkr		= 1'b1; // seed CSR (needs external bit source)
+parameter bit WITH_Zalrsc	= 1'b1; // LR/SC instructions
+parameter bit WITH_Ziccrse	= 1'b1; // LR/SC guarantee forward progress
 
 parameter bit STRICT_UNDEFINED	= 1'b0; // Strict opcode checking
 
 parameter bit TRAP_BADINSN	= 1'b1;
 parameter bit TRAP_BADALU	= 1'b1;
 parameter bit TRAP_BADPC	= 1'b1;
+
+// For the Ziccrse instruction, this sets the size as a power of 2 of the
+// maximum constrained instruction sequence. Interrupts are locked out
+// until this number of instructions have retired. If this is 0, interrupts
+// are locked out indefinely until the reservation is released.
+parameter int Ziccrse_bits      = 4;    // Standard architectural value
 
 parameter logic [31:0] PC_MASK	= 32'h41ff_fffe;
 parameter logic [31:0] RESET_PC	= 32'h0000_0010;

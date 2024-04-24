@@ -42,7 +42,7 @@ module decode_comb #(`CONFIG)
 
    always @(*)
      begin
-	op	      = 'bx;
+	op 	      = 'bx;
 	op.i16	      = is_16;
 	op.mcontext   = d_mcontext;
 
@@ -61,6 +61,7 @@ module decode_comb #(`CONFIG)
 	op.rs2.c      = op.mcontext.m;
 	op.rs2_valid  = 1'b0;
 	op.imm	      = 'bx;
+	op.lrsc       = 1'b0;
 	op.csrw       = 1'b0;
 	op.csrr       = 1'b0;
 	op.pred_taken = d_pred_taken;
@@ -80,11 +81,32 @@ module decode_comb #(`CONFIG)
 	  end
 
 	  STORE: begin
-	     if (op.funct3 <= 3'b010)
-	       op.itype      = INSN_ST;
+	     if (!STRICT_UNDEFINED || op.funct3 <= 3'b010)
+	       op.itype   = INSN_ST;
 	     op.rs1_valid = 1'b1;
 	     op.rs2_valid = 1'b1;
-	     op.imm       = s_imm;
+	     op.imm	  = s_imm;
+	  end
+
+	  AMO: begin
+	     if (WITH_Zalrsc) begin
+		if (!STRICT_UNDEFINED ||
+		  (op.funct7[6:3] == 4'b0001 & op.funct7[1:0] == 2'b11 &
+		   op.funct3 == 3'b010 & (op.funct7[2] | !op.rd.r))) begin
+		   op.imm          = 'b0;
+		   op.rs1_valid    = 1'b1;
+		   op.lrsc         = 1'b1;
+		   if (op.funct7[2]) begin
+		      op.itype	   = INSN_ST;
+		      op.rs2_valid = 1'b1;
+		      op.rd_e	   = 1'b1;
+		   end else begin
+		      op.itype	   = INSN_LD;
+		      op.rs2_valid = 1'b0;
+		      op.rd_m	   = 1'b1;
+		   end
+		end
+	     end
 	  end
 
 	  BRANCH: begin

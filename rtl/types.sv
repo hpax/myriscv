@@ -79,6 +79,9 @@ typedef struct packed {
    logic	 csrr;
    logic	 csrw;
 
+   // Atomic (LR/SC) memory operation
+   logic	 lrsc;
+
    // Jump prediced taken?
    logic	 pred_taken;
 } decoded_insn_t;
@@ -106,6 +109,7 @@ function decoded_insn_t dummy_op(
 
    dummy_op.csrr       = 1'b0;
    dummy_op.csrw       = 1'b0;
+   dummy_op.lrsc       = 1'b0;
 
    dummy_op.pc	       = pc;
    dummy_op.pc_valid   = pc_valid;

@@ -16,9 +16,11 @@ Standard options:
 	C	- Compression operations (Zca Zcb)
 	Zkr	- Entropy source
 	Zkt	- Data-independent execution latency
+	Zalrsc	- LR/SC instructions for atomicity
 	Zicbom	- Cache block management operations
 	Ziccif	- Aligned instruction fetches are atomic
 	Zicclsm	- Unaligned memory accesses
+	Ziccrse	- LR/SC forward progress guarantee
 	Zicond	- Conditional integer operations
 	Zicsr	- Control registers
 	Zictr	- Standard counter registers
@@ -73,7 +75,7 @@ Private extensions:
 		bitfield extraction; this needs to be assigned opcodes.
 
 
-Non-standard behaviors:
+Non-standard or system-specific behaviors:
 
 	With FUSE_CNOP:
 		An RVC instruction immediately followed by c.nop, as
@@ -116,6 +118,27 @@ Non-standard behaviors:
 		The time counter can be external.
 
 		None of the counters are writable.
+
+	LR/SC instructions (WITH_Zalrsc):
+		There is only one reservation bit.
+
+		It is claimed by LR and released by SC, exceptions,
+		and interrupts.
+
+		If WITH_Ziccrse is specified, interrupts are inhibited
+		for up to 2^Ziccrse_bits instructions (default 2^4)
+		have been retired, or if Ziccrse_bits == 0, until the
+		reservation has been cleared.
+
+		Unless STRICT_UNDEFINED is set, halfword and byte
+		LR/SC instructions (lr.b, lr.h, lr.bu, lr.hu, sc.b,
+		sc.h) are supported by setting funct3 to the same
+		value as the equivalent load or store instruction.
+
+Omit the counter for the Ziccrse extension;
+		interrupts are suppressed until an SC instruction or
+		exception is encountered.
+
 
 
 System architecture:

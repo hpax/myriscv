@@ -102,6 +102,9 @@ module backend #(`CONFIG)
    // This does not consider m_trap due to a speed path.
    assign e_valid_o = e_accept;
 
+   // LR/SC state machine outputs
+   logic lrsc_resv;		// Reservation set held (SC returns 0)
+   logic lrsc_hold;		// Inhibit interrupts (atomic sequence)
 
    // M-stage pipeline synchronization signals
    reg	  m_trap;
@@ -399,7 +402,8 @@ module backend #(`CONFIG)
 	e_irq        <= 1'b0;
 	e_irq_vector <= 'b0;
 
-	if (cie[e_op.mcontext.m]) begin
+	// lrsc_hold inhibits interrupts for the forward progress guarantee
+	if (cie[e_op.mcontext.m] & ~lrsc_hold) begin
 	   e_irq     <= |real_irq;
 	   // Priority vector encoder
 	   for (int i = NUM_IRQS; i > 0; i--)
@@ -643,6 +647,9 @@ module backend #(`CONFIG)
 	  e_dout = e_succ_pc;
 	INSN_CSR:
 	  e_dout = e_csr_rval;
+	INSN_ST:
+	  if (WITH_Zalrsc)
+	    e_dout = { 31'b0, ~lrsc_resv };
 	default:
 	  e_dout = 32'bx; // Suppress warning
       endcase
@@ -690,6 +697,61 @@ module backend #(`CONFIG)
      );
 
    assign m_busy = ldst_busy;
+
+   //
+   // LR/SC state machine
+   //
+   logic       lrsc_hold_q;
+   logic       lrsc_clear_hold;
+
+   wire is_lr = WITH_Zalrsc & e_accept & e_op.lrsc & ~e_op.itype[0];
+   wire	is_sc = WITH_Zalrsc & e_accept & e_op.lrsc &  e_op.itype[0];
+
+   // The combinatorial part here prevents an interrupt right after LR,
+   // which would violate the Ziccrse atomicity guarantee.
+   assign lrsc_hold = WITH_Zalrsc & WITH_Ziccrse & (lrsc_hold_q | is_lr);
+
+   generate
+      if (WITH_Zalrsc && WITH_Ziccrse && Ziccrse_bits) begin
+	 reg [Ziccrse_bits-1:0] lrsc_hold_ctr;
+
+	 always @(negedge rst_n or posedge clk)
+	   if (~rst_n)
+	      lrsc_hold_ctr <= 'b0;
+	   else if (clken) begin
+	      if (is_lr)
+		lrsc_hold_ctr <= 'b0;
+	      else
+		lrsc_hold_ctr <= lrsc_hold_ctr + (m_valid_o & ~m_stall);
+	   end
+
+	 assign lrsc_clear_hold = &lrsc_hold_ctr;
+      end else begin
+	 assign lrsc_clear_hold = 1'b0;
+      end
+   endgenerate
+
+   generate
+      if (WITH_Zalrsc) begin
+	 always @(negedge rst_n or posedge clk)
+	   if (~rst_n) begin
+	      lrsc_resv     <= 1'b0;
+	      lrsc_hold_q   <= 1'b0;
+	   end else if (clken) begin
+	      lrsc_hold_q <= WITH_Ziccrse & lrsc_hold_q & ~lrsc_clear_hold;
+	      if (is_sc | m_xcpt) begin
+		 lrsc_resv   <= 1'b0;
+		 lrsc_hold_q <= 1'b0;
+	      end else if (is_lr) begin
+		 lrsc_resv   <= 1'b1;
+		 lrsc_hold_q <= WITH_Ziccrse;
+	      end
+	   end
+      end else begin
+	 assign lrsc_resv   = 1'b0;
+	 assign lrsc_hold_q = 1'b0;
+      end
+   endgenerate
 
    //
    // M stage output MUX
