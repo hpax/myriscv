@@ -70,6 +70,6 @@ module rng_zkr #(
      end
 
    assign rdata[31:30] = status;
-   assign rdata[28:16] = 14'b0;
+   assign rdata[29:16] = 14'b0;
    assign rdata[15:0]  = {16{!Zkr_secure || status == RNG_ES16}} & acc[15:0];
 endmodule
