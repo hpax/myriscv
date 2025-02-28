@@ -1,14 +1,19 @@
 Pipeline stages:
 
-	F - Fetch
-	D - Decode
-	E - Execute (address generation, ALU)
-	M - Memory accress (load, store; late ALU operations)
-	W - Write Back (register file is written)
-	X - Pseudo-stage beyond the end of the pipeline
+	F1 - Fetch - generate instruction fetch address
+	F2 - Fetch - receive fetch data
+	D  - Decode
+	E  - Execute (address generation, ALU)
+	M  - Memory accress (load, store; late ALU operations)
+	W  - Write Back (register file is written)
+	X  - Pseudo-stage beyond the end of the pipeline
 
-X is not a stage per se, but a source for bypass data due to the
-register file begin read already during the D stage.
+X is not a stage per se, but an artificial name for a source for
+bypass data due to the register file begin read already during the D
+stage.
+
+The split between the F1 and F2 stages is internal to the fetch unit;
+the global pipeline logic consider it a single "F stage."
 
 A clocked register is named with the stage for which its output is
 valid for. Combinatorial signals become valid during their signal
@@ -25,29 +30,34 @@ The valid bit propagates down the pipe and indicates whether the input
 of that pipeline stage represents a valid instruction.
 
 The E stage is the last stage in which an operation can be aborted. An
-instruction allowed to advance to the M stage must complete.
-*Fix this to support memory exceptions.*
+instruction allowed to advance to the M stage must retire.
 
 Bypasses and latencies:
 
 	E -> E		1 cycle	 (immediate use)
 	M -> E		2 cycles
-	E -> F		3 cycles
-	M -> F		4 cycles
+	E -> F1		5 cycles (mispredict kill)	XXX: correct?
+	M -> F1		6 cycles (exception kill)	XXX: correct?
 
-Mandatory penalty cycles in the current implementation:
+Additional mandatory penalty cycles in the current implementation:
 
 A jump/branch to a misaligned 32-bit instruction takes a 1-cycle
 penalty.
 
 Load data or multiply output used in the next cycle takes a 1-cycle
-penalty.
+penalty, except for cached multiply data (typically MULH to MUL
+forward.)
 
 A memory operation which crosses a 32-bit boundary takes a 1-cycle
 (one dbus transaction) penalty.
 
 
-Each stage has the following handshaking signals:
+Each stage has the following handshaking signals, for the backend
+stages inputs and outputs are combinatorial for the stage in
+question. The F and D stages have some special tighter coupling to
+allow the F stage to output data and some handshaking signals in the D
+stage; thus, the fetch unit outputs e.g. d_valid_i instead of
+f_valid_o.
 
 output  valid_o
 
@@ -96,7 +106,7 @@ input	killed
 	valid_o = 0 no later than the next cycle, with the sole
 	exception of the F stage.
 
-	The unit may continue to re-assert busy if already asserted,
-	but after the first cycle with busy = 0, the stage MUST NOT
+	The unit MAY continue to assert busy if already asserted, but
+	after the first cycle with busy = 0, the stage MUST NOT
 	re-assert busy until it has accepted at least one datum
 	(valid_i = 1, busy = 0.)
