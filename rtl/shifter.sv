@@ -15,14 +15,15 @@
 
 `include "myriscv.vh"
 
-module rotate
+// Low-level rotator implementation
+module sh_rot
   #(
     parameter width = 32
     )
    (
     input  [$clog2(width)-1:0] cnt,
     input  [width-1:0] d,
-    output logic [width-1:0] q
+    output [width-1:0] q
     );
 // *** Variant 1
 //   wire [2*width-1:0]  in = { d, {width{1'b0}} };
@@ -66,199 +67,141 @@ module rotate
 endmodule
 
 //
-// Construct the output mask.
-//
-module maskgen
+// Rotated output
+module sh_rotate
   #(
     parameter width = 32
     )
    (
-    input [$clog2(width)-1:0] cnt,
-    input [$clog2(width)-1:0] pos,
-    output reg [width-1:0] q
+    input [$clog2(width)-1:0] shamt,
+    input shiftop_t           op,
+    input [width-1:0]	      d,
+    output [width-1:0]        q
     );
 
-   // *** Variant 1
-`ifdef NOT
-   always @(*)
-     begin
-	for (integer i = 0; i < width; i = i + 1)
-	  begin
-	     logic [$clog2(width)-1:0] delta;
-	     delta = (width+i) - pos;
-	     q[i] = delta < cnt;
-	  end
-     end
-`endif //  `ifdef NOT
+   logic [$clog2(width)-1:0]  cnt;
 
    always @(*)
-     begin
-     end
+     unique casez (op.srot)
+       SROT_NONE:  cnt = 'b0;
+       SROT_RIGHT: cnt = shamt;
+       SROT_LEFT:  cnt = -shamt;
+       default:    cnt = 'bx;
+     endcase
 
-   // *** Variant 2
-`ifdef NOT
-   always @(*)
-     begin
-	reg [width-1:0]		       qtmp;
-	for (integer i = 0; i < width; i = i + 1)
-	  qtmp[i] = i < cnt;
-	for (integer i = 0; i < width; i = i + 1)
-	  q[i] = qtmp[(i-pos) & (width-1)];
-     end
-`endif
-
-   // *** Variant 3
-   always @(*)
-     begin
-	logic [width-1:0] xa;
-
-	// Mask of cnt bits
-	for (integer i = 0; i < width; i++)
-	  xa[i] = i < cnt;
-
-	// Rotate left
-	for (integer i = 0; i < $clog2(width); i++)
-	  begin
-	     if (cnt[i])
-	       begin
-		  logic [$clog2(width)-1:0] ioffs;
-		  logic [width-1:0] xb;
-
-		  ioffs = 'b0;
-		  ioffs[i] = 1'b1;
-		  for (integer j = 0; j < width; j++)
-		    begin
-		       logic [$clog2(width)-1:0] joffs;
-		       joffs = j - ioffs;
-		       xb[j] = xa[joffs];
-		    end
-		  xa = xb;
-	       end
-	  end // for (integer i = 0; i < $clog2(width); i++)
-
-	q = xa;
-     end // always @ (*)
-
-   // *** Variant 4
-`ifdef NOT
-   always @(*)
-     begin
-	logic [width-1:0] xa;
-
-	// Mask of cnt bits
-	for (integer i = 0; i < width; i++)
-	  xa[i] = i < cnt;
-
-	// Shift left
-	q = xa << pos;
-     end
-`endif
+   sh_rot rot (.cnt(cnt), .d(d), .q(q));
 endmodule
 
-//
-// Sign bit multiplexer
-//
-module sign_mux
-  #(
-    parameter width = 32
-    )
-   (
-    input [$clog2(width)-1:0] pos,
-    input sand,
-    input sxor,
-    input [width-1:0] d,
-    output reg q
-    );
-
-   always @(*)
-     q = (d[pos] & sand) ^ sxor;
-endmodule // sign_mux
 
 //
-// See shiftops.odt for description of the input signals.
+// Construct the output mask.
 //
-module shifter_core
-  #(
-    // Note: a width that is not a power of 2 is theoretically
-    // supported, but is likely to produce a very inefficient circuit.
-    parameter width = 32
-    )
-  (
-   input [$clog2(width)-1:0] rcnt, // Rotation count
-   input [$clog2(width)-1:0] mpos, // First output bit to be masked
-   input [$clog2(width)-1:0] mcnt, // Number of output bits to be unmasked
-   input [$clog2(width)-1:0] spos, // Sign bit position
-   input		     sand, // Sign bit ANDed with this value
-   input		     sxor, // Sign bit XORed with this value
-
-   input  [width-1:0]	     d,
-   output [width-1:0]	     q
-   );
-
-   wire			     sign_bit;
-   sign_mux #(.width(width)) sign_mux (.pos(spos), .sand (sand), .sxor(sxor),
-				       .d(d), .q(sign_bit));
-
-   // Rotation using crossbar
-   wire [width-1:0]	    d_rot;
-   rotate #(.width(width)) rotate (.cnt(rcnt), .d(d), .q(d_rot));
-
-   // Note: for a left shift, only invert the mask if the mask would not
-   // end up zero.
-   wire [width-1:0]	    mask;
-   maskgen #(.width(width)) maskgen (.cnt(mcnt), .pos(mpos), .q(mask));
-
-   assign q = (d_rot & ~mask) | ({width{sign_bit}} & mask);
-endmodule // shifter
-
-module shifter
+module sh_maskgen
   #(
     parameter width = 32
     )
    (
     input [$clog2(width)-1:0] shamt, // Shift amount operand
-    input		      shiftop_t op,
-
-    input [width-1:0]	      d,
-    output [width-1:0]	      q
+    input shiftop_t           op,
+    output [width-1:0]        q
     );
 
-   logic [$clog2(width)-1:0]  rcnt;
-   logic [$clog2(width)-1:0]  mpos;
-   logic [$clog2(width)-1:0]  mcnt;
-   logic [$clog2(width)-1:0]  spos;
-   logic		      sand;
-   logic		      sxor;
+   always @(*) begin
+      logic [$clog2(width)-1:0] amt;
 
-   always @(*)
-     begin
-	unique case (op.rcnt)
-	  2'b00:   rcnt = 'b0;
-	  2'b10:   rcnt = shamt;
-	  2'b11:   rcnt = -shamt;
-	  default: rcnt = 'bx;
-	endcase // unique case (op.rcnt)
+      unique case (op.smpos)
+	SMPOS_CNT:   amt = shamt;
+	SMPOS_mWIMM: amt = -op.wimm;
+	default:     amt = 'bx;
+      endcase
 
-	mcnt = op.mcnt[1] ? shamt : op.wimm;
-	mcnt = op.mcnt[0] ? -mcnt : mcnt;
-
-	mpos = op.mpos[1] ? shamt : op.wimm;
-	mpos = op.mpos[0] ? -mpos : mpos;
-
-	spos = ({width{op.spos[1]}} & shamt) +
-	       ({width{op.spos[0]}} & op.wimm) - op.spos[0];
-
-	sand = op.sand;
-	sxor = op.sxor;
-     end // always @ (*)
-
-   shifter_core core (
-		      .rcnt (rcnt),
-		      .mpos (mpos),
-		      .mcnt (mcnt),
-		      .spos (spos),
-		      .sand (sand),
-		      .sxor (sxor),
-		      .d    (d),
-		      .q    (q));
+      for (int i = 0; i < width; i++)
+	unique case ( op.smask )
+	  SMASK_NONE: q[i] = 1'b0;
+	  SMASK_ONE:  q[i] = i == amt;
+	  SMASK_LO:   q[i] = i < amt;
+	  SMASK_HI:   q[i] = ~i < amt;
+	  default:    q[i] = 1'bx;
+	endcase
+   end
 endmodule
+
+//
+// Sign bit multiplexer
+//
+module sh_signmux
+  #(
+    parameter width = 32
+    )
+   (
+    input [$clog2(width)-1:0] shamt,
+    input shiftop_t           op,
+    input [width-1:0]	      d,
+    output		      q
+    );
+
+   always @(*) begin
+      logic [$clog2(width)-1:0] pos;
+      unique case (op.spos)
+	SPOS_CNT:    pos = shamt;
+	SPOS_WIMMm1: pos = op.wimm - 1;
+	SPOS_mCNT:   pos = -shamt;
+	SPOS_1mWC:   pos = -(shamt + op.wimm - 1);
+	default:     pos = 'bx;
+      endcase
+
+      q = (d[pos] & op.sand) ^ op.sxor;
+   end
+endmodule // sign_mux
+
+//
+// Output mux
+//
+module sh_outmux
+  #(
+    parameter width = 32
+  )
+  (
+    input [$clog2(width)-1:0]  d_rot,
+    input [$clog2(width)-1:0]  mask,
+    input		       signbit,
+    output [$clog2(width)-1:0] q
+  );
+   assign q = (d_rot & ~mask) | ({width{signbit}} & mask);
+endmodule
+
+//
+// See shiftops.odt for description of the input signals.
+//
+module shifter
+  #(
+    // Make this a non-power-of-2 at your own risk
+    parameter width = 32
+    )
+  (
+  input [$clog2(width)-1:0] shamt, // shift amount
+  input			    shiftop_t op,
+
+  input  [width-1:0]	    d,
+  output [width-1:0]	    q
+   );
+
+   // "Sign" bit MUX
+   wire			     signbit;
+   sh_signmux #(.width(width))
+   signmux (.shamt(shamt), .op(op), .d(d), .q(signbit));
+
+   // Rotator
+   wire [width-1:0]	    d_rot;
+   sh_rotate #(.width(width))
+   rotate (.shamt(shamt), .op(op), .d(d), .q(d_rot));
+
+   // Mask generator
+   wire [width-1:0]	    mask;
+   sh_maskgen #(.width(width))
+   maskgen (.shamt(shamt), .op(op), .q(mask));
+
+   // Combine using output MUX
+   sh_outmux #(.width(width))
+   outmux (.d_rot(d_rot), .mask(mask), .signbit(signbit), .q(q));
+endmodule // shifter

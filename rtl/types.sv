@@ -143,64 +143,64 @@ function logic [31:0] successor_pc(input decoded_insn_t op, input valid);
 endfunction
 
 //
-// Shifter operation control.
+// Shifter operation control. Entries in parens aren't used and may be
+// x'd out.
 //
-//  14:10 - wimm (width immediate)
-//    9:8 - rcnt
-//          00 = 0
-//          10 = shamt
-//          11 = -shamt
-//    7:6 - mpos
-//          00 = wimm
-//          01 = -wimm
-//          10 = shamt
-//          11 = -shamt
-//    5:4 - mcnt:
-//          00 = wimm
-//          01 = -wimm
-//          10 = shamt
-//          11 = -shamt
-//    3:2 - spos:
-//          00  = 00
-//          01  = wimm - 1
-//          10  = shamt
-//          11  = shamt + wimm - 1
-//    1:0 - sign (masked) bit selection:
-//          (bit 1 = AND, bit 0 = XOR)
-//	    00  =  0
-//	    01  =  1
-//          10  =  src[spos]
-//	    11  = ~src[spos]
-//
+typedef enum logic [1:0] {
+  SROT_NONE  = 2'b00,	// No rotation
+  SROT_RIGHT = 2'b10,	// Rotate right
+  SROT_LEFT  = 2'b11	// Rotate left
+} srot_t;
+
+typedef enum logic {
+  SMPOS_CNT   = 1'b0,	// shamt
+  SMPOS_mWIMM = 1'b1,	// -wimm
+  SMPOS_ANY   = 1'bx
+} smpos_t;
+
+typedef enum logic [1:0] {
+  SMASK_NONE = 2'b00,  // Nothing is masked
+  SMASK_ONE  = 2'b01,  // The mpos bit only is masked
+  SMASK_HI   = 2'b10,  // mpos bits at the top are masked
+  SMASK_LO   = 2'b11   // mpos bits at the bottom are masked
+} smasktype_t;
+
+typedef enum logic [1:0] {
+  SPOS_CNT    = 2'b00, // shamt
+  SPOS_WIMMm1 = 2'b01, // wimm - 1
+  SPOS_mCNT   = 2'b10, // -shamt
+  SPOS_1mWC   = 2'b11, // -(shamt + wimm - 1)
+  SPOS_ANY    = 2'bxx
+} spos_t;
 
 typedef struct packed {
-   logic [4:0] wimm;
-   logic [1:0] rcnt;
-   logic [1:0] mpos;
-   logic [1:0] mcnt;
-   logic [1:0] spos;
+   logic [4:0] wimm;		// Width immediate
+   srot_t      srot;
+   smpos_t     smpos;
+   smasktype_t smask;
+   spos_t      spos;
    logic       sand;
    logic       sxor;
 } shiftop_t;
 
 typedef enum shiftop_t {
-	     SHIFTOP_SLL   = 15'b00000_11_00_10_xx_00,
-	     SHIFTOP_SRL   = 15'bxxxxx_10_11_10_xx_00,
-	     SHIFTOP_SRA   = 15'b00000_10_11_10_01_10,
-	     SHIFTOP_ROL   = 15'b00000_11_xx_00_xx_xx,
-	     SHIFTOP_ROR   = 15'b00000_10_xx_00_xx_xx,
-	     SHIFTOP_ZEXTB = 15'b01000_00_00_01_xx_00,
-	     SHIFTOP_ZEXTH = 15'b10000_00_00_01_xx_00,
-	     SHIFTOP_SEXTB = 15'b01000_00_00_01_01_10,
-	     SHIFTOP_SEXTH = 15'b10000_00_00_01_01_10,
-	     SHIFTOP_BCLR  = 15'b00001_00_10_00_xx_00,
-	     SHIFTOP_BSET  = 15'b00001_00_10_00_xx_01,
-	     SHIFTOP_BINV  = 15'b00001_00_10_00_10_11,
-	     SHIFTOP_BEXT  = 15'b00001_10_00_01_xx_00, // == EXTRU ...,1
-	     SHIFTOP_EXTRU = 15'bxxxxx_10_00_01_xx_00,
-	     SHIFTOP_EXTRS = 15'bxxxxx_10_00_01_11_10
+	     SHIFTOP_SLL   = { 5'bx,  SROT_LEFT,  SMPOS_CNT,   SMASK_LO,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_SRL   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_SRA   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_mCNT,   2'b10 },
+	     SHIFTOP_ROL   = { 5'bx,  SROT_LEFT,  SMPOS_ANY,   SMASK_NONE, SPOS_ANY,    2'b00 },
+	     SHIFTOP_ROR   = { 5'bx,  SROT_RIGHT, SMPOS_ANY,   SMASK_NONE, SPOS_ANY,    2'b00 },
+	     SHIFTOP_ZEXTB = { 5'd8,  SROT_NONE,  SMPOS_mWIMM, SMASK_HI,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_ZEXTH = { 5'd16, SROT_NONE,  SMPOS_mWIMM, SMASK_HI,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_SEXTB = { 5'd8,  SROT_NONE,  SMPOS_mWIMM, SMASK_HI,   SPOS_WIMMm1, 2'b10 },
+	     SHIFTOP_SEXTH = { 5'd16, SROT_NONE,  SMPOS_mWIMM, SMASK_HI,   SPOS_WIMMm1, 2'b10 },
+	     SHIFTOP_BCLR  = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_ANY,    2'b00 },
+	     SHIFTOP_BSET  = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_ANY,    2'b01 },
+	     SHIFTOP_BINV  = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_CNT,    2'b11 },
+	     SHIFTOP_BEXT  = { 5'd1,  SROT_RIGHT, SMPOS_mWIMM, SMASK_HI,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_EXTRU = { 5'bx,  SROT_RIGHT, SMPOS_mWIMM, SMASK_HI,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_EXTRS = { 5'bx,  SROT_RIGHT, SMPOS_mWIMM, SMASK_HI,   SPOS_1mWC,   2'b10 }
 } shiftop_enum_t;
-	     
+
 //
 // ALU operation definitions
 //
