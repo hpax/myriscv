@@ -58,6 +58,12 @@ module alu_decode #(`CONFIG)
 		  ctl.unit = ALUSRC_SHIFT;
 		  ctl.shiftop = SHIFTOP_SLL;
 	       end
+	       { 7'b100_0000, ALU_SLL }: begin
+		  if (WITH_shiftone) begin
+		     ctl.unit 	 = ALUSRC_SHIFT;
+		     ctl.shiftop = SHIFTOP_SLO;
+		  end
+	       end
 	       { 7'b001_0100, ALU_SLL },
 		 { 7'b01?_0100, ALU_SLL }: begin // BSET, BCLR, BINV
 		    ctl.unit	  = ALUSRC_SHIFT;
@@ -94,6 +100,12 @@ module alu_decode #(`CONFIG)
 	       { 7'b010_0000, ALU_SRL }: begin
 		  ctl.unit = ALUSRC_SHIFT;
 		  ctl.shiftop = SHIFTOP_SRA;
+	       end
+	       { 7'b100_0000, ALU_SRL }: begin
+		  if (WITH_shiftone) begin
+		     ctl.unit 	 = ALUSRC_SHIFT;
+		     ctl.shiftop = SHIFTOP_SRO;
+		  end
 	       end
 	       { 7'b001_0100, ALU_SRL }: begin
 		  unique casez ({~op.rs2_valid, op.rs2.r})

@@ -66,9 +66,11 @@ Private extensions:
 			cto	- ctz   rs2[4] = 1
 			cpopz	- cpop  rs2[4] = 1
 
-	Without STRICT_UNDEFINED:
-		Additional RVC encoding:
-			c.ecall	- opcode 0x8002
+	WITH_shiftone:
+		Shift left/right insert ones - 
+		      	slo(i), sro(i)
+			Same encodings as sll(i), srl(i) with
+			funct7[6]/instr[31] = 1
 
 	WITH_extr:
 		Bitfield extraction custom opcode:
@@ -92,6 +94,10 @@ Private extensions:
 		instr[30]	= 0 for EXTRU*
 				  1 for EXTRS*
 		instr[31]	= 0
+
+	Without STRICT_UNDEFINED:
+		Additional RVC encoding:
+			c.ecall	- opcode 0x8002
 
 
 Non-standard or system-specific behaviors:

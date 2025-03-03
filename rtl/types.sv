@@ -185,8 +185,10 @@ typedef struct packed {
 
 typedef enum shiftop_t {
 	     SHIFTOP_SLL   = { 5'bx,  SROT_LEFT,  SMPOS_CNT,   SMASK_LO,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_SLO   = { 5'bx,  SROT_LEFT,  SMPOS_CNT,   SMASK_LO,   SPOS_ANY,    2'b01 }, // Shift left 1's
 	     SHIFTOP_SRL   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_ANY,    2'b00 },
 	     SHIFTOP_SRA   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_mCNT,   2'b10 },
+	     SHIFTOP_SRO   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_ANY,    2'b01 }, // Shift right 1's
 	     SHIFTOP_ROL   = { 5'bx,  SROT_LEFT,  SMPOS_ANY,   SMASK_NONE, SPOS_ANY,    2'b00 },
 	     SHIFTOP_ROR   = { 5'bx,  SROT_RIGHT, SMPOS_ANY,   SMASK_NONE, SPOS_ANY,    2'b00 },
 	     SHIFTOP_ZEXTB = { 5'd8,  SROT_NONE,  SMPOS_mWIMM, SMASK_HI,   SPOS_ANY,    2'b00 },
