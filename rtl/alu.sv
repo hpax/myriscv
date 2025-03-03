@@ -37,7 +37,7 @@ module alu_decode #(`CONFIG)
 	     logic [6:0] funct7;
 
 	     if (!op.rs2_valid && op.funct3[1:0] != 2'b01)
-	       funct7 = 7'b0;
+	       funct7 = 7'b0;	// Immediate form
 	     else
 	       funct7 = op.funct7;
 
@@ -56,29 +56,30 @@ module alu_decode #(`CONFIG)
 	       end
 	       { 7'b000_0000, ALU_SLL }: begin
 		  ctl.unit = ALUSRC_SHIFT;
-		  ctl.shiftop = 11'b11_00_100_xx_0_0; // SLL
+		  ctl.shiftop = SHIFTOP_SLL;
 	       end
 	       { 7'b001_0100, ALU_SLL },
 		 { 7'b01?_0100, ALU_SLL }: begin // BSET, BCLR, BINV
-		    ctl.unit = ALUSRC_SHIFT;
-		    ctl.shiftop = { 9'b00_10_001_10,
-		      funct7[5:4] == 2'b11, funct7[5:4] != 2'b10 };
+		    ctl.unit 	  = ALUSRC_SHIFT;
+		    ctl.shiftop   = SHIFTOP_BINV;
+		    ctl.shiftop.sand = funct7[5:4] == 2'b11; // BINV
+		    ctl.shiftop.sxor = funct7[4];	     // Not BCLR
 		 end
 	       { 7'b011_0000, ALU_SLL }: begin
 		  unique casez ({!op.rs2_valid, op.rs2.r})
 		    6'b1_?00??: begin // CTZ, CLZ, CPOP (+inverses)
-		       if (!STRICT_UNDEFINED ||
-			 op.rs2.r[1:0] != 2'b11)
+		       if (!STRICT_UNDEFINED || op.rs2.r[1:0] != 2'b11)
 			 if (WITH_bitcntinv || !op.rs2.r[4])
 			   ctl.unit = ALUSRC_BITCNT;
 		    end
 		    6'b1_0010?: begin	// SEXT.B/H
-		       ctl.unit = ALUSRC_SHIFT;
-		       ctl.shiftop = { 4'b00_11, op.rs2.r[2:0], 4'b11_1_0 };
+		       ctl.unit    = ALUSRC_SHIFT;
+		       ctl.shiftop = SHIFTOP_EXTRS;
+		       ctl.shiftop.wimm = op.rs2.r[0] ? 5'd16 : 5'd8;
 		    end
 		    6'b0_?????: begin
 		       ctl.unit = ALUSRC_SHIFT;
-		       ctl.shiftop = 11'b11_xx_000_xx_x_x; // ROL
+		       ctl.shiftop = SHIFTOP_ROL;
 		    end
 		    default: begin
 		       // Do nothing
@@ -88,11 +89,11 @@ module alu_decode #(`CONFIG)
 
 	       { 7'b000_0000, ALU_SRL }: begin
 		  ctl.unit = ALUSRC_SHIFT;
-		  ctl.shiftop = 11'b10_11_100_xx_0_0; // SRL
+		  ctl.shiftop = SHIFTOP_SRL;
 	       end
 	       { 7'b010_0000, ALU_SRL }: begin
 		  ctl.unit = ALUSRC_SHIFT;
-		  ctl.shiftop = 11'b10_11_100_11_1_0; // SRA
+		  ctl.shiftop = SHIFTOP_SRA;
 	       end
 	       { 7'b001_0100, ALU_SRL }: begin
 		  unique casez ({~op.rs2_valid, op.rs2.r})
@@ -147,8 +148,8 @@ module alu_decode #(`CONFIG)
 	       { 7'b000_0100, ALU_XOR }: begin
 		  unique casez (op.rs2.r)
 		    5'b00000: begin
-		       ctl.unit = ALUSRC_SHIFT;
-		       ctl.shiftop = 11'b00_11_101_xx_0_0; // ZEXT.H
+		       ctl.unit    = ALUSRC_SHIFT;
+		       ctl.shiftop = SHIFTOP_ZEXTH;
 		    end
 		    default: begin
 		       // Do nothing
@@ -167,6 +168,26 @@ module alu_decode #(`CONFIG)
 	     endcase // unique casez ({funct7, op.funct3})
 	  end
 
+	  INSN_XALU: begin
+	     unique casez (op.funct3)
+	       3'b00?: begin		// add.xu, add.ux
+		  ctl.unit   = ALUSRC_ADD;
+		  ctl.invert = op.rs2_valid & op.funct7[5];
+	       end
+	       3'b101: begin		// extr[us]
+		  if (WITH_extr) begin
+		     ctl.unit 	      = ALUSRC_SHIFT;
+		     ctl.shiftop      = SHIFTOP_EXTRS;
+		     ctl.shiftop.wimm = op.funct7[4:0];
+		     ctl.shiftop.sand = op.funct7[5];
+		  end
+	       end
+	       default: begin
+		  // Do nothing
+	       end
+	     endcase
+	  end
+   
 	  default: begin
 	     // Not an ALU instruction
 	  end

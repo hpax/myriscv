@@ -5,9 +5,9 @@
 
 typedef enum logic [3:0] {
 	INSN_NOP    = 4'b0000,	// No-op instruction (unless decoded as ALU)
-	INSN_ALU    = 4'b0001,	// ALU instruction
-	INSN_MUL    = 4'b0010,	// Multiply
-	// 4'b0011 is reserved for divide
+	INSN_MUL    = 4'b0001,	// Multiply
+	INSN_ALU    = 4'b0010,	// ALU instruction
+	INSN_XALU   = 4'b0011,	// Custom ALU instruction (CUSTOM0/1)
 	// The low 2 bits of the following must be maintained.
 	INSN_LD     = 4'b0100,	// Memory load
 	INSN_ST     = 4'b0101,	// Memory store
@@ -145,43 +145,62 @@ endfunction
 //
 // Shifter operation control.
 //
-//  10:9 - rcnt
+//  14:10 - wimm (width immediate)
+//    9:8 - rcnt
 //          00 = 0
 //          10 = shamt
 //          11 = -shamt
-//   8:7 - mpos
-//          00 = 0
-//          01 = 1
+//    7:6 - mpos
+//          00 = wimm
+//          01 = -wimm
 //          10 = shamt
-//          11 = -mcnt
-//   6:4 - mcnt:
-//         000 =  0
-//         001 =  1
-//         011 = -1
-//         100 = -8
-//         101 = -16
-//         100 = shamt
-//         111 = -shamt
-//   3:2 - spos:
-//          00 =   0
-//          01 =  -1
+//          11 = -shamt
+//    5:4 - mcnt:
+//          00 = wimm
+//          01 = -wimm
 //          10 = shamt
-//          11 = -mcnt-1
-//   1:0 - sign (masked) bit selection:
-//	    00 =  0
-//	    01 =  1
-//          10 =  src[spos]
-//	    11 = ~src[spos]
+//          11 = -shamt
+//    3:2 - spos:
+//          00  = 00
+//          01  = wimm - 1
+//          10  = shamt
+//          11  = shamt + wimm - 1
+//    1:0 - sign (masked) bit selection:
+//          (bit 1 = AND, bit 0 = XOR)
+//	    00  =  0
+//	    01  =  1
+//          10  =  src[spos]
+//	    11  = ~src[spos]
 //
 
 typedef struct packed {
+   logic [4:0] wimm;
    logic [1:0] rcnt;
    logic [1:0] mpos;
-   logic [2:0] mcnt;
+   logic [1:0] mcnt;
    logic [1:0] spos;
-   logic [1:0] sbit;
+   logic       sand;
+   logic       sxor;
 } shiftop_t;
 
+typedef enum shiftop_t {
+	     SHIFTOP_SLL   = 15'b00000_11_00_10_xx_00,
+	     SHIFTOP_SRL   = 15'bxxxxx_10_11_10_xx_00,
+	     SHIFTOP_SRA   = 15'b00000_10_11_10_01_10,
+	     SHIFTOP_ROL   = 15'b00000_11_xx_00_xx_xx,
+	     SHIFTOP_ROR   = 15'b00000_10_xx_00_xx_xx,
+	     SHIFTOP_ZEXTB = 15'b01000_00_00_01_xx_00,
+	     SHIFTOP_ZEXTH = 15'b10000_00_00_01_xx_00,
+	     SHIFTOP_SEXTB = 15'b01000_00_00_01_01_10,
+	     SHIFTOP_SEXTH = 15'b10000_00_00_01_01_10,
+	     SHIFTOP_BCLR  = 15'b00001_00_10_00_xx_00,
+	     SHIFTOP_BSET  = 15'b00001_00_10_00_xx_01,
+	     SHIFTOP_BINV  = 15'b00001_00_10_00_10_11,
+	     SHIFTOP_BEXT  = 15'b00001_10_00_01_xx_00, // == EXTRU ...,1
+	     SHIFTOP_EXTRU = 15'bxxxxx_10_00_01_xx_00,
+	     SHIFTOP_EXTRS = 15'bxxxxx_10_00_01_11_10
+} shiftop_enum_t;
+	     
 //
 // ALU operation definitions
 //

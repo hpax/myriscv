@@ -186,7 +186,7 @@ module shifter_core
   (
    input [$clog2(width)-1:0] rcnt, // Rotation count
    input [$clog2(width)-1:0] mpos, // First output bit to be masked
-   input [$clog2(width)-1:0] mcnt, // Number of output bits to be masked
+   input [$clog2(width)-1:0] mcnt, // Number of output bits to be unmasked
    input [$clog2(width)-1:0] spos, // Sign bit position
    input		     sand, // Sign bit ANDed with this value
    input		     sxor, // Sign bit XORed with this value
@@ -239,35 +239,17 @@ module shifter
 	  default: rcnt = 'bx;
 	endcase // unique case (op.rcnt)
 
-	unique case (op.mcnt)
-	  3'b000:  mcnt = 'd0;
-	  3'b001:  mcnt = 'd1;
-	  3'b011:  mcnt = -'sd1;
-	  3'b100:  mcnt = -'sd8;
-	  3'b101:  mcnt = -'sd16;
-	  3'b110:  mcnt = shamt;
-	  3'b111:  mcnt = -shamt;
-	  default: mcnt = 'bx;
-	endcase // unique case (op.mcnt)
+	mcnt = op.mcnt[1] ? shamt : op.wimm;
+	mcnt = op.mcnt[0] ? -mcnt : mcnt;
 
-	unique case (op.mpos)
-	  2'b00:   mpos = 'b0;
-	  2'b01:   mpos = 'b1;
-	  2'b10:   mpos = shamt;
-	  2'b11:   mpos = -mcnt;
-	  default: mpos = 'bx;
-	endcase // unique case (op.mpos)
+	mpos = op.mpos[1] ? shamt : op.wimm;
+	mpos = op.mpos[0] ? -mpos : mpos;
 
-	unique case (op.spos)
-	  2'b00:   spos = 'b0;
-	  2'b01:   spos = -'sb1;
-	  2'b10:   spos = shamt;
-	  2'b11:   spos = -mcnt-1'b1;
-	  default: spos = 'bx;
-	endcase
+	spos = ({width{op.spos[1]}} & shamt) +
+	       ({width{op.spos[0]}} & op.wimm) - op.spos[0];
 
-	sand = op.sbit[1];
-	sxor = op.sbit[0];
+	sand = op.sand;
+	sxor = op.sxor;
      end // always @ (*)
 
    shifter_core core (

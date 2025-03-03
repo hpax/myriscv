@@ -471,7 +471,7 @@ module backend #(`CONFIG)
 		e_trap	 = 1'b1;
 		e_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
 	     end
-	     INSN_ALU: if (TRAP_BADALU) begin
+	     INSN_ALU, INSN_XALU: if (TRAP_BADALU) begin
 		e_trap	 = e_aluctl.unit == ALUSRC_ERR;
 		e_mcause = MCAUSE_BADINSN;
 	     end
@@ -638,7 +638,7 @@ module backend #(`CONFIG)
       // No output, or delivered from M stage
       e_dout = 32'bx;
       unique case (e_op.itype)
-	INSN_ALU:
+	INSN_ALU, INSN_XALU:
 	  e_dout = e_alu_out;
 	INSN_MUL:
 	  if (WITH_Zmmul & FORWARD_MUL)
