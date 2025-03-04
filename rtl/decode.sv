@@ -216,21 +216,26 @@ module decode_comb #(`CONFIG)
 
 	  // CUSTOM0 is CUSTOM1 as OP_IMM is to OP
 	  CUSTOM0, CUSTOM1: begin
-	     op.itype		= INSN_XALU;
 	     op.rs1_valid	= 1'b1;
 	     op.rs2_valid	= i[5];
 	     op.rd_e		= 1'b1;
 	     op.imm		= i_imm;
 
+	     // The *.xu and *.ux actually can support any ALU operation
+	     // with funct3 == 0.
 	     unique casez (op.funct3)
 	       3'b000: begin	// add.xu
-		   op.rs1.c = op.mcontext.u;
+		  op.itype  = INSN_ALU;
+		  op.funct3 = 3'b000;
+		  op.rs1.c  = op.mcontext.u;
 	       end
 	       3'b001: begin	// add.ux
+		  op.itype  = INSN_ALU;
+		  op.funct3 = 3'b000;
 		  op.rd.c   = op.mcontext.u;
 	       end
 	       default: begin
-		  // Assume extended ALU
+		  op.itype  = INSN_XALU;
 	       end
 	     endcase
 	  end

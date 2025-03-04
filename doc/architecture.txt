@@ -72,6 +72,11 @@ Private extensions:
 			Same encodings as sll(i), srl(i) with
 			funct7[6]/instr[31] = 1
 
+		Shift right complement sign -
+		        slcs(i)
+			Same encoding as sra(i) with
+			funct7[6]/instr[31] = 1
+
 	WITH_extr:
 		Bitfield extraction custom opcode:
 
@@ -93,7 +98,12 @@ Private extensions:
 		instr[29:25]	= wimm5
 		instr[30]	= 0 for EXTRU*
 				  1 for EXTRS*
-		instr[31]	= 0
+		instr[31]	= 0 (see below)
+
+	WITH_extr + WITH_shiftone:
+
+		 Adds EXTRO (extract one) and EXTRCS (extract complement sign)
+		 to the above, with instr[31] = funct7[6] = 1.
 
 	Without STRICT_UNDEFINED:
 		Additional RVC encoding:

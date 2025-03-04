@@ -49,25 +49,22 @@ module alu_decode #(`CONFIG)
 	       { 7'b0?1_0000, 3'b??0 }: begin // shXadd, shXsub
 		  if (WITH_Zba &&
 		      (WITH_Zbasub || !funct7[5])) begin
-		     ctl.unit   = ALUSRC_ADD;
-		     ctl.shadd  = op.funct3[2:1];
+		     ctl.unit 	= ALUSRC_ADD;
+		     ctl.shadd 	= op.funct3[2:1];
 		     ctl.invert = funct7[5];
 		  end
 	       end
-	       { 7'b000_0000, ALU_SLL }: begin
-		  ctl.unit = ALUSRC_SHIFT;
-		  ctl.shiftop = SHIFTOP_SLL;
-	       end
-	       { 7'b100_0000, ALU_SLL }: begin
-		  if (WITH_shiftone) begin
-		     ctl.unit 	 = ALUSRC_SHIFT;
-		     ctl.shiftop = SHIFTOP_SLO;
-		  end
+	       { 7'b?00_0000, ALU_SLL }: begin
+		  if (WITH_shiftone || !funct7[6]) begin
+		     ctl.unit 	      = ALUSRC_SHIFT;
+		     ctl.shiftop      = SHIFTOP_SLL;
+		     ctl.shiftop.sxor = funct7[6];
+		     end
 	       end
 	       { 7'b001_0100, ALU_SLL },
 		 { 7'b01?_0100, ALU_SLL }: begin // BSET, BCLR, BINV
-		    ctl.unit	  = ALUSRC_SHIFT;
-		    ctl.shiftop   = SHIFTOP_BINV;
+		    ctl.unit	     = ALUSRC_SHIFT;
+		    ctl.shiftop      = SHIFTOP_BINV;
 		    ctl.shiftop.sand = funct7[5:4] == 2'b11; // BINV
 		    ctl.shiftop.sxor = funct7[4];	     // Not BCLR
 		 end
@@ -93,18 +90,12 @@ module alu_decode #(`CONFIG)
 		  endcase // unique casez ({!op.rs2_valid, op.rs2.r})
 	       end // case: { 7'b011_0000, ALU_SLL }
 
-	       { 7'b000_0000, ALU_SRL }: begin
-		  ctl.unit = ALUSRC_SHIFT;
-		  ctl.shiftop = SHIFTOP_SRL;
-	       end
-	       { 7'b010_0000, ALU_SRL }: begin
-		  ctl.unit = ALUSRC_SHIFT;
-		  ctl.shiftop = SHIFTOP_SRA;
-	       end
-	       { 7'b100_0000, ALU_SRL }: begin
-		  if (WITH_shiftone) begin
-		     ctl.unit 	 = ALUSRC_SHIFT;
-		     ctl.shiftop = SHIFTOP_SRO;
+	       { 7'b??0_0000, ALU_SRL }: begin
+		  if (WITH_shiftone || !funct7[6]) begin
+		     ctl.unit 	      = ALUSRC_SHIFT;
+		     ctl.shiftop      = SHIFTOP_SRA;
+		     ctl.shiftop.sand = funct7[5];
+		     ctl.shiftop.sxor = funct7[6];
 		  end
 	       end
 	       { 7'b001_0100, ALU_SRL }: begin
@@ -182,16 +173,13 @@ module alu_decode #(`CONFIG)
 
 	  INSN_XALU: begin
 	     unique casez (op.funct3)
-	       3'b00?: begin		// add.xu, add.ux
-		  ctl.unit   = ALUSRC_ADD;
-		  ctl.invert = op.rs2_valid & op.funct7[5];
-	       end
-	       3'b101: begin		// extr[us]
+	       3'b101: begin		// extr*
 		  if (WITH_extr) begin
-		     ctl.unit	      = ALUSRC_SHIFT;
+		     ctl.unit 	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_EXTRS;
 		     ctl.shiftop.wimm = op.funct7[4:0];
 		     ctl.shiftop.sand = op.funct7[5];
+		     ctl.shiftop.sxor = op.funct7[6] & WITH_shiftone;
 		  end
 	       end
 	       default: begin
