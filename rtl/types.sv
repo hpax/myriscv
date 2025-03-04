@@ -29,9 +29,10 @@ endfunction
 
 // Register bank and machine mode context
 typedef enum logic [`CONTEXT_BITS-1:0] {
-	CTX_MACHINE	= `CONTEXT_BITS ' (0),
-	CTX_USER_MIN	= `CONTEXT_BITS ' (1),
-	CTX_USER_MAX	= `CONTEXT_BITS ' (CTX_USER_MIN + `USER_CONTEXTS - 1)
+     CTX_MACHINE  = `CONTEXT_BITS ' (0),
+     CTX_USER_MIN = `CONTEXT_BITS ' (1),
+     CTX_USER_MAX = `CONTEXT_BITS ' (CTX_USER_MIN + `USER_CONTEXTS - 1),
+     CTX_X        = {`CONTEXT_BITS{1'bx}}
 } rcontext_t;
 
 typedef struct packed {

@@ -222,16 +222,16 @@ module decode_comb #(`CONFIG)
 	     op.imm		= i_imm;
 
 	     // The *.xu and *.ux actually can support any ALU operation
-	     // with funct3 == 0.
+	     // with funct3 == 0 EXCEPT MUL
 	     unique casez (op.funct3)
 	       3'b000: begin	// add.xu
 		  op.itype  = INSN_ALU;
-		  op.funct3 = 3'b000;
+		  op.funct3 = ALU_ADD;
 		  op.rs1.c  = op.mcontext.u;
 	       end
 	       3'b001: begin	// add.ux
 		  op.itype  = INSN_ALU;
-		  op.funct3 = 3'b000;
+		  op.funct3 = ALU_ADD;
 		  op.rd.c   = op.mcontext.u;
 	       end
 	       default: begin
@@ -284,48 +284,21 @@ module decode_seq #(`CONFIG)
    // can safely use the result of a previous multiply; this is
    // allows MULH* to forward the low half of the result to MUL in
    // the E stage rather than M stage.
-   reg		have_mult;
-   regnum_t	mult_rs1;
-   regnum_t	mult_rs2;
-   reg [1:0]	mulhifunc;
-   logic [1:0]	mulhifunc_c;
+   //
+   // This takes advantage of the fact that .xu and .ux are not supported
+   // for MUL, so in many cases it is only necessary to compare the
+   // architectural register numbers.
+   typedef struct packed {
+      logic	  valid;
+      rcontext_t  ctx;
+      logic [4:0] rs1;
+      logic [4:0] rs2;
+      logic [1:0] hifunc;
+   } multinfo_t;
 
-   always @(negedge rst_n or posedge clk)
-     if (~rst_n) begin
-	  have_mult <= 1'b0;
-	  mult_rs1  <= 'bx;
-	  mult_rs2  <= 'bx;
-	  mulhifunc <= 2'bx;
-     end else if (d_clken) begin
-	if (FORWARD_MUL) begin
-	   if (d_killed) begin
-	      // State rolled back
-	      have_mult <= 1'b0;
-	      mult_rs1  <= 'bx;
-	      mult_rs2  <= 'bx;
-	      mulhifunc <= 2'bx;
-	   end else if (op_o.itype == INSN_MUL) begin
-	      if (op_o.rd != op_o.rs1 && op_o.rd != op_o.rs2) begin
-		 have_mult <= 1'b1;
-		 mult_rs1  <= op_o.rs1;
-		 mult_rs2  <= op_o.rs2;
-		 mulhifunc <= mulhifunc_c;
-	      end else begin
-		 have_mult <= 1'b0;
-		 mult_rs1  <= 'bx;
-		 mult_rs2  <= 'bx;
-		 mulhifunc <= 2'bx;
-	      end
-	   end else if ((op_o.rd_e | op_o.rd_m) &&
-	     (op_o.rd == mult_rs1 || op_o.rd == mult_rs2)) begin
-	      // Input registers clobbered
-	      have_mult <= 1'b0;
-	      mult_rs1  <= 'bx;
-	      mult_rs2  <= 'bx;
-	      mulhifunc <= 2'bx;
-	   end
-	end
-     end
+   multinfo_t mult_invalid = { 1'b0, CTX_X, 5'bx, 5'bx, 2'bx };
+   multinfo_t mult;
+   logic [1:0]	mulhifunc_c;
 
    always @(*) begin
       op_o = op_i;
@@ -345,11 +318,11 @@ module decode_seq #(`CONFIG)
 	 // Multiply cache handling handling
 	 logic is_mull;
 	 is_mull = !op_i.funct3[1:0];
-	 if (FORWARD_MUL &&
-	   have_mult && (is_mull || op_i.funct3[1:0] == mulhifunc) &&
-	   op_i.rs1 == mult_rs1 && op_i.rs2 == mult_rs2) begin
+	 if (FORWARD_MUL && mult.valid && mult.ctx == op_i.mcontext.m &&
+	   (is_mull || op_i.funct3[1:0] == mult.hifunc) &&
+           op_i.rs1.r == mult.rs1 && op_i.rs2.r == mult.rs2) begin
 	    // Can forward old multiply low result
-	    mulhifunc_c = mulhifunc; // Not actually doing the multiply
+	    mulhifunc_c = mult.hifunc;	  // Not actually doing the multiply
 	 end else begin
 	    // Move the output to the M stage. Note that
 	    // using op_i.rd_e here handles the case of rd == x0.
@@ -361,6 +334,33 @@ module decode_seq #(`CONFIG)
 	 end
       end
    end
+
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	mult <= mult_invalid;
+     end else if (d_clken) begin
+	if (FORWARD_MUL) begin
+	   if (d_killed) begin
+	      // State rolled back
+	      mult <= mult_invalid;
+	   end else if (op_o.itype == INSN_MUL) begin
+	      if (op_o.rd.r != op_o.rs1.r && op_o.rd.r != op_o.rs2.r) begin
+		 mult.valid  <= 1'b1;
+		 mult.ctx    <= op_o.mcontext.m;
+		 mult.rs1    <= op_o.rs1.r;
+		 mult.rs2    <= op_o.rs2.r;
+		 mult.hifunc <= mulhifunc_c;
+	      end else begin
+		 mult <= mult_invalid;	
+	      end
+	   end else if ((op_o.rd_e | op_o.rd_m) &&
+	     (op_o.rd.c == mult.ctx) &&
+  	     (op_o.rd.r == mult.rs1 || op_o.rd.r == mult.rs2)) begin
+	      // Input registers clobbered
+	      mult <= mult_invalid;
+	   end
+	end
+     end
 endmodule // decode_seq
 
 //
