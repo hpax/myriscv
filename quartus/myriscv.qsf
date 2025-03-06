@@ -81,6 +81,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/counter.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/types.sv
 set_global_assignment -name VERILOG_INCLUDE_FILE ../rtl/config.vh
 set_global_assignment -name VERILOG_INCLUDE_FILE ../rtl/myriscv.vh
+set_global_assignment -name VERILOG_INCLUDE_FILE ../rtl/functions.vh
 set_global_assignment -name VERILOG_TEST_BENCH_FILE ../test/test.sv
 set_global_assignment -name SDC_FILE myriscv.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/tcm.sv
@@ -98,6 +99,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/decode.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/alu.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/rng.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/icache.sv
+set_global_assignment -name PRE_FLOW_SCRIPT_FILE "quartus_sh:preflow.tcl"
 set_global_assignment -name QIP_FILE regfile_alt.qip
 set_global_assignment -name QIP_FILE tcm_alt.qip
 set_global_assignment -name QIP_FILE altmult.qip

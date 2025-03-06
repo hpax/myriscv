@@ -3,6 +3,7 @@
 
 `include "config.vh"
 `include "params.vh"
+`include "functions.vh"
 
 `ifdef MODEL_TECH
 // ModelSim/Questa simulation needs type definitions included here

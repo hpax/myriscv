@@ -216,32 +216,32 @@ module decode_comb #(`CONFIG)
 
 	  // CUSTOM0 is CUSTOM1 as OP_IMM is to OP
 	  CUSTOM0, CUSTOM1: begin
+	     op.itype           = INSN_XALU;
 	     op.rs1_valid	= 1'b1;
 	     op.rs2_valid	= i[5];
 	     op.rd_e		= 1'b1;
-	     op.imm		= i_imm;
-
-	     // The *.xu and *.ux actually can support any ALU operation
+	     op.imm             = i_imm;
+		
+	     // .sm .xu and .ux actually can support any ALU operation
 	     // with funct3 == 0 EXCEPT MUL
 	     unique casez (op.funct3)
-	       3'b000: begin	// add.xu
-		  op.itype  = INSN_ALU;
-		  op.funct3 = ALU_ADD;
+	       3'b000: begin	// .xu
 		  op.rs1.c  = op.mcontext.u;
 	       end
-	       3'b001: begin	// add.ux
-		  op.itype  = INSN_ALU;
-		  op.funct3 = ALU_ADD;
+	       3'b001: begin	// .ux
 		  op.rd.c   = op.mcontext.u;
 	       end
+	       3'b011: begin	// .sm - switch to machine mode
+		  op.rd.c   = CTX_MACHINE;
+	       end
 	       default: begin
-		  op.itype  = INSN_XALU;
+		  // Nothing special here
 	       end
 	     endcase
 	  end
 
 	  default: begin
-	     // Error
+	     // Undefined major opcode
 	  end
 	endcase // unique case (i[6:0])
 
@@ -430,10 +430,24 @@ module decode_srcregs #(`CONFIG)
    localparam [4:0] R_SP   = 5'd2;
 
    always @(*) begin
+      rs1.c = mc.m;
+      rs2.c = mc.m;
+   
       priority casez ({insn[15:13], insn[1:0]})
 	5'b???_11: begin		// 32-bit instruction
 	   rs1.r = insn[19:15];
 	   rs2.r = insn[24:20];
+	   unique case ({insn[14:12], insn[6:0]})
+	     { 3'b000, CUSTOM0 },
+	     { 3'b000, CUSTOM1 }: begin
+		rs1.c = mc.u;	// .xu instruction
+	     end
+	     // .ux and .sm don't have to be considered, because
+	     // rd is not begin decoded here.
+	     default: begin
+		// Default contexts
+	     end
+	   endcase
 	end
 	5'b000_00: begin		// C.ADDI4SPN
 	   rs1.r = R_SP;
@@ -468,17 +482,5 @@ module decode_srcregs #(`CONFIG)
 	   rs2.r = 5'bx;
 	end
       endcase // priority casez ({insn[15:13], insn[1:0]})
-
-      priority casez ({insn[14:12], insn[6:0]})
-	10'b000_0?01011:	// add.xu
-	  rs1.c = mc.u;
-	default:
-	  rs1.c = mc.m;
-      endcase // priority casez ({insn[14:12], insn[6:0]})
-
-      rs2.c = mc.m;
    end
-
-   // add.ux doesn't have to be considered, because
-   // rd is not begin decoded here.
 endmodule

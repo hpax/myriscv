@@ -13,7 +13,7 @@ typedef enum logic [3:0] {
 	INSN_ST     = 4'b0101,	// Memory store
 	INSN_CBO    = 4'b0110,	// Cache block operation
 	// 4'b0111 is exclusively RESERVED for another memory operation!
-	INSN_CSR    = 4'b1000,	// CSR instruction
+        INSN_CSR    = 4'b1000,	// CSRR, CSRW et al
 	INSN_JAL    = 4'b1010,	// JAL, JALR
 	INSN_BR     = 4'b1011,  // Conditional branch
 	INSN_MRET   = 4'b1100,	// MRET, SRET
@@ -27,11 +27,11 @@ function logic insn_mem(input insn_type_t insn);
    insn_mem = insn[3:2] == INSN_LD[3:2]; // CBO, LD, ST
 endfunction
 
-// Register bank and machine mode context
+// Register bank and machine mode context. See config.vh.
 typedef enum logic [`CONTEXT_BITS-1:0] {
-     CTX_MACHINE  = `CONTEXT_BITS ' (0),
-     CTX_USER_MIN = `CONTEXT_BITS ' (1),
-     CTX_USER_MAX = `CONTEXT_BITS ' (CTX_USER_MIN + `USER_CONTEXTS - 1),
+     CTX_USER_MIN = `CONTEXT_BITS ' (0),
+     CTX_USER_MAX = `CONTEXT_BITS ' (`USER_CONTEXTS - 1),
+     CTX_MACHINE  = `CONTEXT_BITS ' (`USER_CONTEXTS),
      CTX_X        = {`CONTEXT_BITS{1'bx}}
 } rcontext_t;
 

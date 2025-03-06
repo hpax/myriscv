@@ -4,8 +4,10 @@
 // This is processed by params.pl to generate params.vh
 //
 
+parameter bit WITH_RVC		= 1'b1; // A.k.a C/Zca
 parameter bit WITH_Zba		= 1'b1;
 parameter bit WITH_Zbb		= 1'b1;
+parameter bit WITH_Zbs		= 1'b1;
 parameter bit WITH_Zcf		= 1'b1;
 parameter bit WITH_Zcb		= 1'b1;
 parameter bit WITH_Zcd		= 1'b1;
@@ -14,7 +16,6 @@ parameter bit WITH_bitcntinv	= 1'b0; // bit-inverted bitcnt ops
 parameter bit WITH_extr         = 1'b1; // bitfield extraction
 parameter bit WITH_shiftone     = 1'b1; // shift left/right one
 parameter bit WITH_Zmmul	= 1'b1;
-parameter bit WITH_div		= 1'b0;
 parameter bit WITH_Zicond	= 1'b1;
 parameter bit WITH_minmax	= 1'b1;
 parameter bit WITH_cmpand       = 1'b1; // baeqz, banez
@@ -40,7 +41,6 @@ parameter bit Zkr_secure        = 1'b0;
 // are locked out indefinely until the reservation is released.
 parameter int Ziccrse_bits      = 4;    // Standard architectural value
 
-parameter logic [31:0] PC_MASK	= 32'h41ff_fffe;
 parameter logic [31:0] RESET_PC	= 32'h0000_0010;
 
 parameter int	     NUM_IRQS	= 31;
@@ -56,10 +56,11 @@ parameter int	     CTR_TIME_WIDTH	= 40;
 parameter int	     CTR_CYCLE_WIDTH	=  0;
 parameter int	     CTR_INSTRET_WIDTH	= 40;
 
-// If these values are reflected (readonly) into the
-// corresponding CSRs; this does add some logic burden
-// if nonzero.
-parameter logic [31:0]    csrval_misa     = 32'h0;
+// Enable (report nonzero) in the misa CSR
+parameter bit             WITH_misa = 1'b0;
+
+// These values are reflected (readonly) into the corresponding CSRs;
+// this does add some logic burden if nonzero.
 parameter logic [31:0]    csrval_vendorid = 32'h0;
 parameter logic [31:0]    csrval_archid   = 32'h0;
 parameter logic [31:0]    csrval_impid    = 32'h0;
@@ -106,5 +107,14 @@ parameter logic [31:0] io_base		= 32'h8000_0000;
 parameter logic [31:0] INVALID_DATA	= 32'h0000_0000;
 
 // Number of bits of register context. Currently this is
-// not configurable by parameter...
+// not configurable by parameter; set in rtl/config.sv
 parameter int CONTEXT_BITS		= `CONTEXT_BITS;
+
+// These are not currently implemented and must not be set
+parameter bit WITH_div		= 1'b0; // Divide instructions
+parameter bit WITH_Zaamo        = 1'b0; // AMO instructions
+
+// Valid PC values - should really be computed from tcm_base, tcm_size_bits
+// ram_base and ram_base_bits... need to figure out how to do that correctly
+// in all cases...
+parameter logic [31:0] PC_MASK	= (addr_mask(tcm_base,tcm_size_bits)|addr_mask(ram_base,ram_size_bits)) & ~(WITH_RVC ? 2'b01 : 2'b11);

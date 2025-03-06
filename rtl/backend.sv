@@ -76,6 +76,38 @@ module backend #(`CONFIG)
  input [31:0]		   dbus_rdata,
  input			   dbus_ready
  );
+   wire [31:0] MISA = {
+	       WITH_Zalrsc & WITH_Zaamo,		// A
+	       WITH_Zba & WITH_Zbb & WITH_Zbs,	// B
+	       WITH_RVC,				// C
+	       1'b0,				// D
+	       1'b0,				// E
+	       1'b0,				// F
+	       1'b0,				// G
+	       1'b0,				// H
+	       1'b1,				// I
+	       1'b0,				// J
+	       1'b0,				// K
+	       1'b0,				// L
+	       WITH_Zmmul & WITH_div,		// M
+	       1'b0,				// N
+	       1'b0,				// O
+	       1'b0,				// P
+	       1'b0,				// Q
+	       1'b0,				// R
+	       1'b0,				// S
+	       1'b0,				// T
+	       1'b0,				// U
+	       1'b0,				// V
+	       1'b0,				// W
+	       1'b0,				// X
+	       1'b0,				// Y
+	       1'b0,				// Z
+	       4'b0,				// Padding
+	       2'b01				// RISCV-32
+   };
+
+   wire [31:0] csrval_misa = WITH_misa ? MISA : 32'b0;
 
    logic	   e_kill;
 
@@ -305,7 +337,7 @@ module backend #(`CONFIG)
    localparam [31:0] mcause_mask = MCAUSE_FIXED_MASK | {IRQ_BITS{1'b1}};
    reg [31:0] mcause;
    reg [NUM_IRQS:1] mie;
-   reg [`USER_CONTEXTS+`SYS_CONTEXTS-1:0] cie; // Context interrupt enable
+   reg [`REG_CONTEXTS-1:0] cie; // Context interrupt enable
 
    //
    // CSR read/write logic
@@ -467,13 +499,24 @@ module backend #(`CONFIG)
 		e_trap      = 1'b1;
 		e_mcause = MCAUSE_BADINSN;
 	     end
-	     INSN_ECALL: begin	// ECALL, EBREAK
-		e_trap	 = 1'b1;
+	     INSN_ECALL: begin
+		// ECALL, EBREAK
+		e_trap   = 1'b1;
 		e_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
 	     end
-	     INSN_ALU, INSN_XALU: if (TRAP_BADALU) begin
+	     INSN_ALU: if (TRAP_BADALU) begin
 		e_trap	 = e_aluctl.unit == ALUSRC_ERR;
 		e_mcause = MCAUSE_BADINSN;
+	     end
+	     INSN_XALU:
+	     if (TRAP_BADALU) begin
+		e_trap			= e_aluctl.unit == ALUSRC_ERR;
+		e_mcause		= MCAUSE_BADINSN;
+	     end else if (e_op.funct3 == 3'b011) begin
+		// .sm		-> switch to machine mode
+		e_jump			= !e_op.pred_taken;
+		e_jump_pc		= e_succ_pc;
+		e_restart_mcontext.m	= CTX_MACHINE;
 	     end
 	     INSN_JAL: begin	// JAL, JALR
 		e_jump	  = !e_op.pred_taken;
@@ -481,7 +524,7 @@ module backend #(`CONFIG)
 	     end
 	     INSN_BR: begin
 		e_jump	  = e_cmp_out != e_op.pred_taken;
-		e_jump_pc = e_op.imm; // rs1 is not part of the jump addr!
+		e_jump_pc = e_op.imm;
 	     end
 	     INSN_MRET: begin
 		e_jump               = !e_op.pred_taken;
@@ -489,21 +532,15 @@ module backend #(`CONFIG)
 		e_restart_mcontext.m = e_restart_mcontext.u;
 	     end
 	     INSN_FENCEI: begin
-		e_fencei		= 1'b1;
+		e_fencei	     = 1'b1;
 	     end
 	     default: begin
 		if (csrw_user_context) begin
-		   rcontext_t new_ctx;
-		   new_ctx = rcontext_t ' (e_csr_wval);
 		   // Force a mispredict kill when writing the user context;
 		   // the actual CSR write is done by the restart.
-		   // Writing user_context always goes to machine mode;
-		   // writing zero goes to machine mode without actually
-		   // modifying the user_context.
-		   e_jump    = 1'b1;
+		   e_jump    = !e_op.pred_taken;
 		   e_jump_pc = e_succ_pc;
-		   if (new_ctx)
-		     e_restart_mcontext.u = new_ctx;
+		   e_restart_mcontext.u = (rcontext_t)'(e_csr_wval);
 		   e_restart_mcontext.m = CTX_MACHINE;
 		end
 		// No control transfer
@@ -530,9 +567,9 @@ module backend #(`CONFIG)
 	   end
 	end // if (e_accept)
 
-	if (e_trap)
+	if (e_trap) begin
 	  e_mepc       = e_op.pc & PC_MASK;
-	else if (~e_busy & e_irq) begin
+	end else if (~e_busy & e_irq) begin
 	   e_restartpc = (mtvec + (e_irq_vector << 2)) & PC_MASK;
 	   e_mepc      = e_next_pc & PC_MASK;
 	   e_mcause    = MCAUSE_IRQ | e_irq_vector;

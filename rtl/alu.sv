@@ -20,13 +20,27 @@ module alu_decode #(`CONFIG)
 
    always @(*)
      begin
-	ctl	     = 'bx;
-	ctl.unit     = ALUSRC_ERR;
-	ctl.shadd    = 2'b00;		// No preshift
-	ctl.cond     = cond_t'(op.funct3);
-	ctl.bcop     = {op.rs2.r[4], op.rs2.r[1:0]};
+	logic [6:0] funct7;
+	logic [2:0] funct3;
+	insn_type_t itype;
 
-	unique case (op.itype)
+	itype	  = op.itype;
+	funct7	  = op.funct7;
+	funct3    = op.funct3;
+
+	ctl	  = 'bx;
+	ctl.unit  = ALUSRC_ERR;
+	ctl.shadd = 2'b00;		// No preshift
+	ctl.cond  = cond_t'(op.funct3);
+	ctl.bcop  = {op.rs2.r[4], op.rs2.r[1:0]};
+
+	// "Extended add" opcodes (.ux, .xu, .js etc)
+	if (itype == INSN_XALU && !funct3[2]) begin
+	   itype  = INSN_ALU;
+	   funct3 = ALU_ADD;
+	end
+
+	unique case (itype)
 	  INSN_BR: begin
 	     // A branch is an SET as far as the ALU is
 	     // concerned...
@@ -34,29 +48,24 @@ module alu_decode #(`CONFIG)
 	  end
 
 	  INSN_ALU: begin
-	     logic [6:0] funct7;
-
-	     if (!op.rs2_valid && op.funct3[1:0] != 2'b01)
+	     if (!op.rs2_valid && funct3[1:0] != 2'b01)
 	       funct7 = 7'b0;	// Immediate form
-	     else
-	       funct7 = op.funct7;
 
-	     unique casez ({funct7, op.funct3})
+	     unique casez ({funct7, funct3})
 	       { 7'b0?0_0000, ALU_ADD }: begin
 		  ctl.unit = ALUSRC_ADD;
 		  ctl.invert = funct7[5];
 	       end
 	       { 7'b0?1_0000, 3'b??0 }: begin // shXadd, shXsub
-		  if (WITH_Zba &&
-		      (WITH_Zbasub || !funct7[5])) begin
-		     ctl.unit 	= ALUSRC_ADD;
-		     ctl.shadd 	= op.funct3[2:1];
+		  if (WITH_Zba && (WITH_Zbasub || !funct7[5])) begin
+		     ctl.unit	= ALUSRC_ADD;
+		     ctl.shadd	= funct3[2:1];
 		     ctl.invert = funct7[5];
 		  end
 	       end
 	       { 7'b?00_0000, ALU_SLL }: begin
 		  if (WITH_shiftone || !funct7[6]) begin
-		     ctl.unit 	      = ALUSRC_SHIFT;
+		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_SLL;
 		     ctl.shiftop.sxor = funct7[6];
 		     end
@@ -92,7 +101,7 @@ module alu_decode #(`CONFIG)
 
 	       { 7'b??0_0000, ALU_SRL }: begin
 		  if (WITH_shiftone || !funct7[6]) begin
-		     ctl.unit 	      = ALUSRC_SHIFT;
+		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_SRA;
 		     ctl.shiftop.sand = funct7[5];
 		     ctl.shiftop.sxor = funct7[6];
@@ -136,7 +145,7 @@ module alu_decode #(`CONFIG)
 		     // bits 1:0 in funct7 can be used to obtain the
 		     // other possible condition codes
 		     ctl.cond[2] = ~funct7[1];
-		     ctl.cond[1] =  op.funct3[0];
+		     ctl.cond[1] =  funct3[0];
 		     ctl.cond[0] =  funct7[0];
 		     ctl.unit	 = ALUSRC_SET;
 		  end
@@ -146,7 +155,7 @@ module alu_decode #(`CONFIG)
 		 { 7'b0?0_0000, ALU_AND }: begin
 		    ctl.unit   = ALUSRC_LOGIC;
 		    ctl.invert = funct7[5];
-		    ctl.bitop  = op.funct3[1:0];
+		    ctl.bitop  = funct3[1:0];
 		 end
 	       { 7'b000_0100, ALU_XOR }: begin
 		  unique casez (op.rs2.r)
@@ -168,18 +177,18 @@ module alu_decode #(`CONFIG)
 	       default: begin
 		  // Do nothing
 	       end
-	     endcase // unique casez ({funct7, op.funct3})
+	     endcase // unique casez ({funct7, funct3})
 	  end
 
 	  INSN_XALU: begin
-	     unique casez (op.funct3)
+	     unique casez (funct3)
 	       3'b101: begin		// extr*
 		  if (WITH_extr) begin
-		     ctl.unit 	      = ALUSRC_SHIFT;
+		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_EXTRS;
-		     ctl.shiftop.wimm = op.funct7[4:0];
-		     ctl.shiftop.sand = op.funct7[5];
-		     ctl.shiftop.sxor = op.funct7[6] & WITH_shiftone;
+		     ctl.shiftop.wimm = funct7[4:0];
+		     ctl.shiftop.sand = funct7[5];
+		     ctl.shiftop.sxor = funct7[6] & WITH_shiftone;
 		  end
 	       end
 	       default: begin
