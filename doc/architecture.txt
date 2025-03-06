@@ -67,8 +67,8 @@ Private extensions:
 			cpopz	- cpop  rs2[4] = 1
 
 	WITH_shiftone:
-		Shift left/right insert ones - 
-		      	slo(i), sro(i)
+		Shift left/right insert ones -
+			slo(i), sro(i)
 			Same encodings as sll(i), srl(i) with
 			funct7[6]/instr[31] = 1
 
@@ -104,6 +104,33 @@ Private extensions:
 
 		 Adds EXTRO (extract one) and EXTRCS (extract complement sign)
 		 to the above, with instr[31] = funct7[6] = 1.
+
+	WITH_extn:
+		Arbitrary width zero- or sign-extension:
+
+		zext   rd,rs1,rs2
+		zexti  rd,rs1,shimm5
+		sext   rd,rs1,rs2
+		sexti  rd,rs1,shimm5
+
+		With WITH_shiftone additionally ones or complement sign:
+
+		oext   rd,rs1,rs2
+		oexti  rd,rs1,shimm5
+		csext  rd,rs1,rs2
+		csexti rd,rs1,shimm5
+
+		instr[6:0]	= 0001011 (CUSTOM0) for *EXTI
+				  0101011 (CUSTOM1) for *EXT
+		instr[11:7]	= rd
+		instr[14:12]	= 111
+		instr[19:15]	= rs1
+		instr[24:20]	= rs2|shimm5
+		instr[29:25]	= 00000
+		instr[31:30]	= 00 for ZEXT*
+				  01 for SEXT*
+				  10 for OEXT*
+				  11 for CSEXT*
 
 	Without STRICT_UNDEFINED:
 		Additional RVC encoding:

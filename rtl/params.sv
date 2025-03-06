@@ -15,6 +15,7 @@ parameter bit WITH_bitcnt	= 1'b1; // clz, ctz, cpop
 parameter bit WITH_bitcntinv	= 1'b0; // bit-inverted bitcnt ops
 parameter bit WITH_extr         = 1'b1; // bitfield extraction
 parameter bit WITH_shiftone     = 1'b1; // shift left/right one
+parameter bit WITH_extn		= 1'b1; // arbitrary sign/zero extend
 parameter bit WITH_Zmmul	= 1'b1;
 parameter bit WITH_Zicond	= 1'b1;
 parameter bit WITH_minmax	= 1'b1;

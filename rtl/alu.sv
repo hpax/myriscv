@@ -191,6 +191,15 @@ module alu_decode #(`CONFIG)
 		     ctl.shiftop.sxor = funct7[6] & WITH_shiftone;
 		  end
 	       end
+	       3'b111: begin		// arbitrary extend
+		  if (WITH_extn &&
+		      (!STRICT_UNDEFINED || !funct7[4:0])) begin
+		     ctl.unit 	      = ALUSRC_SHIFT;
+		     ctl.shiftop      = SHIFTOP_SEXTN;
+		     ctl.shiftop.sand = funct7[5];
+		     ctl.shiftop.sxor = funct7[6] & WITH_shiftone;
+		  end
+	       end
 	       default: begin
 		  // Do nothing
 	       end

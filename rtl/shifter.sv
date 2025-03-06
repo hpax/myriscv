@@ -110,17 +110,17 @@ module sh_maskgen
       logic [$clog2(width)-1:0] amt;
 
       unique case (op.smpos)
-	SMPOS_CNT:   amt = shamt;
-	SMPOS_mWIMM: amt = -op.wimm;
-	default:     amt = 'bx;
+	SMPOS_CNT:  amt = shamt;
+	SMPOS_WIMM: amt = op.wimm;
+	default:    amt = 'bx;
       endcase
 
       for (int i = 0; i < width; i++)
 	unique case ( op.smask )
-	  SMASK_NONE: q[i] = 1'b0;
 	  SMASK_ONE:  q[i] = i == amt;
 	  SMASK_LO:   q[i] = i < amt;
 	  SMASK_HI:   q[i] = ~i < amt;
+	  SMASK_UP:   q[i] = amt && i >= amt;
 	  default:    q[i] = 1'bx;
 	endcase
    end
@@ -140,18 +140,13 @@ module sh_signmux
     output		      q
     );
 
-   always @(*) begin
-      logic [$clog2(width)-1:0] pos;
-      unique case (op.spos)
-	SPOS_CNT:    pos = shamt;
-	SPOS_WIMMm1: pos = op.wimm - 1;
-	SPOS_mCNT:   pos = -shamt;
-	SPOS_1mWC:   pos = -(shamt + op.wimm - 1);
-	default:     pos = 'bx;
-      endcase
+   localparam		wb = $clog2(width);
 
-      q = (d[pos] & op.sand) ^ op.sxor;
-   end
+   wire [wb-1:0]	offs   = ({wb{op.spos}} & shamt) - 1'b1;
+   wire [wb:0]		swsum  = offs + op.wimm;
+   wire [wb-1:0]	pos    = swsum[wb-1:0] | {wb{op.spos & swsum[wb]}};
+
+   assign q = (d[pos] & op.sand) ^ op.sxor;
 endmodule // sign_mux
 
 //

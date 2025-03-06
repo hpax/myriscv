@@ -153,25 +153,26 @@ typedef enum logic [1:0] {
   SROT_LEFT  = 2'b11	// Rotate left
 } srot_t;
 
+
+// Position of mask (see below for interpretation)
 typedef enum logic {
   SMPOS_CNT   = 1'b0,	// shamt
-  SMPOS_mWIMM = 1'b1,	// -wimm
+  SMPOS_WIMM  = 1'b1,	// wimm
   SMPOS_ANY   = 1'bx
 } smpos_t;
 
 typedef enum logic [1:0] {
-  SMASK_NONE = 2'b00,  // Nothing is masked
-  SMASK_ONE  = 2'b01,  // The mpos bit only is masked
-  SMASK_HI   = 2'b10,  // mpos bits at the top are masked
-  SMASK_LO   = 2'b11   // mpos bits at the bottom are masked
+  SMASK_ONE  = 2'b00,  // The mpos bit only is masked
+  SMASK_LO   = 2'b01,  // mpos bits at the bottom are masked
+  SMASK_UP   = 2'b10,  // Bits mpos+ are masked
+  SMASK_HI   = 2'b11   // mpos bits at the top are masked
 } smasktype_t;
 
-typedef enum logic [1:0] {
-  SPOS_CNT    = 2'b00, // shamt
-  SPOS_WIMMm1 = 2'b01, // wimm - 1
-  SPOS_mCNT   = 2'b10, // -shamt
-  SPOS_1mWC   = 2'b11, // -(shamt + wimm - 1)
-  SPOS_ANY    = 2'bxx
+// Pre-shift position of sign bit
+typedef enum logic  {
+  SPOS_WIMMm1 = 1'b0, // wimm - 1
+  SPOS_CWm1   = 1'b1, // wimm + (shamt - 1) SATURATING
+  SPOS_ANY    = 1'bx
 } spos_t;
 
 typedef struct packed {
@@ -188,20 +189,22 @@ typedef enum shiftop_t {
 	     SHIFTOP_SLL   = { 5'bx,  SROT_LEFT,  SMPOS_CNT,   SMASK_LO,   SPOS_ANY,    2'b00 },
 	     SHIFTOP_SLO   = { 5'bx,  SROT_LEFT,  SMPOS_CNT,   SMASK_LO,   SPOS_ANY,    2'b01 }, // Shift left 1's
 	     SHIFTOP_SRL   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_ANY,    2'b00 },
-	     SHIFTOP_SRA   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_mCNT,   2'b10 },
+	     SHIFTOP_SRA   = { 5'd0,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_WIMMm1, 2'b10 },
 	     SHIFTOP_SRO   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_ANY,    2'b01 }, // Shift right 1's
-	     SHIFTOP_ROL   = { 5'bx,  SROT_LEFT,  SMPOS_ANY,   SMASK_NONE, SPOS_ANY,    2'b00 },
-	     SHIFTOP_ROR   = { 5'bx,  SROT_RIGHT, SMPOS_ANY,   SMASK_NONE, SPOS_ANY,    2'b00 },
-	     SHIFTOP_ZEXTB = { 5'd8,  SROT_NONE,  SMPOS_mWIMM, SMASK_HI,   SPOS_ANY,    2'b00 },
-	     SHIFTOP_ZEXTH = { 5'd16, SROT_NONE,  SMPOS_mWIMM, SMASK_HI,   SPOS_ANY,    2'b00 },
-	     SHIFTOP_SEXTB = { 5'd8,  SROT_NONE,  SMPOS_mWIMM, SMASK_HI,   SPOS_WIMMm1, 2'b10 },
-	     SHIFTOP_SEXTH = { 5'd16, SROT_NONE,  SMPOS_mWIMM, SMASK_HI,   SPOS_WIMMm1, 2'b10 },
+	     SHIFTOP_ROL   = { 5'b0,  SROT_LEFT,  SMPOS_WIMM,  SMASK_LO,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_ROR   = { 5'b0,  SROT_RIGHT, SMPOS_WIMM,  SMASK_HI,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_ZEXTB = { 5'd8,  SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_ZEXTH = { 5'd16, SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_SEXTB = { 5'd8,  SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_WIMMm1, 2'b10 },
+	     SHIFTOP_SEXTH = { 5'd16, SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_WIMMm1, 2'b10 },
 	     SHIFTOP_BCLR  = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_ANY,    2'b00 },
 	     SHIFTOP_BSET  = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_ANY,    2'b01 },
-	     SHIFTOP_BINV  = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_CNT,    2'b11 },
-	     SHIFTOP_BEXT  = { 5'd1,  SROT_RIGHT, SMPOS_mWIMM, SMASK_HI,   SPOS_ANY,    2'b00 },
-	     SHIFTOP_EXTRU = { 5'bx,  SROT_RIGHT, SMPOS_mWIMM, SMASK_HI,   SPOS_ANY,    2'b00 },
-	     SHIFTOP_EXTRS = { 5'bx,  SROT_RIGHT, SMPOS_mWIMM, SMASK_HI,   SPOS_1mWC,   2'b10 }
+	     SHIFTOP_BINV  = { 5'd1,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_CWm1,   2'b11 },
+	     SHIFTOP_BEXT  = { 5'd1,  SROT_RIGHT, SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 }, // == extru ...,1
+	     SHIFTOP_EXTRU = { 5'bx,  SROT_RIGHT, SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_EXTRS = { 5'bx,  SROT_RIGHT, SMPOS_WIMM,  SMASK_UP,   SPOS_CWm1,   2'b10 },
+	     SHIFTOP_ZEXTN = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_UP,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_SEXTN = { 5'b0,  SROT_NONE,  SMPOS_CNT,   SMASK_UP,   SPOS_CWm1,   2'b10 }
 } shiftop_enum_t;
 
 //
