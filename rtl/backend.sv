@@ -69,7 +69,7 @@ module backend #(`CONFIG)
  // Data bus from ldst unit
  output [31:0]		   dbus_a,
  output			   dbus_valid,
- output			   dbus_cbo,
+ output cbo_t		   dbus_cbo,
  output			   dbus_wrq,
  output [3:0]		   dbus_wbe,
  output [31:0]		   dbus_wdata,
@@ -700,20 +700,36 @@ module backend #(`CONFIG)
    // here is a speed path. However, if invalid address exceptions
    // are added, this needs to be considered here (or in the ldst unit),
    // or a memory transaction would be initiated.
-   wire ldst_valid = e_accept & insn_mem(e_op.itype);
-
    wire [31:0] ldst_dout;
    wire [3:0]  ldst_dout_wbe;
    wire	       ldst_dout_valid;
    wire	       ldst_busy;
+
+   logic       ldst_valid;
+   cbo_t       ldst_cbo;
+
+   always @(*) begin
+      ldst_valid = e_accept & insn_mem(e_op.itype);
+      ldst_cbo   = { 1'b0, CBO_X };
+
+      if (ldst_valid && e_op.itype == INSN_CBO) begin
+	 unique casez (e_op.rs2.r)
+	   5'b00000: ldst_cbo = { 1'b1, CBO_INVAL };
+	   5'b00001: ldst_cbo = { 1'b1, CBO_CLEAN };
+	   5'b00010: ldst_cbo = { 1'b1, CBO_FLUSH };
+	   5'b00100: ldst_cbo = { 1'b1, CBO_ZERO  };
+	   default:  ldst_cbo = { 1'b0, CBO_X };
+	 endcase
+	 ldst_valid = ldst_cbo.valid;
+      end
+   end
 
    ldst ldst (
      .rst_n		(rst_n),
      .clk		(clk),
      .clken		(clken),
      .valid		(ldst_valid),
-     .memop_cbo		(e_op.itype[1]),
-     .memop_cbo_op	(e_op.rs2.r),
+     .memop_cbo		(ldst_cbo),
      .memop_st		(e_op.itype[0]),
      .memop_ldu		(e_op.funct3[2]),
      .size		(e_op.funct3[1:0]),

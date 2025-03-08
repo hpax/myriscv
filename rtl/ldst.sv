@@ -8,15 +8,17 @@
 // This unit supports misaligned accesses by breaking them into two if they
 // cross a word boundary.
 //
+
+`include "myriscv.vh"
+
 module ldst (
 		input		  rst_n,
 		input		  clk,
 		input		  clken,
 		input		  valid, // It is a memop
 
-		input		  memop_cbo,  // It is a cache management op
-		input [4:0]	  memop_cbo_op,    // 5-bit CBO opcode
-		input		  memop_st, // It is a store
+		input cbo_t	  memop_cbo, // Cache block op
+		input		  memop_st,  // It is a store
 		input		  memop_ldu, // Load is unsigned
 		input [1:0]	  size, // Data size == 2^x bytes
 
@@ -33,10 +35,10 @@ module ldst (
 
 		output [31:0]	  dbus_a,
 		output		  dbus_valid,
-		output		  dbus_cbo,	// Cache block operation
+		output cbo_t	  dbus_cbo, // Cache block operation
 		output		  dbus_wrq,
 		output reg [3:0]  dbus_wbe,
-		output reg [31:0] dbus_wdata,	// Or CBO operation
+		output reg [31:0] dbus_wdata,
 		input [31:0]	  dbus_rdata,
 		input		  dbus_ready
 		);
@@ -58,30 +60,31 @@ module ldst (
 
    reg			      dbus_valid_q;
    reg			      memop_st_q;
-   reg			      memop_cbo_q;
+   cbo_t		      memop_cbo_q;
 
    assign dbus_a	= use_latched ? latched_a + {upper_word, 2'b00} : addr;
    assign dbus_valid	= rst_n & (valid | busy);
-   assign dbus_wrq = dbus_valid & (use_latched ? memop_st_q : memop_st);
-   assign dbus_cbo = dbus_valid & (use_latched ? memop_cbo_q : memop_cbo);
+   assign dbus_wrq      = dbus_valid & (use_latched ? memop_st_q : memop_st);
+   assign dbus_cbo      = dbus_valid & (use_latched ? memop_cbo_q : memop_cbo);
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	dbus_valid_q <= 1'b0;
-	memop_st_q   <= 1'b0;
-	memop_cbo_q  <= 1'b0;
+	dbus_valid_q	  <= 1'b0;
+	memop_st_q	  <= 1'b0;
+	memop_cbo_q.valid <= 1'b0;
+	memop_cbo_q.op    <= CBO_X;
      end else if (clken) begin
-	dbus_valid_q <= dbus_valid;
+	dbus_valid_q     <= dbus_valid;
 	if (~busy) begin
-	   memop_st_q  <= memop_st;
-	   memop_cbo_q <= memop_cbo;
+	   memop_st_q     <= memop_st;
+	   memop_cbo_q    <= memop_cbo;
 	end
      end
 
    logic		      misaligned_comb;
    reg			      misaligned_q;
    always @(*)
-     if (memop_cbo)
+     if (memop_cbo.valid)
        misaligned_comb = 1'b0;	// Never split a CBO
      else
        unique case (size)
@@ -163,20 +166,15 @@ module ldst (
      end
 
    // dbus output MUXes
-   // XXX: does multiplexing CBO operations onto the wdata bus actually
-   // make any sense?
    logic [31:0] wdata_comb;
    always @(*)
-     if (memop_cbo)
-       wdata_comb = { 27'bx, memop_cbo_op };
-     else
-       unique case (addr[1:0])
-	 2'b00:   wdata_comb = src2;
-	 2'b01:   wdata_comb = { src2[23:0], src2[31:24] };
-	 2'b10:   wdata_comb = { src2[15:0], src2[31:16] };
-	 2'b11:   wdata_comb = { src2[7:0],  src2[31:8]  };
-	 default: wdata_comb = 32'bx;
-       endcase // unique casez (addr[1:0])
+     unique case (addr[1:0])
+       2'b00:   wdata_comb = src2;
+       2'b01:   wdata_comb = { src2[23:0], src2[31:24] };
+       2'b10:   wdata_comb = { src2[15:0], src2[31:16] };
+       2'b11:   wdata_comb = { src2[7:0],  src2[31:8]  };
+       default: wdata_comb = 32'bx;
+     endcase // unique casez (addr[1:0])
 
    reg [31:0]	  latched_wdata;
    reg [1:0][3:0] latched_wbe;

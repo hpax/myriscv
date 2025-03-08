@@ -243,4 +243,18 @@ typedef struct packed {
    logic       dead;
 } rng_bus_t;
 
+// Cache block operation types
+typedef enum logic [1:0] {
+   CBO_INVAL = 2'b00,
+   CBO_CLEAN = 2'b01,
+   CBO_FLUSH = 2'b10,
+   CBO_ZERO  = 2'b11,		// Encoded as 00100 in the ISA
+   CBO_X     = 2'bxx
+} cbo_op_t;
+
+typedef struct packed {
+   logic       valid;
+   cbo_op_t    op;
+} cbo_t;
+
 `endif

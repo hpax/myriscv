@@ -75,7 +75,7 @@ module core #(`CONFIG) (rst_n, clk, clken,
    wire [31:0]		     dbus_a;
    wire [31:0]		     dbus_wdata;
    wire			     dbus_valid;
-   wire			     dbus_cbo;
+   cbo_t		     dbus_cbo;
    wire			     dbus_wrq;
    wire [3:0]		     dbus_wbe;
    logic [31:0]		     dbus_rdata;
@@ -228,13 +228,13 @@ module core #(`CONFIG) (rst_n, clk, clken,
 
 	      dbus_ready_cbo <= 1'b0;
 
-	      if (~mem_valid & dbus_mem_sel & ~dbus_cbo) begin
+	      if (~mem_valid & dbus_mem_sel & ~dbus_cbo.valid) begin
 		 // Note: CBO requests don't go to actual memory; they
 		 // will go to the dcache when implemented.
 		 mem_addr    <= dbus_a[ram_size_bits-1:0];
 		 mem_is_dbus <= 1'b1;
-		 mem_valid   <= ~dbus_cbo;
-		 dbus_ready_cbo <= dbus_cbo;
+		 mem_valid   <= ~dbus_cbo.valid;
+		 dbus_ready_cbo <= dbus_cbo.valid;
 		 mem_wrq     <= dbus_wrq;
 		 mem_wdata   <= dbus_wdata;
 		 mem_wbe     <= dbus_wbe;
@@ -267,7 +267,7 @@ module core #(`CONFIG) (rst_n, clk, clken,
      end else if (clken) begin
 	dbus_ready_io <= 1'b0;
 
-	if (~io_valid & dbus_io_sel & ~dbus_cbo) begin
+	if (~io_valid & dbus_io_sel & ~dbus_cbo.valid) begin
 	   io_addr       <= dbus_a;
 	   io_wdata      <= dbus_wdata;
 	   io_valid      <= 1'b1;
