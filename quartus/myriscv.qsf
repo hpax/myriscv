@@ -128,6 +128,9 @@ set_global_assignment -name ROUTER_LCELL_INSERTION_AND_LOGIC_DUPLICATION ON
 
 
 set_global_assignment -name QIP_FILE altmult16.qip
+set_global_assignment -name QIP_FILE altmult18.qip
+set_global_assignment -name QIP_FILE altmult18x14.qip
+set_global_assignment -name QIP_FILE altmult14.qip
 
 
 
