@@ -69,7 +69,13 @@ module rng_zkr #(
 	  status <= RNG_WAIT;
      end
 
-   assign rdata[31:30] = status;
-   assign rdata[29:16] = 14'b0;
-   assign rdata[15:0]  = {16{!Zkr_secure || status == RNG_ES16}} & acc[15:0];
+   always @(*) begin
+      rdata = 32'b0;
+
+      if (WITH_Zkr) begin
+	 rdata[31:30]  = status;
+	 if (!Zkr_secure || status == RNG_ES16)
+	   rdata[15:0] = acc[15:0];
+      end
+   end
 endmodule
