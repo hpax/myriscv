@@ -132,6 +132,14 @@ Private extensions:
 				  10 for OEXT*
 				  11 for CSEXT*
 
+	WITH_indcsr:
+		Indirect CSR access.
+
+		Functionally implemented as using custom CSR numbers
+		0xbe0-0xbff to indicate that actual register number
+		should be accessed via x0..x31. This can also be seen as
+		rs2 = register number, funct7 = 1011111.
+
 	Without STRICT_UNDEFINED:
 		Additional RVC encoding:
 			c.ecall	- opcode 0x8002

@@ -274,7 +274,7 @@ module backend #(`CONFIG)
 	      e_src1 = e_src1_q;
 
 	    if (e_rs2_m)
-	       e_src2 = m_din;
+	      e_src2 = m_din;
 	    else if (e_rs2_w)
 	      e_src2 = w_din;
 	    else
@@ -344,7 +344,9 @@ module backend #(`CONFIG)
    //
    logic [31:0]	e_csr_rval;
    logic [31:0]	e_csr_wval;
-   wire [11:0]	ncsr = e_op.imm[11:0];
+
+   // If !WITH_indcsr there is no reason to wait for e_src2...
+   wire  [11:0]	ncsr = WITH_indcsr ? e_src2[11:0] : e_op.imm[11:0];
 
    // For a CSR with read side effects, the read side effect
    // should be conditioned on e_accept & e_op.csrr.

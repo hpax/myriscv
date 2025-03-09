@@ -40,9 +40,17 @@ module decode_comb #(`CONFIG)
    wire signed [31:0] j_imm = $signed({i[31], i[19:12], i[20], i[30:21], 1'b0});
    wire signed [31:0] u_imm = $signed({i[31:12], 12'b0});
 
+   function logic csr_is_indirect(logic [6:0] funct7);
+      logic indirect;
+      indirect = 1'b0;
+      if (WITH_indcsr)
+	indirect      = funct7 == 7'b1011_111; // Equivalent to CSR 0xBE0-0xBFF
+      csr_is_indirect = indirect;
+   endfunction
+
    always @(*)
      begin
-	op 	      = 'bx;
+	op	      = 'bx;
 	op.i16	      = is_16;
 	op.mcontext   = d_mcontext;
 
@@ -169,18 +177,20 @@ module decode_comb #(`CONFIG)
 	     op.imm       = i_imm;
 	     unique casez ({op.funct7, op.funct3})
 	       10'b???????_?01: begin	// CSRRW[I]
-		  op.itype = INSN_CSR;
-		  op.rd_e = 1'b1;
-		  op.csrr = |op.rd.r;
-		  op.csrw = 1'b1;
+		  op.itype     = INSN_CSR;
+		  op.rd_e      = 1'b1;
+		  op.csrr      = |op.rd.r;
+		  op.csrw      = 1'b1;
 		  op.rs1_valid = ~op.funct3[2];
+		  op.rs2_valid = csr_is_indirect(op.funct7);
 	       end
 	       10'b???????_?1?: begin	// CSRR[SC][I]
-		  op.itype = INSN_CSR;
-		  op.rd_e = 1'b1;
-		  op.csrr = 1'b1;
-		  op.csrw = |op.rs1.r;
+		  op.itype     = INSN_CSR;
+		  op.rd_e      = 1'b1;
+		  op.csrr      = 1'b1;
+		  op.csrw      = |op.rs1.r;
 		  op.rs1_valid = ~op.funct3[2];
+		  op.rs2_valid = csr_is_indirect(op.funct7);
 	       end
 	       10'b0000000_000: begin		// ECALL, EBREAK
 		  if (!STRICT_UNDEFINED ||
@@ -221,7 +231,7 @@ module decode_comb #(`CONFIG)
 	     op.rs2_valid	= i[5];
 	     op.rd_e		= 1'b1;
 	     op.imm             = i_imm;
-		
+
 	     // .sm .xu and .ux actually can support any ALU operation
 	     // with funct3 == 0 EXCEPT MUL
 	     unique casez (op.funct3)
@@ -351,11 +361,11 @@ module decode_seq #(`CONFIG)
 		 mult.rs2    <= op_o.rs2.r;
 		 mult.hifunc <= mulhifunc_c;
 	      end else begin
-		 mult <= mult_invalid;	
+		 mult <= mult_invalid;
 	      end
 	   end else if ((op_o.rd_e | op_o.rd_m) &&
 	     (op_o.rd.c == mult.ctx) &&
-  	     (op_o.rd.r == mult.rs1 || op_o.rd.r == mult.rs2)) begin
+	     (op_o.rd.r == mult.rs1 || op_o.rd.r == mult.rs2)) begin
 	      // Input registers clobbered
 	      mult <= mult_invalid;
 	   end
@@ -432,7 +442,7 @@ module decode_srcregs #(`CONFIG)
    always @(*) begin
       rs1.c = mc.m;
       rs2.c = mc.m;
-   
+
       priority casez ({insn[15:13], insn[1:0]})
 	5'b???_11: begin		// 32-bit instruction
 	   rs1.r = insn[19:15];
