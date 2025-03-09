@@ -81,10 +81,17 @@ module predict_branch #(`CONFIG)
 	// especially since only one bit needs to be tested for that
 	// specific MUX...
 	bj_offset  = i[3] ? j_imm : b_imm;
-	bj_pc	   = add_pc(f2_pc, bj_offset);
-
 	cbj_offset = i[14] ? cb_imm : cj_imm;
+
+`ifdef EXTRA_PC_ADDERS
+	bj_pc	   = add_pc(f2_pc, bj_offset);
 	cbj_pc     = add_pc(f2_pc, cbj_offset);
+`else
+	// The CBJ ops are all in RVC quadrant 1, so just test
+	// for quadrant 0/1 versus 2/3
+	bj_pc      = add_pc(f2_pc, i[1] ? bj_offset : cbj_offset);
+	cbj_pc     = bj_pc;
+`endif
 
 	if (f2_valid)
 	  unique casez (i[6:0])
