@@ -822,7 +822,7 @@ module backend #(`CONFIG)
        end
        INSN_MUL: begin
 	  if (WITH_Zmmul)
-	    m_dout  = e_op.funct3[1:0] ? m_mulh_o : m_mull_o;
+	    m_dout  = m_op.funct3[1:0] ? m_mulh_o : m_mull_o;
        end
        default: begin
 	  // See above
