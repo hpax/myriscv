@@ -109,7 +109,40 @@ typedef enum logic [11:0] {
 
 	// Extensions CSRs
 	CSR_USER_CONTEXT	= 12'h7f0,
-	CSR_CIE			= 12'h7f1 // Interrupt enable by context
+	CSR_CIE			= 12'h7f1, // Interrupt enable by context
+
+	CSR_INDIRECT_X0		= 12'hbe0,
+	CSR_INDIRECT_X1		= 12'hbe1,
+	CSR_INDIRECT_X2		= 12'hbe2,
+	CSR_INDIRECT_X3		= 12'hbe3,
+	CSR_INDIRECT_X4		= 12'hbe4,
+	CSR_INDIRECT_X5		= 12'hbe5,
+	CSR_INDIRECT_X6		= 12'hbe6,
+	CSR_INDIRECT_X7		= 12'hbe7,
+	CSR_INDIRECT_X8		= 12'hbe8,
+	CSR_INDIRECT_X9		= 12'hbe9,
+	CSR_INDIRECT_X10	= 12'hbea,
+	CSR_INDIRECT_X11	= 12'hbeb,
+	CSR_INDIRECT_X12	= 12'hbec,
+	CSR_INDIRECT_X13	= 12'hbed,
+	CSR_INDIRECT_X14	= 12'hbee,
+	CSR_INDIRECT_X15	= 12'hbef,
+	CSR_INDIRECT_X16	= 12'hbf0,
+	CSR_INDIRECT_X17	= 12'hbf1,
+	CSR_INDIRECT_X18	= 12'hbf2,
+	CSR_INDIRECT_X19	= 12'hbf3,
+	CSR_INDIRECT_X20	= 12'hbf4,
+	CSR_INDIRECT_X21	= 12'hbf5,
+	CSR_INDIRECT_X22	= 12'hbf6,
+	CSR_INDIRECT_X23	= 12'hbf7,
+	CSR_INDIRECT_X24	= 12'hbf8,
+	CSR_INDIRECT_X25	= 12'hbf9,
+	CSR_INDIRECT_X26	= 12'hbfa,
+	CSR_INDIRECT_X27	= 12'hbfb,
+	CSR_INDIRECT_X28	= 12'hbfc,
+	CSR_INDIRECT_X29	= 12'hbfd,
+	CSR_INDIRECT_X30	= 12'hbfe,
+	CSR_INDIRECT_X31	= 12'hbff
 } csr_t;
 
 typedef enum logic [31:0] {
