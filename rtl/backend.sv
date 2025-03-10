@@ -123,8 +123,11 @@ module backend #(`CONFIG)
    // E-stage pipeline synchronization signals
    logic	   e_trap;
    logic	   e_jump;
+   logic	   e_waiting;	  // Waiting for an event
+   logic	   e_really_busy; // Uninterruptably busy
 
-   assign e_busy    = 1'b0;
+   assign e_really_busy = 1'b0;
+   assign e_busy        = e_really_busy | e_waiting;
 
    // m_kill will not be reflected in e_valid_i because it ends
    // up on the wrong side of a register; this could be fixed,
@@ -417,24 +420,33 @@ module backend #(`CONFIG)
    wire		csrw_mstatus	  = e_op.csrw && ncsr == CSR_MSTATUS;
    wire		csrw_user_context = e_op.csrw && ncsr == CSR_USER_CONTEXT;
    wire		csrw_cie	  = e_op.csrw && ncsr == CSR_CIE;
+   wire		csrw_waitfor	  = WITH_waitfor && e_op.csrw && ncsr == CSR_WAITFOR;
 
    //
    // Interrupt recognition
    //
    reg [IRQ_BITS-1:0] e_irq_vector;
    reg		      e_irq;
+   reg		      e_wakeup;
 
    // Note that e_irq_vector must be zero if !e_irq
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	e_irq		      <= 1'b0;
-	e_irq_vector	      <= 'b0;
-     end else if (~clken) begin
+	e_irq	      <= 1'b0;
+	e_wakeup      <= 1'b0;
+	e_irq_vector  <= 'b0;
+     end else if (clken) begin
 	logic [NUM_IRQS:1] real_irq;
 	real_irq      = d_irqs & mie;
 
-	e_irq        <= 1'b0;
+	e_irq	     <= 'b0;
 	e_irq_vector <= 'b0;
+
+	// Waiting for an event? Check for wakeup. Because this adds a
+	// cycle of latency, we must already have waited for one cycle;
+	// thus, writing waitfor takes 2 cycles if the event is
+	// already pending.
+	e_wakeup     <= e_waiting & |(d_irqs & e_csr_wval[NUM_IRQS:1]);
 
 	// lrsc_hold inhibits interrupts for the forward progress guarantee
 	if (cie[e_op.mcontext.m] & ~lrsc_hold) begin
@@ -446,9 +458,9 @@ module backend #(`CONFIG)
      end
 
    //
-   // Successor PC (for JAL/JALR and, in the future, branch predict
-   // validation.)
+   // Waiting...
    //
+   assign e_waiting = csrw_waitfor & !e_wakeup;
 
    //
    // Branch, jump, trap and interrupt handling.
@@ -571,13 +583,13 @@ module backend #(`CONFIG)
 
 	if (e_trap) begin
 	  e_mepc       = e_op.pc & PC_MASK;
-	end else if (~e_busy & e_irq) begin
+	end else if (e_irq & ~e_really_busy) begin
 	   e_restartpc = (mtvec + (e_irq_vector << 2)) & PC_MASK;
 	   e_mepc      = e_next_pc & PC_MASK;
 	   e_mcause    = MCAUSE_IRQ | e_irq_vector;
 	end
 
-	e_kill = e_trap | (e_irq & ~e_busy) | e_jump | e_fencei;
+	e_kill = e_trap | (e_irq & ~e_really_busy) | e_jump | e_fencei;
      end
 
    //

@@ -110,6 +110,7 @@ typedef enum logic [11:0] {
 	// Extensions CSRs
 	CSR_USER_CONTEXT	= 12'h7f0,
 	CSR_CIE			= 12'h7f1, // Interrupt enable by context
+	CSR_WAITFOR		= 12'h7f2,
 
 	CSR_INDIRECT_X0		= 12'hbe0,
 	CSR_INDIRECT_X1		= 12'hbe1,

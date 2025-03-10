@@ -208,10 +208,100 @@ Non-standard or system-specific behaviors:
 
 System architecture:
 
-       The system architecture is only partly compatible with the
-       standard RISC-V privileged system architecture.
+	The system architecture is only partly compatible with the
+	standard RISC-V privileged system architecture.
 
-       This is intended for microcontroller applications, and does not
-       implement any kind of protection.
+	This is intended for microcontroller applications, and does not
+	implement any kind of protection; in effect only the machine
+	privilege level exists.
 
-       ... detailed description ...
+	The main intended target of this CPU is FPGAs, and FPGAs tend
+	to have relatively large RAM arrays (except for a minority of
+	architectures which also allows the LUT tables to be used as
+	very fine grained RAM.) Thus, this CPU tries to take advantage
+	of a "forced large" register file by providing multiple
+	register contexts (register banks.)
+
+	One register context (exception context) is used for
+	interrupts/exceptions; the CPU will automatically switch to
+	this context, and return when executing MEPC.
+
+	There are no scratch register CSRs as they are no longer needed.
+
+	The CSR user_context (0x7f0) contains the current user
+	context; the operating system can set this to quickly switch
+	tasks. user_context is *not* changed when going to exception
+	context.
+
+	The following special instructions are provided that provide
+	access across register contexts. They have immediate (CUSTOM0)
+	and register (CUSTOM1) forms. They are executed as if they
+	were ALU (OP-IMM/OP) instructions with funct3 == 000 (add); in
+	the register form they take the same funct7 as the OP opcodes,
+	*except MUL* (funct7 == 0000001). Thus, "add.xu" here really
+	means "add.xu, addi.xu, sub.xu, ...".
+
+		add.xu	- rs1 is forced to the user context.
+
+		add.ux	- rd is forced to the user context.
+
+		add.sm	- rd is forced to exception context, and the
+			  CPU switches to exception context before
+			  executing the next instruction. mepc is
+			  *not* affected.
+
+			  This is intended to be used to implement
+			  fast locking operations in an RTOS as it
+			  avoids having to dispatch an exception
+			  handler. The register written can be used
+			  as an argument without needing to use
+			  add.xu to fetch it, or for other purposes.
+
+			  If writing a register is not wanted, just
+			  set rd == x0.
+
+	User contexts range from 0 to USER_CONTEXTS-1 (defined in
+	rtl/config.sv); system contexts are assigned higher
+	numbers. Currently this only applies to the exception context,
+	but in the future might include e.g. NMI and/or debug mode
+	contexts as well and might depend on the CPU configuration.
+
+	On reset, the CPU runs in the exception context with
+	user_context set to the highest supported user context
+	(i.e. USER_CONTEXTS-1).
+
+	Each context has a separate interrupt flag, given as a bitmask
+	in the cie CSR (context interrupt enable, 0x7f1). Normally the
+	interrupt flag in exception context would be left at 0, of
+	course. The standard mstatus CSR acts as a "window" into this CSR,
+	with bit 1 corresponding to the flag for the current user
+	context, and bit 3 to the currently executing context (user or
+	exception.)
+
+	Up to 31 interrupt requests are supported, strictly
+	prioritized, numbered from 1 to 31. IRQ 1 has the highest
+	priority.
+
+	IRQ 0 is reserved for future CPU-generated interrupt
+	conditions and/or NMI.
+
+	The mie and mip CSRs contain the currently pending and enabled
+	interrupts as a bitmask. This is at least partially nonstandard.
+
+	Interrupts can be level- or edge-triggered. If edge-triggered,
+	they are cleared either on the interrupt begin accepted or by
+	writing 1 to the corresponding bit(s) in the mip register.
+
+	Writing a mask to the waitfor CSR (0x7f2) will wait until any
+	of the interrupt sources in that CSR become pending in the mip
+	register, whether or not they are enabled in either mie or
+	cie. If an interrupt arrives that *is* enabled in mie and cie,
+	it will be taken; mepc will point to the successor to the csrw
+	waitfor if this interrupt is in the wait mask, otherwise it
+	will point back to the csrw waitfor instruction itself. Thus,
+	this can be used with interrupts enabled to enforce that a
+	certain interrupt has been received and its handler executed,
+	*or* to wait for an interrupt line that in fact never needs to
+	be enabled and is simply used as a ready signal from external hardware.
+
+	waitfor is a write-only CSR and always reads 0.

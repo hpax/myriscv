@@ -26,6 +26,7 @@ parameter bit WITH_Zkr		= 1'b1; // seed CSR (needs external bit source)
 parameter bit WITH_Zalrsc	= 1'b1; // LR/SC instructions
 parameter bit WITH_Ziccrse	= 1'b1; // LR/SC guarantee forward progress
 parameter bit WITH_indcsr	= 1'b0; // Indirect CSR access
+parameter bit WITH_waitfor      = 1'b1; // waitfor CSR
 
 parameter bit STRICT_UNDEFINED	= 1'b0; // Strict opcode checking
 parameter bit TRAP_BADINSN	= 1'b1;
