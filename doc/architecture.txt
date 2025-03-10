@@ -241,14 +241,18 @@ System architecture:
 	*except MUL* (funct7 == 0000001). Thus, "add.xu" here really
 	means "add.xu, addi.xu, sub.xu, ...".
 
-		add.xu	- rs1 is forced to the user context.
+		add.xu	- funct3 == 000
+			  rs1 is forced to the user context.
 
-		add.ux	- rd is forced to the user context.
+		add.ux	- funct3 == 001
+			  rd is forced to the user context.
 
-		add.sm	- rd is forced to exception context, and the
+		add.sm	- funct3 == 011
+			  rd is forced to exception context, and the
 			  CPU switches to exception context before
-			  executing the next instruction. mepc is
-			  *not* affected.
+			  executing the next instruction. mepc or any
+			  of the other exception status registers
+			  are unaffected.
 
 			  This is intended to be used to implement
 			  fast locking operations in an RTOS as it
@@ -293,7 +297,7 @@ System architecture:
 	writing 1 to the corresponding bit(s) in the mip register.
 
 	Writing a mask to the waitfor CSR (0x7f2) will wait until any
-	of the interrupt sources in that CSR become pending in the mip
+	of the interrupt sources in the mask become pending in the mip
 	register, whether or not they are enabled in either mie or
 	cie. If an interrupt arrives that *is* enabled in mie and cie,
 	it will be taken; mepc will point to the successor to the csrw
@@ -302,6 +306,8 @@ System architecture:
 	this can be used with interrupts enabled to enforce that a
 	certain interrupt has been received and its handler executed,
 	*or* to wait for an interrupt line that in fact never needs to
-	be enabled and is simply used as a ready signal from external hardware.
+	be enabled and is simply used as a ready signal from external
+	hardware.
 
 	waitfor is a write-only CSR and always reads 0.
+	XXX: could return mip, or mip masked...
