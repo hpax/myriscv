@@ -296,6 +296,8 @@ System architecture:
 	they are cleared either on the interrupt begin accepted or by
 	writing 1 to the corresponding bit(s) in the mip register.
 
+	WITH_waitfor:
+
 	Writing a mask to the waitfor CSR (0x7f2) will wait until any
 	of the interrupt sources in the mask become pending in the mip
 	register, whether or not they are enabled in either mie or
