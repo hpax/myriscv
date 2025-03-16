@@ -82,8 +82,10 @@ module test #(
      .mem_wr	( mem_wr ),
      .mem_cpu	( mem_cpu ),
 
-     .irq	( irq ),
-     .intack	( intack ),
+     .irq	   ( { irq, 1'b0 } ),
+     .irq_intack   ( intack ),
+     .irq_intable  ( {{NUM_IRQS{1'b1}}, 1'b0} ),
+     .irq_waitable ( {{NUM_IRQS{1'b1}}, 1'b0} ),
 
      .buserr	( buserr )
      );
@@ -123,7 +125,7 @@ module test #(
 
    wire [31:0] busaddr = { io_addr[31:2], 2'b00 };
 
-   bit need_nl = 1'b0;
+   bit  need_nl = 1'b0;
 
    always @(posedge clk)
      begin
