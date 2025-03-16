@@ -36,7 +36,10 @@ parameter bit TRAP_BADPC	= 1'b1;
 // If Zkr_secure is set, the entropy register is not visible unless
 // the status field in the SEED CSR is set to ES16. If this is set to 0,
 // this masking is not performed (reduces area cost.)
-parameter bit Zkr_secure        = 1'b0;
+parameter bit Zkr_secure        = 1'b1;
+
+// Width of the random number pool (architecturally compliant value 16)
+parameter int Zkr_bits          = 16;
 
 // For the Ziccrse instruction, this sets the size as a power of 2 of the
 // maximum constrained instruction sequence. Interrupts are locked out
@@ -44,12 +47,29 @@ parameter bit Zkr_secure        = 1'b0;
 // are locked out indefinely until the reservation is released.
 parameter int Ziccrse_bits      = 4;    // Standard architectural value
 
-parameter logic [31:0] RESET_PC	= 32'h0000_0010;
+parameter logic [31:0] RESET_PC		= 32'h0000_0010;
 
-parameter int	     NUM_IRQS	= 31;
-parameter int	     IRQ_BITS	= $clog2(NUM_IRQS+1);
-parameter logic [31:0] MTVEC_RESET	= 32'h0000_0080;
-parameter logic [31:0] MTVEC_WMASK	= 32'h0;
+// Interrupts
+parameter int	       NUM_IRQS		= 31;
+parameter int	       IRQ_BITS		= $clog2(NUM_IRQS+1);
+
+// Set this to 0 for non-vectored interrupts (interrupts and
+// exceptions all share a single vector.) Set to 2 for architectually
+// vectored interrupts (4 byte spacing.)
+parameter int	       IRQ_VECTOR_BITS = 2;
+
+// MTVEC initialization and writability. For convenience separate
+// parameters are made available for the reset values of the mode and
+// addr fields, but they can be overridden by setting MTVEC_RESET
+// explicitly.
+//
+// If vectoring is enabled, to reduce logic, the address fields of
+// MTVEC_RESET and MTVEC_WMASK should be a multiple of
+// 1 << (IRQ_VECTOR_BITS+IRQ_BITS).
+parameter logic [31:0] MTVEC_WMASK	  = 32'h0;
+parameter logic [1:0]  MTVEC_MODE_RESET   = { 1'b0, IRQ_VECTOR_BITS && ~MTVEC_WMASK[0] };
+parameter logic [31:0] MTVEC_ADDR_RESET   = 32'h0000_0080;
+parameter logic [31:0] MTVEC_RESET        = MTVEC_ADDR_RESET | MTVEC_MODE_RESET;
 
 // These can be set to any width from 0 (no counter) to 64 (full
 // architectural counter width.) If CTR_TIME_WIDTH is zero, the
