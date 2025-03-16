@@ -23,7 +23,7 @@ module sh_rot
    (
     input  [$clog2(width)-1:0] cnt,
     input  [width-1:0] d,
-    output [width-1:0] q
+    output logic [width-1:0] q
     );
 // *** Variant 1
 //   wire [2*width-1:0]  in = { d, {width{1'b0}} };
@@ -103,7 +103,7 @@ module sh_maskgen
    (
     input [$clog2(width)-1:0] shamt, // Shift amount operand
     input shiftop_t           op,
-    output [width-1:0]        q
+    output logic [width-1:0]  q
     );
 
    always @(*) begin
@@ -157,10 +157,10 @@ module sh_outmux
     parameter width = 32
   )
   (
-    input [$clog2(width)-1:0]  d_rot,
-    input [$clog2(width)-1:0]  mask,
+    input [width-1:0]	       d_rot,
+    input [width-1:0]	       mask,
     input		       signbit,
-    output [$clog2(width)-1:0] q
+    output [width-1:0]	       q
   );
    assign q = (d_rot & ~mask) | ({width{signbit}} & mask);
 endmodule
