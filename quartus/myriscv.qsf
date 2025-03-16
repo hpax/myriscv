@@ -76,6 +76,37 @@ set_global_assignment -name EDA_NATIVELINK_SIMULATION_SETUP_SCRIPT ../test/test.
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name PRE_FLOW_SCRIPT_FILE "quartus_sh:preflow.tcl"
+set_global_assignment -name MUX_RESTRUCTURE AUTO
+set_global_assignment -name REMOVE_REDUNDANT_LOGIC_CELLS ON
+set_global_assignment -name CYCLONEII_OPTIMIZATION_TECHNIQUE SPEED
+set_global_assignment -name AUTO_RAM_TO_LCELL_CONVERSION ON
+set_global_assignment -name AUTO_RESOURCE_SHARING ON
+set_global_assignment -name ALLOW_ANY_SHIFT_REGISTER_SIZE_FOR_RECOGNITION ON
+set_global_assignment -name SYNTH_GATED_CLOCK_CONVERSION ON
+set_global_assignment -name SYNTH_PROTECT_SDC_CONSTRAINT ON
+set_global_assignment -name PRE_MAPPING_RESYNTHESIS ON
+set_global_assignment -name ROUTER_CLOCKING_TOPOLOGY_ANALYSIS ON
+set_global_assignment -name ECO_OPTIMIZE_TIMING ON
+set_global_assignment -name PERIPHERY_TO_CORE_PLACEMENT_AND_ROUTING_OPTIMIZATION AUTO
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_EFFORT EXTRA
+set_global_assignment -name ROUTER_REGISTER_DUPLICATION ON
+
+set_global_assignment -name ADV_NETLIST_OPT_SYNTH_WYSIWYG_REMAP ON
+set_global_assignment -name FINAL_PLACEMENT_OPTIMIZATION ALWAYS
+set_global_assignment -name PHYSICAL_SYNTHESIS_ASYNCHRONOUS_SIGNAL_PIPELINING ON
+set_global_assignment -name ROUTER_LCELL_INSERTION_AND_LOGIC_DUPLICATION ON
+
+
+
+
+
+set_global_assignment -name ROUTER_EFFORT_MULTIPLIER 2.0
+set_global_assignment -name OPTIMIZE_POWER_DURING_FITTING OFF
+set_global_assignment -name QII_AUTO_PACKED_REGISTERS "SPARSE AUTO"
+set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC_FOR_AREA ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_MAP_LOGIC_TO_MEMORY_FOR_AREA ON
 set_global_assignment -name SYSTEMVERILOG_FILE top.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/counter.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/types.sv
@@ -99,44 +130,10 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/decode.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/alu.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/rng.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/icache.sv
-set_global_assignment -name PRE_FLOW_SCRIPT_FILE "quartus_sh:preflow.tcl"
 set_global_assignment -name QIP_FILE regfile_alt.qip
 set_global_assignment -name QIP_FILE tcm_alt.qip
-set_global_assignment -name QIP_FILE altmult.qip
-set_global_assignment -name SOURCE_FILE db/myriscv.cmp.rdb
 set_global_assignment -name QIP_FILE alt_regfile.qip
-set_global_assignment -name MUX_RESTRUCTURE AUTO
-set_global_assignment -name REMOVE_REDUNDANT_LOGIC_CELLS ON
-set_global_assignment -name CYCLONEII_OPTIMIZATION_TECHNIQUE SPEED
-set_global_assignment -name AUTO_RAM_TO_LCELL_CONVERSION ON
-set_global_assignment -name AUTO_RESOURCE_SHARING ON
-set_global_assignment -name ALLOW_ANY_SHIFT_REGISTER_SIZE_FOR_RECOGNITION ON
-set_global_assignment -name SYNTH_GATED_CLOCK_CONVERSION ON
-set_global_assignment -name SYNTH_PROTECT_SDC_CONSTRAINT ON
-set_global_assignment -name PRE_MAPPING_RESYNTHESIS ON
-set_global_assignment -name ROUTER_CLOCKING_TOPOLOGY_ANALYSIS ON
-set_global_assignment -name ECO_OPTIMIZE_TIMING ON
-set_global_assignment -name PERIPHERY_TO_CORE_PLACEMENT_AND_ROUTING_OPTIMIZATION AUTO
-set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
-set_global_assignment -name PHYSICAL_SYNTHESIS_EFFORT EXTRA
-set_global_assignment -name ROUTER_REGISTER_DUPLICATION ON
-
-set_global_assignment -name ADV_NETLIST_OPT_SYNTH_WYSIWYG_REMAP ON
-set_global_assignment -name FINAL_PLACEMENT_OPTIMIZATION ALWAYS
-set_global_assignment -name PHYSICAL_SYNTHESIS_ASYNCHRONOUS_SIGNAL_PIPELINING ON
-set_global_assignment -name ROUTER_LCELL_INSERTION_AND_LOGIC_DUPLICATION ON
-
-
-set_global_assignment -name QIP_FILE altmult16.qip
 set_global_assignment -name QIP_FILE altmult18.qip
-set_global_assignment -name QIP_FILE altmult18x14.qip
 set_global_assignment -name QIP_FILE altmult14.qip
-
-
-
-set_global_assignment -name ROUTER_EFFORT_MULTIPLIER 2.0
-set_global_assignment -name OPTIMIZE_POWER_DURING_FITTING OFF
-set_global_assignment -name QII_AUTO_PACKED_REGISTERS "SPARSE AUTO"
-set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC_FOR_AREA ON
-set_global_assignment -name PHYSICAL_SYNTHESIS_MAP_LOGIC_TO_MEMORY_FOR_AREA ON
+set_global_assignment -name QIP_FILE altmult18x15x2.qip
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

@@ -20,6 +20,9 @@ add wave /cpu/pipe_ctl/m_busy
 add wave /cpu/backend/m_dout
 add wave /cpu/backend/m_kill
 add wave /cpu/dbus_*
+add wave /cpu/backend/mult/*
+add wave /cpu/backend/mult/mult/*
+add wave /cpu/backend/ldst/*
 wave zoom range 15ns 30ns
 view structure
 view signals

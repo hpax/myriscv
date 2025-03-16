@@ -123,12 +123,11 @@ module backend #(`CONFIG)
 
    // These are the bits that can possibly be 1 in MTVEC, regardless
    // of whether or not they are actually set or settable.
-   wire [31:0]	mtvec_mask;
-   assign mtvec_mask[31:2] = PC_MASK[31:2];
-   assign mtvec_mask[1:0]  = { 1'b0, vectored_irqs_supported };
+   localparam [31:0]	  mtvec_mask =
+			  { PC_MASK[31:2], 1'b0, vectored_irqs_supported };
 
-   wire [31:0] mtvec_reset = MTVEC_RESET & mtvec_mask;
-   wire [31:0] mtvec_wmask = MTVEC_WMASK & mtvec_mask;
+   localparam [31:0] mtvec_reset = MTVEC_RESET & mtvec_mask;
+   localparam [31:0] mtvec_wmask = MTVEC_WMASK & mtvec_mask;
 
    reg [31:0]  mtvec	   = mtvec_reset;
    reg [31:0]  mepc;

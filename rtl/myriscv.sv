@@ -4,7 +4,7 @@ module core #(`CONFIG) (rst_n, clk, clken,
 	     ctr_time, ctr_cycle, ctr_instret,
   mem_addr, mem_wdata, mem_valid, mem_wrq, mem_wbe,
   mem_ready, mem_rdata, mem_wr, mem_cpu, mem_addr_i,
-  io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready,io_rdata,
+  io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready, io_rdata,
   irq, irq_edge, irq_intable, irq_waitable, irq_intack, buserr,
   rng_data, rng_stb, rng_incr, rng_bist, rng_dead, rng_full
   );
@@ -43,9 +43,8 @@ module core #(`CONFIG) (rst_n, clk, clken,
 
    // irq is the expected IRQ input.
    //
-   // irq_enable is intended to be used to compile-time disable.
-   // interrupt vectors, but can also be used to suppress otherwise
-   // latched edge-triggered interrupts.
+   // irq_intable and irq_waitable are intended to be used to
+   // compile-time disables.
    //
    // irq_edge is set to make an input edge-triggered.
    input tri0 [NUM_IRQS:0]   irq;

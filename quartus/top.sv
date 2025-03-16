@@ -38,7 +38,7 @@ module benchmark (
 	    input	  io_ready,
 	    input [31:0]  io_rdata,
 	    input [31:1]  irq_in,
-	    output [4:0]  intack,
+	    output [4:0]  irq_intack,
 
 	    output [25:0] mem_addr,
 	    output [31:0] mem_wdata,
@@ -95,11 +95,11 @@ module benchmark (
      .mem_cpu (mem_cpu),
      .mem_addr_i (mem_addr_i),
 
-	     .irq		(irq),
-	     .irq_enable	(31'b1),
-	     .irq_edge		(31'b0),
-	     .intack		(intack),
+	     .irq		({irq, 1'b0}),
+	     .irq_intable	({{31{1'b1}}, 1'b0}),
+	     .irq_waitable	({{31{1'b1}}, 1'b0}),
+	     .irq_edge		(32'b0),
+	     .irq_intack		(intack),
 	     .buserr		( )
 	     );
 endmodule
-   

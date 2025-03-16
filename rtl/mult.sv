@@ -17,84 +17,6 @@
 `define ALTERA_MULT 1
 `endif
 
-`ifdef NORMAL
-
-module mult
-  #(
-    parameter width = 32,
-    parameter bit mux_late = 1'b1 // High/low as combinatorial MUX
-    )
-   (
-  input			 rst_n,
-  input			 clk,
-  input			 clken,
-
-  input [width-1:0]	 src1,
-  input			 ssign1, // src1 is signed
-  input [width-1:0]	 src2,
-  input			 ssign2, // src2 is signed
-  input			 high, // q should contains the high half result
-
-  output	[width-1:0] q,
-  output	[width-1:0] ql
-    );
-
-
-`ifdef ALTERA_MULT		// Altera IP
-
-   wire [width-1:0]	      l_q;
-   wire [width-1:0]	      h_q;
-
-   altmult am (
-     .clock0  ( clk ),
-     .ena0    ( clken ),
-     .dataa_0 ( src1 ),
-     .datab_0 ( src2 ),
-     .signa   ( ssign1 ),
-     .signb   ( ssign2 ),
-     .result  ( {h_q, l_q} )
-     );
-
-`else				// Generic
-
-   logic signed [width:0]   a;
-   logic signed [width:0]   b;
-
-   logic [width-1:0]	      l_q;
-   logic [width-1:0]	      h_q;
-
-   always @(negedge rst_n or posedge clk)
-     if (~rst_n) begin
-	a	<= 'bx;
-	b	<= 'bx;
-     end else if (clken) begin
-	a	<= $signed({ src1[width-1] & ssign1, src1 });
-	b	<= $signed({ src2[width-1] & ssign2, src2 });
-     end
-
-   always @(*) begin
-      logic signed [2*width-1:0] m;
-
-      m = a * b;
-
-      l_q = m[width-1:0];
-      h_q = m[2*width-1:width];
-   end
-`endif
-
-   reg				 high_q;
-   always @(negedge rst_n or posedge clk)
-     if (~rst_n)
-       high_q <= 1'bx;
-     else if (clken)
-       high_q <= high;
-
-   assign q  = ~high_q ? l_q : h_q;
-   assign ql = l_q;
-endmodule // mult
-
-`endif
-
 module multiplier
   #(
         parameter width = 32
@@ -157,28 +79,28 @@ module mult
    logic [31:0]		    hh;
 
    altmult16 mul_ll (
-     .clock0 (clk),
-     .ena0 (clken),
+     .clock0  (clk),
+     .ena0    (clken),
      .dataa_0 (src1[15:0]),
      .datab_0 (src2[15:0]),
-     .signa (1'b0),
-     .signb (1'b0),
-     .result (ll)
+     .signa   (1'b0),
+     .signb   (1'b0),
+     .result  (ll)
      );
 
    altmult16 mul_lh (
-     .clock0 (clk),
-     .ena0 (clken),
+     .clock0  (clk),
+     .ena0    (clken),
      .dataa_0 (src1[15:0]),
      .datab_0 (src2[31:16]),
-     .signa (1'b0),
-     .signb (ssign2),
-     .result (lh)
+     .signa   (1'b0),
+     .signb   (ssign2),
+     .result  (lh)
      );
 
    altmult16 mul_hl (
-     .clock0 (clk),
-     .ena0 (clken),
+     .clock0  (clk),
+     .ena0    (clken),
      .dataa_0 (src1[31:16]),
      .datab_0 (src2[15:0]),
      .signa (ssign1),
@@ -233,65 +155,46 @@ module mult
   output [width-1:0]	 qh
     );
 
-   logic [35:0]	    ll;
-   logic [32:0]	    hl;	// Extended by multiplier
-   logic [32:0]	    lh;	// Extended by multiplier
-   logic [27:0]	    hh;
+   wire [35:0]		 ll;
+   wire signed [33:0]	 lhhl;
+   wire [27:0]		 hh;
 
    altmult18 mul_ll (
-     .clock0 (clk),
-     .ena0 (clken),
+     .clock0  (clk),
+     .ena0    (clken),
      .dataa_0 (src1[17:0]),
      .datab_0 (src2[17:0]),
-     .signa (1'b0),
-     .signb (1'b0),
-     .result (ll)
+     .signa   (1'b0),
+     .signb   (1'b0),
+     .result  (ll)
      );
 
-   altmult18x14 mul_lh (
-     .clock0 (clk),
-     .ena0 (clken),
+   // Two u18 x s15 multipliers added together
+   altmult18x15x2 mul_lhhl (
+     .clock0  (clk),
+     .ena0    (clken),
      .dataa_0 (src1[17:0]),
-     .datab_0 (src2[31:18]),
-     .signa (1'b0),
-     .signb (ssign2),
-     .result (lh)
-     );
-
-   altmult18x14 mul_hl (
-     .clock0 (clk),
-     .ena0 (clken),
-     .dataa_0 (src2[17:0]),
-     .datab_0 (src1[31:18]),
-     .signa (1'b0),
-     .signb (ssign1),
-     .result (hl)
+     .datab_0 ({src2[31] & ssign2, src2[31:18]}),
+     .dataa_1 (src2[17:0]),
+     .datab_1 ({src1[31] & ssign1, src1[31:18]}),
+     .result  (lhhl)
      );
 
    altmult14 mul_hh (
-     .clock0 (clk),
-     .ena0 (clken),
+     .clock0  (clk),
+     .ena0    (clken),
      .dataa_0 (src1[31:18]),
      .datab_0 (src2[31:18]),
-     .signa (ssign1),
-     .signb (ssign2),
-     .result (hh)
+     .signa   (ssign1),
+     .signb   (ssign2),
+     .result  (hh)
      );
 
-   logic [63:0]	    q;
+   logic [63:0]		 q;
 
    always @(*) begin
-      logic [18:0] lhhs_lo;
-      logic signed [19:0] middle;
-      logic signed [15:0] lhhs_hi;
-
-      lhhs_lo	  = lh[17:0] + hl[17:0];
-      q[17:0]	  = ll[17:0];
-      middle	  = ll[35:18] + lhhs_lo;
-      q[35:18]	  = middle[17:0];
-
-      lhhs_hi	  = $signed(lh[32:18] + hl[32:18]) + $signed(middle[19:18]);
-      q[63:36]	  = hh + lhhs_hi;
+      q[17:0]  = ll[17:0];
+      q[63:18] = $signed(lhhl) + $signed({ hh, ll[35:18] });
    end
 
    assign ql = q[31:0];
