@@ -185,6 +185,7 @@ typedef struct packed {
    logic       sxor;
 } shiftop_t;
 
+`ifdef SKIP
 typedef enum shiftop_t {
 	     SHIFTOP_SLL   = { 5'bx,  SROT_LEFT,  SMPOS_CNT,   SMASK_LO,   SPOS_ANY,    2'b00 },
 	     SHIFTOP_SLO   = { 5'bx,  SROT_LEFT,  SMPOS_CNT,   SMASK_LO,   SPOS_ANY,    2'b01 }, // Shift left 1's
@@ -206,6 +207,27 @@ typedef enum shiftop_t {
 	     SHIFTOP_ZEXTN = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_UP,   SPOS_ANY,    2'b00 },
 	     SHIFTOP_SEXTN = { 5'b0,  SROT_NONE,  SMPOS_CNT,   SMASK_UP,   SPOS_CWm1,   2'b10 }
 } shiftop_enum_t;
+`else
+const shiftop_t SHIFTOP_SLL   = { 5'bx,  SROT_LEFT,  SMPOS_CNT,   SMASK_LO,   SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_SLO   = { 5'bx,  SROT_LEFT,  SMPOS_CNT,   SMASK_LO,   SPOS_ANY,    2'b01 }; // Shift left 1's
+const shiftop_t SHIFTOP_SRL   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_SRA   = { 5'd0,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_WIMMm1, 2'b10 };
+const shiftop_t SHIFTOP_SRO   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_ANY,    2'b01 }; // Shift right 1's
+const shiftop_t SHIFTOP_ROL   = { 5'b0,  SROT_LEFT,  SMPOS_WIMM,  SMASK_LO,   SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_ROR   = { 5'b0,  SROT_RIGHT, SMPOS_WIMM,  SMASK_HI,   SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_ZEXTB = { 5'd8,  SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_ZEXTH = { 5'd16, SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_SEXTB = { 5'd8,  SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_WIMMm1, 2'b10 };
+const shiftop_t SHIFTOP_SEXTH = { 5'd16, SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_WIMMm1, 2'b10 };
+const shiftop_t SHIFTOP_BCLR  = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_BSET  = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_ANY,    2'b01 };
+const shiftop_t SHIFTOP_BINV  = { 5'd1,  SROT_NONE,  SMPOS_CNT,   SMASK_ONE,  SPOS_CWm1,   2'b11 };
+const shiftop_t SHIFTOP_BEXT  = { 5'd1,  SROT_RIGHT, SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 }; // == extru ...,1
+const shiftop_t SHIFTOP_EXTRU = { 5'bx,  SROT_RIGHT, SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_EXTRS = { 5'bx,  SROT_RIGHT, SMPOS_WIMM,  SMASK_UP,   SPOS_CWm1,   2'b10 };
+const shiftop_t SHIFTOP_ZEXTN = { 5'bx,  SROT_NONE,  SMPOS_CNT,   SMASK_UP,   SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_SEXTN = { 5'b0,  SROT_NONE,  SMPOS_CNT,   SMASK_UP,   SPOS_CWm1,   2'b10 };
+`endif
 
 //
 // ALU operation definitions
