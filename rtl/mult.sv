@@ -108,15 +108,15 @@ module multiplier
   input [width-1:0]  e_src2,
   input [1:0]	     e_op,	// MULL, MULH, MULHSU, MULHU
 
-  output [width-1:0] m_mulh_o,	// Main output
-  output [width-1:0] m_mull_o	// Can be forwarded to E on a subsequent MULL
+  output [width-1:0] m_mulh_o,	// High half output
+  output [width-1:0] m_mull_o	// Low half output
   );
 
    wire		     is_mulh   = e_op == 2'b01;
    wire		     is_mulhsu = e_op == 2'b10;
 
    wire		     e_ssign1  = is_mulh | is_mulhsu;
-   wire		     e_ssign2  = is_mulhsu;
+   wire		     e_ssign2  = is_mulh;
 
    mult mult (
      .rst_n	( rst_n ),
@@ -278,9 +278,10 @@ module mult
      .result (hh)
      );
 
+   logic [63:0]	    q;
+
    always @(*) begin
       logic [18:0] lhhs_lo;
-      logic [63:0] q;
       logic signed [19:0] middle;
       logic signed [15:0] lhhs_hi;
 
@@ -291,10 +292,10 @@ module mult
 
       lhhs_hi	  = $signed(lh[32:18] + hl[32:18]) + $signed(middle[19:18]);
       q[63:36]	  = hh + lhhs_hi;
-
-      ql	  = q[31:0];
-      qh	  = q[63:32];
    end
+
+   assign ql = q[31:0];
+   assign qh = q[63:32];
 endmodule
 
 `endif
