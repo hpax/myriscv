@@ -28,9 +28,16 @@ module backend #(`CONFIG)
 
  // IRQ pending bitmask. Note that there is no IRQ 0 since that vector
  // is reserved for exceptions; e_intack == 0 means no interrupt taken.
- input [NUM_IRQS:1]	   d_irqs,
- output reg [NUM_IRQS:1]   d_irqs_clear, // Clear edge-triggered interrupts
+ // Bit 0 is included in these bitmasks mostly to make simulation easier
+ // to read.
+ input [NUM_IRQS:0]	   d_irqs,
+ output reg [NUM_IRQS:0]   d_irqs_clear, // Clear edge-triggered interrupts
  output reg [IRQ_BITS-1:0] e_intack,
+
+ // These are ports rather than parameters mainly to benefit simulation;
+ // they are expected to be synthesis-time constants when generating logic.
+ input [NUM_IRQS:0]	   irq_intable,  // IRQ events can trigger interrupts
+ input [NUM_IRQS:0]	   irq_waitable, // IRQ events can be waited for
 
  input			   e_valid_i,
  input			   e_stall,
@@ -59,7 +66,7 @@ module backend #(`CONFIG)
  input [63:0]		   ctr_instret,
 
  // Random data input
- input rng_bus_t	   rng,
+ input			   rng_bus_t rng,
  output			   rng_full,
 
  // Data output, unregistered and registered
@@ -69,17 +76,19 @@ module backend #(`CONFIG)
  // Data bus from ldst unit
  output [31:0]		   dbus_a,
  output			   dbus_valid,
- output cbo_t		   dbus_cbo,
+ output			   cbo_t dbus_cbo,
  output			   dbus_wrq,
  output [3:0]		   dbus_wbe,
  output [31:0]		   dbus_wdata,
  input [31:0]		   dbus_rdata,
  input			   dbus_ready
  );
-   wire [31:0] MISA = {
-	       WITH_Zalrsc & WITH_Zaamo,		// A
+
+   // Canonical MISA value, regardless if it is exposed as CSR or not
+   parameter [31:0] MISA = {
+	       WITH_Zalrsc & WITH_Zaamo,	// A
 	       WITH_Zba & WITH_Zbb & WITH_Zbs,	// B
-	       WITH_RVC,				// C
+	       WITH_RVC,			// C
 	       1'b0,				// D
 	       1'b0,				// E
 	       1'b0,				// F
@@ -107,8 +116,31 @@ module backend #(`CONFIG)
 	       2'b01				// RISCV-32
    };
 
+   //
+   // CSR registers
+   //
+   localparam bit vectored_irqs_supported = IRQ_VECTOR_BITS > 0;
+
+   // These are the bits that can possibly be 1 in MTVEC, regardless
+   // of whether or not they are actually set or settable.
+   wire [31:0]	mtvec_mask;
+   assign mtvec_mask[31:2] = PC_MASK[31:2];
+   assign mtvec_mask[1:0]  = { 1'b0, vectored_irqs_supported };
+
+   wire [31:0] mtvec_reset = MTVEC_RESET & mtvec_mask;
+   wire [31:0] mtvec_wmask = MTVEC_WMASK & mtvec_mask;
+
+   reg [31:0]  mtvec	   = mtvec_reset;
+   reg [31:0]  mepc;
+   localparam [31:0] mcause_mask = MCAUSE_FIXED_MASK | {IRQ_BITS{1'b1}};
+   reg [31:0]  mcause;
+   reg [NUM_IRQS:0] mie        = 'b0;
+   reg [`REG_CONTEXTS-1:0] cie = 'b0; // Context interrupt enable
    wire [31:0] csrval_misa = WITH_misa ? MISA : 32'b0;
 
+   //
+   // Pipeline control signals and pipeline stage input/output
+   //
    logic	   e_kill;
 
    wire		   e_clken = clken & (~e_stall | e_busy | e_kill);
@@ -120,14 +152,20 @@ module backend #(`CONFIG)
    reg [31:0]	   m_dout;
    reg [3:0]	   m_dout_be;
 
+   // LR/SC state machine outputs
+   logic lrsc_resv;		// Reservation set held (SC returns 0)
+   logic lrsc_hold;		// Inhibit interrupts (atomic sequence)
+
    // E-stage pipeline synchronization signals
    logic	   e_trap;
    logic	   e_jump;
-   logic	   e_waiting;	  // Waiting for an event
-   logic	   e_really_busy; // Uninterruptably busy
+   logic	   e_really_busy;	// Uninterruptably busy
+   logic	   e_waiting;		// Waiting for an event
+   logic	   e_irq_ok;		// May take interrupts
 
    assign e_really_busy = 1'b0;
-   assign e_busy        = e_really_busy | e_waiting;
+   assign e_busy        = e_waiting | e_really_busy;
+   assign e_irq_ok      = cie[e_op.mcontext.m] & ~lrsc_hold & ~e_really_busy;
 
    // m_kill will not be reflected in e_valid_i because it ends
    // up on the wrong side of a register; this could be fixed,
@@ -136,10 +174,6 @@ module backend #(`CONFIG)
 
    // This does not consider m_trap due to a speed path.
    assign e_valid_o = e_accept;
-
-   // LR/SC state machine outputs
-   logic lrsc_resv;		// Reservation set held (SC returns 0)
-   logic lrsc_hold;		// Inhibit interrupts (atomic sequence)
 
    // M-stage pipeline synchronization signals
    reg	  m_trap;
@@ -260,6 +294,8 @@ module backend #(`CONFIG)
 	     // using e_op when d_src_hold is active. However,
 	     // as of right now, the E stage is never busy (e_busy = 0)
 	     // so this (hack) should be correct.
+	     //
+	     // XXX: THIS IS NO LONGER TRUE WITH WAITFOR
 	     if (~d_src_hold) begin
 		e_rs1_m <= d_rs1_e;
 		e_rs1_w <= d_rs1_m;
@@ -333,16 +369,6 @@ module backend #(`CONFIG)
      .rdata(e_rng_out), .rstb(e_rng_rstb));
 
    //
-   // CSR registers
-   //
-   reg [31:0] mtvec;
-   reg [31:0] mepc;
-   localparam [31:0] mcause_mask = MCAUSE_FIXED_MASK | {IRQ_BITS{1'b1}};
-   reg [31:0] mcause;
-   reg [NUM_IRQS:1] mie;
-   reg [`REG_CONTEXTS-1:0] cie; // Context interrupt enable
-
-   //
    // CSR read/write logic
    //
    logic [31:0]	e_csr_rval;
@@ -384,9 +410,9 @@ module backend #(`CONFIG)
 	CSR_MIMPID:
 	  e_csr_rval  = csrval_impid;
 	CSR_MIP:
-	  e_csr_rval  = { d_irqs, 1'b0 };
+	  e_csr_rval  = d_irqs;
 	CSR_MIE:
-	  e_csr_rval  = { mie, 1'b0 };
+	  e_csr_rval  = mie;
 	CSR_MSTATUS:
 	  e_csr_rval  = { 28'b0,
 	  cie[e_op.mcontext.m], 1'b0,
@@ -412,15 +438,16 @@ module backend #(`CONFIG)
        default: e_csr_wval  = 32'bx;
      endcase
 
-   wire		csrw_mtvec	  = e_op.csrw && ncsr == CSR_MTVEC;
+   wire		csrw_mtvec	  = MTVEC_WMASK && e_op.csrw && ncsr == CSR_MTVEC;
    wire		csrw_mepc	  = e_op.csrw && ncsr == CSR_MEPC;
    wire		csrw_mcause	  = e_op.csrw && ncsr == CSR_MCAUSE;
-   wire		csrw_mip	  = e_op.csrw && ncsr == CSR_MIP;
-   wire		csrw_mie	  = e_op.csrw && ncsr == CSR_MIE;
+   wire		csrw_mip	  = NUM_IRQS && e_op.csrw && ncsr == CSR_MIP;
+   wire		csrw_mie	  = NUM_IRQS && e_op.csrw && ncsr == CSR_MIE;
    wire		csrw_mstatus	  = e_op.csrw && ncsr == CSR_MSTATUS;
    wire		csrw_user_context = e_op.csrw && ncsr == CSR_USER_CONTEXT;
-   wire		csrw_cie	  = e_op.csrw && ncsr == CSR_CIE;
-   wire		csrw_waitfor	  = WITH_waitfor && e_op.csrw && ncsr == CSR_WAITFOR;
+   wire		csrw_cie	  = NUM_IRQS && e_op.csrw && ncsr == CSR_CIE;
+   wire		csrw_waitfor	  = WITH_waitfor && NUM_IRQS &&
+		e_op.csrw && ncsr == CSR_WAITFOR;
 
    //
    // Interrupt recognition
@@ -436,25 +463,26 @@ module backend #(`CONFIG)
 	e_wakeup      <= 1'b0;
 	e_irq_vector  <= 'b0;
      end else if (clken) begin
-	logic [NUM_IRQS:1] real_irq;
-	real_irq      = d_irqs & mie;
+	// IRQs that generates interrupts
+	logic [NUM_IRQS:0] irq_int;
+	// IRQs that generate wait wakeups
+	logic [NUM_IRQS:0] irq_wakeup;
 
-	e_irq	     <= 'b0;
-	e_irq_vector <= 'b0;
+	irq_int    = d_irqs & irq_intable & mie;
+	irq_wakeup = d_irqs & irq_waitable & e_csr_wval[NUM_IRQS:0];
 
 	// Waiting for an event? Check for wakeup. Because this adds a
 	// cycle of latency, we must already have waited for one cycle;
 	// thus, writing waitfor takes 2 cycles if the event is
-	// already pending.
-	e_wakeup     <= e_waiting & |(d_irqs & e_csr_wval[NUM_IRQS:1]);
+	// already pending. This is needed so e_csr_wval can stabilize.
+	e_wakeup <= e_waiting & |irq_wakeup;
 
-	// lrsc_hold inhibits interrupts for the forward progress guarantee
-	if (cie[e_op.mcontext.m] & ~lrsc_hold) begin
-	   e_irq     <= |real_irq;
-	   // Priority vector encoder
-	   for (int i = NUM_IRQS; i > 0; i--)
-	     if (real_irq[i]) e_irq_vector <= i;
-	end
+	e_irq     <= |irq_int;
+
+	// Priority vector encoder
+	e_irq_vector <= 'b0;
+	for (int i = NUM_IRQS; i > 0; i--)
+	  if (irq_int[i]) e_irq_vector <= i;
      end
 
    //
@@ -494,6 +522,9 @@ module backend #(`CONFIG)
    logic [31:0]	e_mepc;
    logic [31:0]	e_mcause;
 
+   wire		do_vector_interrupts = IRQ_VECTOR_BITS && (mtvec & 1);
+   wire [31:0]	mtvec_addr = { mtvec[31:2], 2'b00 } & PC_MASK;
+
    always @(*)
      begin
 	e_trap      = 1'b0;
@@ -502,7 +533,7 @@ module backend #(`CONFIG)
 	e_succ_pc   = successor_pc(e_op, e_accept);
 	e_jump_pc   = 32'bx;
 	e_next_pc   = e_succ_pc;
-	e_restartpc = e_next_pc & PC_MASK;
+	e_restartpc = e_succ_pc;
 	e_restart_mcontext = e_op.mcontext;
 	e_mepc      = 32'bx;
 	e_mcause    = 32'bx;
@@ -554,7 +585,7 @@ module backend #(`CONFIG)
 		   // the actual CSR write is done by the restart.
 		   e_jump    = !e_op.pred_taken;
 		   e_jump_pc = e_succ_pc;
-		   e_restart_mcontext.u = (rcontext_t)'(e_csr_wval);
+		   e_restart_mcontext.u = rcontext_t ' (e_csr_wval);
 		   e_restart_mcontext.m = CTX_MACHINE;
 		end
 		// No control transfer
@@ -574,20 +605,25 @@ module backend #(`CONFIG)
 	   end
 
 	   if (e_trap) begin
-	      e_restartpc = mtvec & PC_MASK;
+	      e_restartpc = mtvec_addr;
 	      e_restart_mcontext.m = CTX_MACHINE;
 	   end else begin
-	     e_restartpc = e_next_pc & PC_MASK;
+	      e_restartpc = e_next_pc;
 	   end
 	end // if (e_accept)
 
 	if (e_trap) begin
-	  e_mepc       = e_op.pc & PC_MASK;
-	end else if (e_irq & ~e_really_busy) begin
-	   e_restartpc = (mtvec + (e_irq_vector << 2)) & PC_MASK;
-	   e_mepc      = e_next_pc & PC_MASK;
-	   e_mcause    = MCAUSE_IRQ | e_irq_vector;
+	   e_mepc       = e_op.pc;
+	end else if (e_irq & e_irq_ok) begin
+	   e_restartpc = mtvec_addr;
+	   if (do_vector_interrupts)
+	     e_restartpc += e_irq_vector << IRQ_VECTOR_BITS;
+	   e_mepc	 = e_next_pc;
+	   e_mcause	 = MCAUSE_IRQ | e_irq_vector;
 	end
+
+	e_mepc      &= PC_MASK;
+	e_restartpc &= PC_MASK;
 
 	e_kill = e_trap | (e_irq & ~e_really_busy) | e_jump | e_fencei;
      end
@@ -621,7 +657,7 @@ module backend #(`CONFIG)
 	m_kill		   <= e_kill;
 	m_fencei	   <= e_fencei;
 	m_trap		   <= e_trap;
-	m_xcpt		   <= e_trap | (e_irq & ~e_busy);
+	m_xcpt		   <= e_trap | (e_irq & e_irq_ok);
 	m_restartpc	   <= e_restartpc & PC_MASK;
 	m_restart_mcontext <= e_restart_mcontext;
 	m_mepc		   <= e_mepc & PC_MASK;
@@ -632,19 +668,17 @@ module backend #(`CONFIG)
    always @(*) begin
       e_intack      = 'b0;
       d_irqs_clear  = 'b0;
-      if (~e_trap & e_irq & ~e_busy) begin
+      if (~e_trap & e_irq & e_irq_ok) begin
 	 e_intack     = e_irq_vector;
 	 d_irqs_clear = 1'b1 << e_irq_vector;
       end else if (csrw_mip) begin
-	 d_irqs_clear = ~e_csr_wval[NUM_IRQS:1]; // Write 0 to clear
+	 d_irqs_clear = ~e_csr_wval[NUM_IRQS:1]; // Write 0 to clear(?!)
       end
    end
 
    //
    // Handle mepc, mcause, mtvec, mie, cie
    //
-   wire [31:0] mtvec_reset = MTVEC_RESET & PC_MASK;
-   wire [31:0] mtvec_wmask = MTVEC_WMASK & PC_MASK;
 
    //
    // Flags for delayed updates of mepc, mcause, etc.
@@ -653,8 +687,6 @@ module backend #(`CONFIG)
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
 	mtvec        <= mtvec_reset;
-	mcause       <= 32'b0;
-	mepc         <= 32'b0;
 	mie          <= 'b0;
 	cie	     <= 'b0;
      end else if (clken) begin
@@ -672,7 +704,7 @@ module backend #(`CONFIG)
 	  mcause <= e_csr_wval & mcause_mask;
 
 	if (csrw_mie)
-	  mie <= e_csr_wval[NUM_IRQS:1];
+	  mie <= e_csr_wval[NUM_IRQS:0] & irq_intable;
 
 	if (csrw_cie)
 	  cie <= e_csr_wval;

@@ -5,7 +5,7 @@ module core #(`CONFIG) (rst_n, clk, clken,
   mem_addr, mem_wdata, mem_valid, mem_wrq, mem_wbe,
   mem_ready, mem_rdata, mem_wr, mem_cpu, mem_addr_i,
   io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready,io_rdata,
-  irq, irq_enable, irq_edge, intack, buserr,
+  irq, irq_edge, irq_intable, irq_waitable, irq_intack, buserr,
   rng_data, rng_stb, rng_incr, rng_bist, rng_dead, rng_full
   );
 
@@ -48,20 +48,20 @@ module core #(`CONFIG) (rst_n, clk, clken,
    // latched edge-triggered interrupts.
    //
    // irq_edge is set to make an input edge-triggered.
-   input tri0 [NUM_IRQS:1]   irq;
-   input tri0 [NUM_IRQS:1]   irq_enable;
-   input tri0 [NUM_IRQS:1]   irq_edge;
+   input tri0 [NUM_IRQS:0]   irq;
+   input tri0 [NUM_IRQS:0]   irq_edge;
+   input tri1 [NUM_IRQS:0]   irq_intable;
+   input tri1 [NUM_IRQS:0]   irq_waitable;
 
-   output [IRQ_BITS-1:0]     intack;
+   output [IRQ_BITS-1:0]     irq_intack;
 
    output reg		     buserr;
 
-
-   input		     rng_data;
-   input		     rng_stb;
-   input		     rng_incr;
-   input		     rng_bist;
-   input		     rng_dead;
+   input tri0		     rng_data;
+   input tri1		     rng_stb;
+   input tri0		     rng_incr;
+   input tri1		     rng_bist;
+   input tri0		     rng_dead;
    output		     rng_full;
 
    wire [31:0]		     ibus_a;
@@ -413,11 +413,13 @@ module core #(`CONFIG) (rst_n, clk, clken,
      );
 
    // Interrupt latching
-   reg [NUM_IRQS:1] d_irqs;	// Pending IRQs
-   reg [NUM_IRQS:1] d_irq_q;	// irq input delayed (for edge detect)
-   reg [NUM_IRQS:1] d_irq_edge;	// edge detected interrupt latched
+   reg [NUM_IRQS:0] d_irqs;	// Pending IRQs
+   reg [NUM_IRQS:0] d_irq_q;	// irq input delayed (for edge detect)
+   reg [NUM_IRQS:0] d_irq_edge;	// edge detected interrupt latched
 
-   wire [NUM_IRQS:1] d_irqs_clear;
+   wire [NUM_IRQS:0] d_irqs_clear;
+
+   wire [NUM_IRQS:0] irq_mask = { {NUM_IRQS{1'b1}}, 1'b0 };
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
@@ -425,13 +427,11 @@ module core #(`CONFIG) (rst_n, clk, clken,
 	d_irq_q    <= 'b0;
 	d_irq_edge <= 'b0;
      end else if (clken) begin
-	logic [NUM_IRQS:1] irq_isedge;
-
 	// Edge-trigger logic
-	d_irq_q    <= irq_edge & irq;
-	d_irq_edge <= irq_edge &
+	d_irq_q    <= irq_edge & irq_mask & irq;
+	d_irq_edge <= irq_edge & irq_mask &
 		      ((d_irq_edge & ~d_irqs_clear) | (irq & ~d_irq_q));
-	d_irqs     <= irq_enable & ((~irq_edge & irq) | d_irq_edge);
+	d_irqs     <= ((~irq_edge & irq) | d_irq_edge) & irq_mask;
      end
 
    // Backend units (E, M, and W stages)
@@ -481,7 +481,9 @@ module core #(`CONFIG) (rst_n, clk, clken,
 
      .d_irqs		(d_irqs),
      .d_irqs_clear      (d_irqs_clear),
-     .e_intack		(intack),
+     .irq_intable	(irq_intable  & irq_mask),
+     .irq_waitable	(irq_waitable & irq_mask),
+     .e_intack		(irq_intack),
 
      .e_valid_i		(e_valid_i),
      .e_stall		(e_stall),
