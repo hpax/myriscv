@@ -144,7 +144,6 @@ Private extensions:
 		Additional RVC encoding:
 			c.ecall	- opcode 0x8002
 
-
 Non-standard or system-specific behaviors:
 
 	With FUSE_CNOP:
@@ -205,6 +204,69 @@ Non-standard or system-specific behaviors:
 		sc.h) are supported by setting funct3 to the same
 		value as the equivalent load or store instruction.
 
+	WITH_Zkr:
+		Enable the Zkr random number generator architecture
+		(seed CSR.) This requires an external source of random
+		bits.
+
+		The Zkr unit contains an LSFR for entropy buffering
+		and bitstream whitening. This is considerably weaker
+		than one using cryptographic whitening; if that is
+		considered necessary then the bitstream needs to be
+		whitened externally, or rtl/rng.sv modified.
+
+		The following ports are used for the random number
+		generator inputs:
+
+		input tri0 rng_data;	// Data bit
+		input tri1 rng_stb;	// Data strobe
+		input tri0 rng_incr;	// Increment entropy counter
+		input tri0 rng_bist;	// RNG running built-in self test
+		input tri1 rng_dead;	// RNG permanent failure
+
+		output rng_full;	// Entropy buffer saturated
+
+		When rng_full is set, the it is reasonable to clock gate
+		or power down the RNG bit source.
+
+		Pulsing rng_stb on data is optional; if left to its
+		default value of 1 it will continously stir the
+		entropy buffer. This is potentially advantageous for a
+		non-perfect bit source.
+
+		rng_incr should be pulsed when enough data bits have
+		been received to count as one bit of true entropy.
+
+		The parameter Zkr_secure (default 1) controls if the
+		value currently in the entropy accumulator should be
+		masked if the entropy buffer is not currently full.
+		Setting it to 0 reduces logic (and might be useful for
+		running BIST on the CPU itself) at the cost of
+		security.
+
+		It might be useful to feed some combination of
+		rng_full, rng_bist, and rng_dead to an external interrupt.
+
+		When rng_full is signalled, the seed CSR status field
+		will report either BIST, ES16 or DEAD. DEAD is
+		reported if rng_dead is asserted; BIST is reported if
+		rng_bist is asserted or has been assered since the
+		last CSR read; otherwise ES16 is reported. Notably,
+		when rng_full is signalled, the state is not WAIT
+		(signal propagation delay excepted.)
+
+		Although the default entropy buffer is the
+		architecturally defined 16 bits, it can be configured
+		to any value between 1 and 30 bits by setting the
+		Zkr_bits parameter; the seed CSR will contain that
+		number of data bits; the "ES16" status is signalled
+		after that many received bits.
+
+The length and polynomial of the entropy buffer can
+		be set by the Zkr_acc_bits and Zkr_acc_poly parameters;
+		however, note that the unit asserts ES16 after 16 valid
+		rng_incr strobes regardless of the Zkr_acc_bits length.
+
 
 System architecture:
 
@@ -214,6 +276,8 @@ System architecture:
 	This is intended for microcontroller applications, and does not
 	implement any kind of protection; in effect only the machine
 	privilege level exists.
+
+Register contexts:
 
 	The main intended target of this CPU is FPGAs, and FPGAs tend
 	to have relatively large RAM arrays (except for a minority of
@@ -270,9 +334,22 @@ System architecture:
 	but in the future might include e.g. NMI and/or debug mode
 	contexts as well and might depend on the CPU configuration.
 
-	On reset, the CPU runs in the exception context with
-	user_context set to the highest supported user context
-	(i.e. USER_CONTEXTS-1).
+Interrupts:
+
+	Up to 31 interrupt request lines are supported, strictly
+	prioritized, numbered from 1 to 31 and configurable by the
+	NUM_IRQS parameter. IRQ 1 has the highest priority.
+
+	IRQ 0 is reserved for future CPU-generated interrupt
+	conditions and/or NMI.
+
+	Note: the CPU top level ports include IRQ 0. This is a
+	convenience for simulation and to avoid additional complexity
+	for the case of NUM_IRQS == 0. The inputs for IRQ 0 are all
+	ignored.
+
+	The interrupt vector number is reflected directly in mcause
+	(with bit 31 set); there is no indirection via mcause 1:11.
 
 	Each context has a separate interrupt flag, given as a bitmask
 	in the cie CSR (context interrupt enable, 0x7f1). Normally the
@@ -282,13 +359,6 @@ System architecture:
 	context, and bit 3 to the currently executing context (user or
 	exception.)
 
-	Up to 31 interrupt requests are supported, strictly
-	prioritized, numbered from 1 to 31. IRQ 1 has the highest
-	priority.
-
-	IRQ 0 is reserved for future CPU-generated interrupt
-	conditions and/or NMI.
-
 	The mie and mip CSRs contain the currently pending and enabled
 	interrupts as a bitmask. This is at least partially nonstandard.
 
@@ -296,7 +366,58 @@ System architecture:
 	they are cleared either on the interrupt begin accepted or by
 	writing 1 to the corresponding bit(s) in the mip register.
 
-	WITH_waitfor:
+	The mtvec CSR is writable if and only if the parameter
+	MTVEC_WMASK (default 0) is set to a mask of permitted bits.
+
+	Bit 1 in mtvec is treated as a PC bit if enabled (which it normally
+	should not be.) Bit 0 in mtvec controls vectoring of interrupts
+	if enabled (IRQ_VECTOR_BITS != 0). If this bit is set in
+	MTVEC_RESET and clear in MTVEC_WMASK, interrupt vectoring is
+	unconditionally enabled.
+
+	If vectoring is to be enabled, it is highly recommended that
+	(MTVEC_RESET | MTVEC_WMASK) [IRQ_BITS+IRQ_VECTOR_BITS-1:0] == 1
+	in order to reduce logic.
+
+	The following ports on the CPU top level are used for interrupts.
+	All ports are optional (triX), with the default values shown
+
+	input tri0 [NUM_IRQS:0] irq;		// IRQ signal mask
+	input tri0 [NUM_IRQS:0] irq_edge;	// IRQ edge triggered
+	input tri1 [NUM_IRQS:0] irq_intable;	// IRQ can generate interrupt
+	input tri1 [NUM_IRQS:0] irq_waitable;	// IRQ can be a waitfor source
+
+	output [IRQ_BITS-1:0]   intack;	// Interrupt acknowledgement if nonzero
+
+	irq_edge can be changed at runtime, although that will require
+	additional logic resources for any IRQs where this is not constant.
+
+	irq_intable and irq_waitable are provided to reduce
+	unnecessary logic if not all IRQs need to support being
+	enabled as interrupts alternatively waitfor triggers (see
+	below) and should be fed with constants in a real system;
+	feeding them with variable parameters will increase the logic
+	burden over simply setting them to all 1. They are ports
+	rather than parameters for the benefit of simulation only.
+
+Reset condition:
+
+	pc			= RESET_PC (0x10)
+	mtvec			= MTVEC_RESET (0x80)
+	user_context		= USER_CONTEXTS-1
+	executing context	= exception context
+	cie			= 0
+
+	Values are CPU parameters and their default values unless otherwise
+	stated.
+
+CSRs:
+
+	Currently, nonexistent CSRs always return 0, and writes are ignored.
+	The same is true for writes to undefined CSR bits.
+	No traps are implemented for any CSR operations.
+
+WITH_waitfor:
 
 	Writing a mask to the waitfor CSR (0x7f2) will wait until any
 	of the interrupt sources in the mask become pending in the mip
