@@ -1,9 +1,6 @@
 `ifndef _MYRISCV_CONFIG_VH
 `define _MYRISCV_CONFIG_VH 1
 
-`define SYS_CONTEXTS	1
-`define USER_CONTEXTS	7
-`define REG_CONTEXTS	((`SYS_CONTEXTS)+(`USER_CONTEXTS))
-`define CONTEXT_BITS	$clog2(`REG_CONTEXTS)
+// Nothing here at the moment, hopefully it stays that way
 
 `endif // _MYRISCV_CONFIG_V

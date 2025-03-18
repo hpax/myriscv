@@ -27,6 +27,7 @@ parameter bit WITH_Zalrsc	= 1'b1; // LR/SC instructions
 parameter bit WITH_Ziccrse	= 1'b1; // LR/SC guarantee forward progress
 parameter bit WITH_indcsr	= 1'b0; // Indirect CSR access
 parameter bit WITH_waitfor      = 1'b1; // waitfor CSR
+parameter bit WITH_mstatus	= 1'b0; // mstatus CSR as a window into CIE
 
 parameter bit STRICT_UNDEFINED	= 1'b0; // Strict opcode checking
 parameter bit TRAP_BADINSN	= 1'b1;
@@ -129,9 +130,14 @@ parameter logic [31:0] io_base		= 32'h8000_0000;
 // What reading from a nonexistent memory spaces returns
 parameter logic [31:0] INVALID_DATA	= 32'h0000_0000;
 
-// Number of bits of register context. Currently this is
-// not configurable by parameter; set in rtl/config.sv
-parameter int CONTEXT_BITS		= `CONTEXT_BITS;
+// Number of supported register contexts; min 2, max 32
+// In the future, more than one system context may be supported,
+// e.g. NMI and debug mode. That will reduce CTX_MAX_USER.
+parameter int CONTEXTS		      = 8;
+parameter logic [4:0] CTX_MASK        = (1'b1 << $clog2(CONTEXTS)) - 1'b1;
+parameter logic [4:0] CTX_MACHINE     = CONTEXTS - 1'b1;
+parameter logic [4:0] CTX_MAX_USER    = CTX_MACHINE - 1'b1;
+parameter logic [4:0] CTX_X           = 5'bx & CTX_MASK;
 
 // These are not currently implemented and must not be set
 parameter bit WITH_div		= 1'b0; // Divide instructions

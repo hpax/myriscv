@@ -29,13 +29,10 @@ function automatic logic insn_mem(input insn_type_t insn);
    insn_mem = insn[3:2] == INSN_LD[3:2]; // CBO, LD, ST
 endfunction
 
-// Register bank and machine mode context. See config.vh.
-typedef enum logic [`CONTEXT_BITS-1:0] {
-     CTX_USER_MIN = `CONTEXT_BITS ' (0),
-     CTX_USER_MAX = `CONTEXT_BITS ' (`USER_CONTEXTS - 1),
-     CTX_MACHINE  = `CONTEXT_BITS ' (`USER_CONTEXTS),
-     CTX_X        = {`CONTEXT_BITS{1'bx}}
-} rcontext_t;
+// 5 bits is the maximum possible rcontext, due to the defintion of
+// the CIE CSR. Variable assignments should be conditioned on CTX_MASK
+// to keep the synthesizer from having to generate all bits if not needed.
+typedef logic [4:0] rcontext_t;
 
 typedef struct packed {
    rcontext_t c;		// Register context
@@ -49,11 +46,6 @@ typedef struct packed {
    rcontext_t m;		// Currently executing context
    rcontext_t u;		// Current user context (user_context csr)
 } mcontext_t;
-
-function automatic mcontext_t mcontext_reset;
-   mcontext_reset.m = CTX_MACHINE;
-   mcontext_reset.u = CTX_USER_MAX;
-endfunction // mcontext_reset
 
 typedef struct packed {
    logic         undead;	// It is an executable instruction

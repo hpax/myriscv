@@ -286,7 +286,7 @@ Register contexts:
 	of a "forced large" register file by providing multiple
 	register contexts (register banks.)
 
-	One register context (exception context) is used for
+	One register context (machine context) is used for
 	interrupts/exceptions; the CPU will automatically switch to
 	this context, and return when executing MEPC.
 
@@ -294,7 +294,7 @@ Register contexts:
 
 	The CSR user_context (0x7f0) contains the current user
 	context; the operating system can set this to quickly switch
-	tasks. user_context is *not* changed when going to exception
+	tasks. user_context is *not* changed when going to machine
 	context.
 
 	The following special instructions are provided that provide
@@ -312,15 +312,15 @@ Register contexts:
 			  rd is forced to the user context.
 
 		add.sm	- funct3 == 011
-			  rd is forced to exception context, and the
-			  CPU switches to exception context before
+			  rd is forced to machine context, and the
+			  CPU switches to machine context before
 			  executing the next instruction. mepc or any
-			  of the other exception status registers
+			  of the other machine status registers
 			  are unaffected.
 
 			  This is intended to be used to implement
 			  fast locking operations in an RTOS as it
-			  avoids having to dispatch an exception
+			  avoids having to dispatch an machine
 			  handler. The register written can be used
 			  as an argument without needing to use
 			  add.xu to fetch it, or for other purposes.
@@ -328,11 +328,19 @@ Register contexts:
 			  If writing a register is not wanted, just
 			  set rd == x0.
 
-	User contexts range from 0 to USER_CONTEXTS-1 (defined in
-	rtl/config.sv); system contexts are assigned higher
-	numbers. Currently this only applies to the exception context,
-	but in the future might include e.g. NMI and/or debug mode
-	contexts as well and might depend on the CPU configuration.
+	The total number of contexts is set with the parameter
+	CONTEXTS. This must include the machine context and at least
+	one user context (so minimum 2); the maximum number of
+	contexts is 32 as the CIE CSR (see below) is a bitmask. The
+	number of contexts does not have to be a power of 2, although
+	in an FPGA it makes sense to make it support the *addressable*
+	size of the RAM arrays (specifically, in "simple dual port"
+	mode.)
+
+	User contexts range from 0 to CONTEXTS-n-1), where n is the
+	number of system contexts. Currently the only system context
+	is machine context, but in the future it might be possible to
+	configure additional contexts like NMI and/or debug contexts.
 
 Interrupts:
 
@@ -349,15 +357,17 @@ Interrupts:
 	ignored.
 
 	The interrupt vector number is reflected directly in mcause
-	(with bit 31 set); there is no indirection via mcause 1:11.
+	(with bit 31 set); the architectural definition of interrupt
+	causes 0-15 are ignored.
 
-	Each context has a separate interrupt flag, given as a bitmask
-	in the cie CSR (context interrupt enable, 0x7f1). Normally the
-	interrupt flag in exception context would be left at 0, of
-	course. The standard mstatus CSR acts as a "window" into this CSR,
-	with bit 1 corresponding to the flag for the current user
-	context, and bit 3 to the currently executing context (user or
-	exception.)
+	Each register context has a separate interrupt flag, given as
+	a bitmask in the cie CSR (context interrupt enable,
+	0x7f1). Normally the interrupt flag in machine context would
+	be left at 0, of course. If the parameter WITH_mstatus is
+	enabled, the standard mstatus CSR acts as a "window" into this
+	CSR, with bit 1 corresponding to the flag for the current user
+	context, and bit 3 to the currently active context (user or
+	system, as the system is currently running in.)
 
 	The mie and mip CSRs contain the currently pending and enabled
 	interrupts as a bitmask. This is at least partially nonstandard.
@@ -404,8 +414,8 @@ Reset condition:
 
 	pc			= RESET_PC (0x10)
 	mtvec			= MTVEC_RESET (0x80)
-	user_context		= USER_CONTEXTS-1
-	executing context	= exception context
+	user_context		= max value for the user context
+	executing context	= machine context
 	cie			= 0
 
 	Values are CPU parameters and their default values unless otherwise

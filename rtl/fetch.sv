@@ -274,16 +274,17 @@ module fetch #(`CONFIG)
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        begin
-	  d_pc		<= RESET_PC & PC_MASK;
-	  f2_pc		<= RESET_PC & PC_MASK;
-	  ibus_a_q      <= RESET_PC & PC_MASK;
-	  d_valid_i	<= 1'b0;
-	  d_pred_taken	<= 1'b0;
-	  d_insn	<= 32'bx;
-	  d_mcontext    <= mcontext_reset();
-	  pref_valid	<= 1'b0;
-	  pref_16	<= 16'bx;
-	  ibus_valid_q	<= 1'b0; // Data not ready yet
+	  d_pc	       <= RESET_PC & PC_MASK;
+	  f2_pc        <= RESET_PC & PC_MASK;
+	  ibus_a_q     <= RESET_PC & PC_MASK;
+	  d_valid_i    <= 1'b0;
+	  d_pred_taken <= 1'b0;
+	  d_insn       <= 32'bx;
+	  d_mcontext.m <= CTX_MACHINE;
+	  d_mcontext.u <= CTX_MAX_USER;
+	  pref_valid   <= 1'b0;
+	  pref_16      <= 16'bx;
+	  ibus_valid_q <= 1'b0; // Data not ready yet
        end
      else if (clken)
        begin

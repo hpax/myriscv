@@ -84,6 +84,10 @@ module backend #(`CONFIG)
  input			   dbus_ready
  );
 
+   function logic [4:0] tocontext(logic [31:0] ctx);
+      tocontext = (ctx >= CONTEXTS) ? CTX_X : (ctx[4:0] & CTX_MASK);
+   endfunction
+
    // Canonical MISA value, regardless if it is exposed as CSR or not
    localparam [31:0] MISA = {
 	       WITH_Zalrsc & WITH_Zaamo,	// A
@@ -134,7 +138,7 @@ module backend #(`CONFIG)
    localparam [31:0] mcause_mask = MCAUSE_FIXED_MASK | {IRQ_BITS{1'b1}};
    reg [31:0]  mcause;
    reg [NUM_IRQS:0] mie        = 'b0;
-   reg [`REG_CONTEXTS-1:0] cie = 'b0; // Context interrupt enable
+   reg [CONTEXTS-1:0] cie = 'b0; // Context interrupt enable
    wire [31:0] csrval_misa = WITH_misa ? MISA : 32'b0;
 
    //
@@ -185,7 +189,7 @@ module backend #(`CONFIG)
        m_din <= e_dout;
 
    // Register file
-   regfile #(.contexts(1 << CONTEXT_BITS)) regs
+   regfile #(.contexts(CONTEXTS)) regs
      (
      .rst_n    ( rst_n ),
      .clk      ( clk ),
@@ -414,8 +418,8 @@ module backend #(`CONFIG)
 	  e_csr_rval  = mie;
 	CSR_MSTATUS:
 	  e_csr_rval  = { 28'b0,
-	  cie[e_op.mcontext.m], 1'b0,
-	  cie[e_op.mcontext.u], 1'b0 };
+	  WITH_mstatus & cie[e_op.mcontext.m], 1'b0,
+	  WITH_mstatus & cie[e_op.mcontext.u], 1'b0 };
 	CSR_USER_CONTEXT:
 	  e_csr_rval  = e_op.mcontext.u;
 	CSR_CIE:
@@ -442,7 +446,7 @@ module backend #(`CONFIG)
    wire		csrw_mcause	  = e_op.csrw && ncsr == CSR_MCAUSE;
    wire		csrw_mip	  = NUM_IRQS && e_op.csrw && ncsr == CSR_MIP;
    wire		csrw_mie	  = NUM_IRQS && e_op.csrw && ncsr == CSR_MIE;
-   wire		csrw_mstatus	  = e_op.csrw && ncsr == CSR_MSTATUS;
+   wire		csrw_mstatus	  = WITH_mstatus && e_op.csrw && ncsr == CSR_MSTATUS;
    wire		csrw_user_context = e_op.csrw && ncsr == CSR_USER_CONTEXT;
    wire		csrw_cie	  = NUM_IRQS && e_op.csrw && ncsr == CSR_CIE;
    wire		csrw_waitfor	  = WITH_waitfor && NUM_IRQS &&
@@ -584,7 +588,7 @@ module backend #(`CONFIG)
 		   // the actual CSR write is done by the restart.
 		   e_jump    = !e_op.pred_taken;
 		   e_jump_pc = e_succ_pc;
-		   e_restart_mcontext.u = rcontext_t ' (e_csr_wval);
+		   e_restart_mcontext.u = tocontext(e_csr_wval);
 		   e_restart_mcontext.m = CTX_MACHINE;
 		end
 		// No control transfer
@@ -646,7 +650,8 @@ module backend #(`CONFIG)
 	m_trap		   <= 1'b0;
 	m_xcpt		   <= 1'b0;
 	m_restartpc	   <= RESET_PC & PC_MASK;
-	m_restart_mcontext <= mcontext_reset();
+	m_restart_mcontext.m <= CTX_MACHINE;
+	m_restart_mcontext.u <= CTX_MAX_USER;
 	m_mepc		   <= 32'bx;
 	m_mcause	   <= 32'bx;
      end else if (clken & ~(m_fencei & (m_busy | m_valid_o))) begin
