@@ -40,7 +40,7 @@ module decode_comb #(`CONFIG)
    wire signed [31:0] j_imm = $signed({i[31], i[19:12], i[20], i[30:21], 1'b0});
    wire signed [31:0] u_imm = $signed({i[31:12], 12'b0});
 
-   function logic csr_is_indirect(logic [6:0] funct7);
+   function automatic logic csr_is_indirect(logic [6:0] funct7);
       logic indirect;
       indirect = 1'b0;
       if (WITH_indcsr)

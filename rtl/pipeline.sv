@@ -44,7 +44,7 @@ module pipe_ctl
   output reg d_rs2_w
 );
 
-   function logic regeq (input v1, regnum_t r1, input v2, regnum_t r2);
+   function automatic logic regeq (input v1, regnum_t r1, input v2, regnum_t r2);
       regeq = v1 & v2 & (r1 == r2);
    endfunction
 

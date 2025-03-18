@@ -5,7 +5,7 @@
 `include "myriscv.vh"
 
 // Compute the new value for a register under mask
-function logic [31:0] wmask(
+function automatic logic [31:0] wmask(
   input [31:0] src,
   input [31:0] old,
   input [31:0] mask
@@ -85,7 +85,7 @@ module backend #(`CONFIG)
  );
 
    // Canonical MISA value, regardless if it is exposed as CSR or not
-   parameter [31:0] MISA = {
+   localparam [31:0] MISA = {
 	       WITH_Zalrsc & WITH_Zaamo,	// A
 	       WITH_Zba & WITH_Zbb & WITH_Zbs,	// B
 	       WITH_RVC,			// C

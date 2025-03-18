@@ -57,8 +57,11 @@ module test #(
    //
    // CPU core with TCM
    //
-   core #(.TCM_INIT_FILE ("/home/hpa/hwhacks/riscv/myriscv/test/test2.hex"))
-   cpu (
+   myriscv #(
+     .NUM_IRQS		(NUM_IRQS),
+     .ram_size_bits	(ram_size_bits),
+     .TCM_INIT_FILE	("/home/hpa/hwhacks/riscv/myriscv/test/test2.hex")
+   ) cpu (
      .rst_n	( rst_n ),
      .clk	( clk ),
      .clken	( clken ),

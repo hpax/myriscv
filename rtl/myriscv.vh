@@ -6,9 +6,12 @@
 `include "functions.vh"
 
 `ifdef MODEL_TECH
-// ModelSim/Questa simulation needs type definitions included here
+// ModelSim/Questa simulation needs type definitions included everywhere
 `include "riscv.sv"
 `include "types.sv"
 `endif
+
+import riscv::*;
+import my_riscv::*;
 
 `endif

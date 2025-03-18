@@ -1,7 +1,9 @@
-`include "myriscv.vh"
+`ifndef _MYRISCV_TYPES_SV
+`define _MYRISCV_TYPES_SV 1
 
-`ifndef _TYPES_SV
-`define _TYPES_SV 1
+`include "config.vh"
+
+package my_riscv;
 
 typedef enum logic [3:0] {
 	INSN_NOP    = 4'b0000,	// No-op instruction (unless decoded as ALU)
@@ -23,7 +25,7 @@ typedef enum logic [3:0] {
 	INSN_X	    = 4'bxxxx
 } insn_type_t;
 
-function logic insn_mem(input insn_type_t insn);
+function automatic logic insn_mem(input insn_type_t insn);
    insn_mem = insn[3:2] == INSN_LD[3:2]; // CBO, LD, ST
 endfunction
 
@@ -48,7 +50,7 @@ typedef struct packed {
    rcontext_t u;		// Current user context (user_context csr)
 } mcontext_t;
 
-function mcontext_t mcontext_reset;
+function automatic mcontext_t mcontext_reset;
    mcontext_reset.m = CTX_MACHINE;
    mcontext_reset.u = CTX_USER_MAX;
 endfunction // mcontext_reset
@@ -87,7 +89,7 @@ typedef struct packed {
    logic	 pred_taken;
 } decoded_insn_t;
 
-function decoded_insn_t dummy_op(
+function automatic decoded_insn_t dummy_op(
   input	       undead,
   input	       insn_type_t itype,
   input [31:0] pc,
@@ -119,21 +121,21 @@ function decoded_insn_t dummy_op(
    dummy_op.pred_taken = 1'b0;
 endfunction
 
-function decoded_insn_t killed_op;
+function automatic decoded_insn_t killed_op;
    killed_op = dummy_op(1'b0, INSN_X, 32'bx, 1'b0, 1'bx, 'bx);
 endfunction
 
-function decoded_insn_t null_op(input [31:0] pc, input mcontext_t mcontext);
+function automatic decoded_insn_t null_op(input [31:0] pc, input mcontext_t mcontext);
    null_op = dummy_op(1'b0, INSN_X, pc, 1'b1, 1'bx, mcontext);
 endfunction
 
-function decoded_insn_t err_op(input [31:0] pc, input i16,
+function automatic decoded_insn_t err_op(input [31:0] pc, input i16,
 			       input mcontext_t mcontext);
    err_op = dummy_op(1'b1, INSN_ERR, pc, 1'b1, i16, mcontext);
 endfunction
 
 // This returns the true successor pc, without masking!
-function logic [31:0] successor_pc(input decoded_insn_t op, input valid);
+function automatic logic [31:0] successor_pc(input decoded_insn_t op, input valid);
    if (~op.pc_valid) begin
       successor_pc = 32'bx;
    end else begin
@@ -254,7 +256,7 @@ typedef struct packed {
    logic [2:0] bcop;		// bitcnt operation
    logic [1:0] msign;
    shiftop_t   shiftop;
-   cond_t      cond;
+   riscv::cond_t cond;
 } aluctl_t;
 
 typedef struct packed {
@@ -278,5 +280,7 @@ typedef struct packed {
    logic       valid;
    cbo_op_t    op;
 } cbo_t;
+
+endpackage
 
 `endif

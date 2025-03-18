@@ -58,7 +58,7 @@ module predict_branch #(`CONFIG)
    assign cb_imm[4:3] = i[11:10];
    assign cb_imm[8]   = i[12];
 
-   function logic [31:0] add_pc
+   function automatic logic [31:0] add_pc
      (
      input signed [31:0] pc,
      input signed [31:0] offset
@@ -198,7 +198,7 @@ module fetch #(`CONFIG)
    // Opportunistically skip padding c.nops by treating them as
    // the upper part of a 32-bit instruction for the purpose of
    // fetching, if and only those bits have already been fetched.
-   function logic is_cnop(input [15:0] cinst);
+   function automatic logic is_cnop(input [15:0] cinst);
       is_cnop = !cinst[15:13] && !cinst[11:7] && cinst[1:0] == 2'b01;
    endfunction
 

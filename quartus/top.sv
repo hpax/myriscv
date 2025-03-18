@@ -24,10 +24,12 @@ module pll (
 	    .clkena (1'b1),
 	    .clkloss ()
    );
-   
 endmodule
 
-module benchmark (
+module benchmark #(
+  parameter num_irqs = 31,
+  parameter mem_bits = 26
+) (
 	    input	  rst_n,
 	    input	  clk,
 	    output [30:2] io_addr,
@@ -37,10 +39,10 @@ module benchmark (
 	    output [3:0]  io_wbe,
 	    input	  io_ready,
 	    input [31:0]  io_rdata,
-	    input [31:1]  irq_in,
-	    output [4:0]  irq_intack,
+	    input [num_irqs:1]  irq_in,
+	    output [$clog2(num_irqs+1)-1:0]  irq_intack,
 
-	    output [25:0] mem_addr,
+	    output [mem_bits-1:0] mem_addr,
 	    output [31:0] mem_wdata,
 	    output	  mem_valid,
 	    output	  mem_wrq,
@@ -49,7 +51,7 @@ module benchmark (
 	    input [31:0]  mem_rdata,
 	    input	  mem_cpu,
 	    input	  mem_wr,
-	    input [25:0]  mem_addr_i
+	    input [mem_bits-1:0]  mem_addr_i
 	    );
 
    wire		   prst_n;
@@ -59,18 +61,18 @@ module benchmark (
    pll pll (.rst_n_i(rst_n), .clk_i(clk), .rst_n_o(prst_n), .clk_o(pclk));
 
    // Register irq inputs
-   reg [31:1]	   irq;
+   reg [num_irqs:1]   irq;
 
    always @(negedge prst_n or posedge pclk)
      if (~prst_n)
-       irq <= 31'b0;
+       irq <= 'b0;
      else
        irq <= irq_in;
 
    wire [31:0]	   cpu_io_addr;
    assign io_addr = cpu_io_addr[30:2];
-   
-   core cpu (
+
+   myriscv #(.NUM_IRQS(num_irqs), .ram_size_bits(mem_bits)) cpu (
 	     .rst_n		(prst_n),
 	     .clk		(pclk),
 	     .clken		(1'b1),
@@ -95,11 +97,11 @@ module benchmark (
      .mem_cpu (mem_cpu),
      .mem_addr_i (mem_addr_i),
 
-	     .irq		({irq, 1'b0}),
-	     .irq_intable	({{31{1'b1}}, 1'b0}),
-	     .irq_waitable	({{31{1'b1}}, 1'b0}),
-	     .irq_edge		(32'b0),
-	     .irq_intack		(intack),
-	     .buserr		( )
-	     );
+     .irq		({irq, 1'b0}),
+     .irq_intable	({{31{1'b1}}, 1'b0}),
+     .irq_waitable	({{31{1'b1}}, 1'b0}),
+     .irq_edge		(32'b0),
+     .irq_intack	(irq_intack),
+     .buserr		( )
+     );
 endmodule

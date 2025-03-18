@@ -1,6 +1,6 @@
 `include "myriscv.vh"
 
-module core #(`CONFIG) (rst_n, clk, clken,
+module myriscv #(`CONFIG) (rst_n, clk, clken,
 	     ctr_time, ctr_cycle, ctr_instret,
   mem_addr, mem_wdata, mem_valid, mem_wrq, mem_wbe,
   mem_ready, mem_rdata, mem_wr, mem_cpu, mem_addr_i,

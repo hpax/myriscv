@@ -13,4 +13,3 @@ function logic [31:0] addr_mask(input [31:0] base, input int bits);
 
    addr_mask = mask;
 endfunction
-

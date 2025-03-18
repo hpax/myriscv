@@ -5,6 +5,8 @@
 `ifndef _RISCV_SV
 `define _RISCV_SV 1
 
+package riscv;
+
 // Base opcode spaces
 typedef enum logic [6:0] {
 	LOAD     = 7'b0000011,
@@ -173,5 +175,7 @@ typedef enum logic [31:0] {
 
 	     MCAUSE_FIXED_MASK = MCAUSE_IRQ | 32'd63
 } csr_mcause_t;
+
+endpackage
 
 `endif

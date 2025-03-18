@@ -24,7 +24,7 @@ module rv32c_comb #(`CONFIG,
    localparam [4:0] R_RA   = 5'd1;
    localparam [4:0] R_SP   = 5'd2;
 
-   function [31:0] insn_i (input [4:0]         rd,
+   function automatic [31:0] insn_i (input [4:0]         rd,
 			   input [4:0]	       rs1,
 			   input signed [11:0] imm,
 			   input [2:0]	       funct3,
@@ -32,7 +32,7 @@ module rv32c_comb #(`CONFIG,
       insn_i = { imm, rs1, funct3, rd, base_op };
    endfunction // insn_i
 
-   function [31:0] insn_r (input [4:0] rd,
+   function automatic [31:0] insn_r (input [4:0] rd,
 			   input [4:0] rs1,
 			   input [4:0] rs2,
 			   input [6:0] funct7,
@@ -41,7 +41,7 @@ module rv32c_comb #(`CONFIG,
       insn_r = { funct7, rs2, rs1, funct3, rd, base_op };
    endfunction
 
-   function [31:0] insn_s (input [4:0]         rs1,
+   function automatic [31:0] insn_s (input [4:0]         rs1,
 			   input [4:0]         rs2,
 			   input signed [11:0] imm,
 			   input [2:0]         funct3,
@@ -49,7 +49,7 @@ module rv32c_comb #(`CONFIG,
       insn_s = { imm[11:5], rs2, rs1, funct3, imm[4:0], base_op };
    endfunction // insn_s
 
-   function [31:0] insn_b (input [4:0]         rs1,
+   function automatic [31:0] insn_b (input [4:0]         rs1,
 			   input [4:0]         rs2,
 			   input signed [12:0] imm,
 			   input [2:0]         funct3,
@@ -57,24 +57,24 @@ module rv32c_comb #(`CONFIG,
       insn_b = { imm[12], imm[10:5], rs2, rs1, funct3, imm[4:1], imm[11], base_op };
    endfunction // insn_b
 
-   function [31:0] insn_u (input[4:0]          rd,
+   function automatic [31:0] insn_u (input[4:0]          rd,
 			   input signed [19:0] imm,
 			   op_t                base_op);
       insn_u = { imm, rd, base_op };
    endfunction // insn_u
 
-   function [31:0] jal (input [4:0] rd,
+   function automatic [31:0] jal (input [4:0] rd,
 			input signed [20:0] imm);
       jal = { imm[20], imm[10:1], imm[11], imm[19:12], rd, JAL };
    endfunction // jal
 
-   function [31:0] addi (input [4:0]         rd,
+   function automatic [31:0] addi (input [4:0]         rd,
 			 input [4:0]	     rs1,
 			 input signed [11:0] imm);
       addi = insn_i(rd, rs1, imm, 3'b000, OP_IMM);
    endfunction // addi
 
-   function [31:0] andi (input [4:0]         rd,
+   function automatic [31:0] andi (input [4:0]         rd,
 			 input [4:0]	     rs1,
 			 input signed [11:0] imm);
       andi = insn_i(rd, rs1, imm, 3'b111, OP_IMM);

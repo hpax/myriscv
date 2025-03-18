@@ -24,7 +24,7 @@
 // These aren't necessarily the only possible ones, nor are they the "simplest"
 // (fewest XORs). The bits are set to the bit number matches the coefficient degree,
 // e.g. 101001 = x^5+x^3+1.
-function logic [32:0] primitive_polynomial(input degree);
+function automatic logic [32:0] primitive_polynomial(input degree);
    logic [32:0] poly;
    unique case (degree)
       0: poly =  1'b1;
