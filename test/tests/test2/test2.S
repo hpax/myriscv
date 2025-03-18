@@ -1,5 +1,7 @@
 #include "asm.h"
 
+icache_size = 4096
+
 	.section ".text.hot","ax"
 	.globl __start
 __start:
@@ -85,6 +87,7 @@ unalign_test:
 
 	/* Multiply me harder? */
 	/* Test with forwarding */
+mult_test:
 	la a0,mult_str
 	jal _print_str
 	li a4,0x8dbbc2c2
@@ -132,6 +135,7 @@ unalign_test:
 	print_crlf
 
 	/* Test writing to and running from external memory */
+extmem_test:
 	la a0,extmem1_str
 	jal _print_str
 	li a0,0x80824531		// li a0,12; ret
@@ -154,9 +158,11 @@ unalign_test:
 	 * memory, then run several times and compare the time.
 	 * Writing to address -16 generates a time stamp on the
 	 * simulation console.
-	 */
-	li a0,0x00150513	// addi a0,a0,1
-	li s3,0x00008067	// ret
+	*/
+icache_test:
+	la s9,itest_insns
+	lw a0,(s9)		// addi a0,a0,1
+	lw s3,4(s9)		// ret
 	mv a1,s0
 	add a2,a1,256*4
 1:
@@ -170,10 +176,10 @@ unalign_test:
 	 * This set of instructions are add a0,a0,2; the addresses are
 	 * intended to conflict to test eviction on tag mismatch.
 	 */
-	li a0,0x00250513	// addi a0,a0,2
-	li a1,4096		// Conflicting offset - modify as needed
+	lw a0,8(s9)		// addi a0,a0,2
+	li s8,icache_size	// Conflicting offset - modify as needed
 
-	add s2,a1,s0
+	add s2,s8,s0
 	mv a1,s2
 	add a2,s2,256*4
 1:
@@ -186,8 +192,8 @@ unalign_test:
 	fence.i
 
 	/* Initial speed test */
-	print "Icache speed test (increment by 0x100):\n"
-
+icache1:
+	print "Icache speed test (should increment by 0x100):\n"
 	li s1,5			// Loop count
 	li a0,0
 	sw a0,-16(zero)
@@ -197,9 +203,9 @@ unalign_test:
 	sw a0,-16(zero)
 	bnez s1,2b
 
-	/* Cache conflict test */
-	print "Icache conflict test (increment by 0x200):\n"
-
+	/* Cache one-conflict test */
+icache2:
+	print "Icache single conflict test (should increment by 0x200):\n"
 	li s1,5			// Loop count
 	li a0,0
 	sw a0,-16(zero)
@@ -211,10 +217,9 @@ unalign_test:
 
 	/* Cache overwrite test */
 	/* Overwriting existing code, should cause icache invalidation */
-
-	print "Icache overwrite test (increment by 0x400):\n"
-
-	li a0,0x00450513	// addi a0,a0,4
+icache3:
+	print "Icache overwrite test (should increment by 0x400):\n"
+	lw a0,12(s9)		// addi a0,a0,4
 	mv a1,s2
 	add a2,a1,256*4
 1:
@@ -223,6 +228,33 @@ unalign_test:
 	bne a1,a2,1b
 
 	// ret should already be there, so this tests that, too...
+	fence.i
+
+	li s1,5			// Loop count
+	li a0,0
+	sw a0,-16(zero)
+2:
+	add s1,s1,-1
+	jalr (s2)
+	sw a0,-16(zero)
+	bnez s1,2b
+
+	/* Icache test where every instruction is a tag conflict */
+icache4:
+	print "Icache chronic conflict test (should increment by 0x800):\n"
+	lw a0,16(s9)		// addi a0,a0,8
+	lw t1,20(s9)		// Jump one icache length
+
+	sll a2,s8,8		// s8 = icache_size
+	mv a1,s2
+	add a2,s2,a2
+1:
+	sw a0,(a1)
+	sw t1,4(a1)
+	add a1,a1,s8
+	bne a1,a2,1b
+
+	sw s3,(a1)		// ret
 
 	fence.i
 
@@ -235,6 +267,7 @@ unalign_test:
 	sw a0,-16(zero)
 	bnez s1,2b
 
+done:
 	/* Done with tests */
 	la a0,done_str
 	jal _print_str
@@ -244,6 +277,19 @@ unalign_test:
 	j stop
 
 	ret
+
+	.balign 4
+	.option push
+	.option norvc
+	.option norelax
+itest_insns:
+	addi a0,a0,1
+	ret
+	addi a0,a0,2
+	addi a0,a0,4
+1:	addi a0,a0,8
+	j 1b+icache_size
+	.option pop
 
 	.section ".rodata.hot","a"
 hello1_str:

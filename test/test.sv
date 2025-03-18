@@ -98,7 +98,7 @@ module test #(
    // No DMA support at the moment...
    assign mem_cpu = 1'b1;
 
-   extmem #(.ram_bits( ram_size_bits ), .size_bits ( 16 ))
+   extmem #(.ram_bits( ram_size_bits ), .size_bits ( ram_size_bits ))
    extmem (
      .rst_n	( rst_n ),
      .clk	( clk ),
