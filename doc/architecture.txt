@@ -5,26 +5,25 @@ some are hard coded in the design).
 See rtl/params.sv for the parameters available and their default
 values. They are set as normal Verilog instance parameters.
 
-Many CSRs are either optional or plain omitted (read as zero); see
-"non-standard behaviors" below.
-
-
 Standard options:
 
 	I	- Base RV32I architecture
-	B	- Bit operations (Zba Zbb Zbs)
-	C	- Compression operations (Zca Zcb)
-	Zkr	- Entropy source
+	B	- Bit operations (= Zba Zbb Zbs)
+	C	- Compression operations (= Zca Zcb)
+	Zkr	- Entropy source (*)
 	Zkt	- Data-independent execution latency
 	Zalrsc	- LR/SC instructions for atomicity
 	Zicbom	- Cache block management operations
 	Ziccif	- Aligned instruction fetches are atomic
 	Zicclsm	- Unaligned memory accesses
-	Ziccrse	- LR/SC forward progress guarantee
+	Ziccrse	- LR/SC forward progress guarantee (*)
 	Zicond	- Conditional integer operations
-	Zicsr	- Control registers
-	Zictr	- Standard counter registers
+	Zicsr	- Control registers (*)
+	Zictr	- Standard counter registers (*)
 	Zmmul	- Integer multiplication
+	Ztso	- Total store ordering (implicit in a uniprocessor)
+
+	* = see below for non-standard or configurable behavior
 
 
 Private extensions:
@@ -35,10 +34,6 @@ Private extensions:
 		standard form of these instructions always have all
 		the bits of the S immediate set to zero, so the
 		standard form is still valid.
-
-		With rs2[4] = 1, these instructions are
-		"geographically addressed" as opposed to using a
-		processor address.
 
 	WITH_Zbasub: (req. Zba)
 		shXsub	- shXadd funct7[5] = 1
@@ -73,17 +68,24 @@ Private extensions:
 			funct7[6]/instr[31] = 1
 
 		Shift right complement sign -
-		        slcs(i)
+		        srcs(i)
 			Same encoding as sra(i) with
 			funct7[6]/instr[31] = 1
 
 	WITH_extr:
 		Bitfield extraction custom opcode:
 
-		extru  rd,rs1,rs2,wimm5
-		extrs  rd,rs1,rs2,wimm5
-		extrui rd,rs1,shimm5,wimm5
-		extrsi rd,rs1,shimm5,wimm5
+		extru   rd,rs1,rs2,wimm5
+		extrs   rd,rs1,rs2,wimm5
+		extrui  rd,rs1,shimm5,wimm5
+		extrsi  rd,rs1,shimm5,wimm5
+
+		With WITH_shiftone additionally ones or complement sign:
+
+		extro   rd,rs1,rs2,wimm5
+		extrcs  rd,rs1,rs2,wimm5
+		extroi  rd,rs1,shimm5,wimm5
+		extrcsi rd,rs1,shimm5,wimm5
 
 		Extracts a sign- or zero-extended wimm5 bitfield from
 		position rs2/pimm5 of rs1 into rd. wimm5 = 0 is reserved
@@ -96,14 +98,10 @@ Private extensions:
 		instr[19:15]	= rs1
 		instr[24:20]	= rs2|shimm5
 		instr[29:25]	= wimm5
-		instr[30]	= 0 for EXTRU*
-				  1 for EXTRS*
-		instr[31]	= 0 (see below)
-
-	WITH_extr + WITH_shiftone:
-
-		 Adds EXTRO (extract one) and EXTRCS (extract complement sign)
-		 to the above, with instr[31] = funct7[6] = 1.
+		instr[31:30]	= 00 for EXTRU*
+				  01 for EXTRS*
+				  10 for EXTRO*
+				  11 for EXTRCS*
 
 	WITH_extn:
 		Arbitrary width zero- or sign-extension:
@@ -120,17 +118,18 @@ Private extensions:
 		csext  rd,rs1,rs2
 		csexti rd,rs1,shimm5
 
-		instr[6:0]	= 0001011 (CUSTOM0) for *EXTI
-				  0101011 (CUSTOM1) for *EXT
+		instr[6:0]	= 0101011 (CUSTOM1) for *EXT
 		instr[11:7]	= rd
 		instr[14:12]	= 111
 		instr[19:15]	= rs1
-		instr[24:20]	= rs2|shimm5
+		instr[24:20]	= rs2
 		instr[29:25]	= 00000
 		instr[31:30]	= 00 for ZEXT*
 				  01 for SEXT*
 				  10 for OEXT*
 				  11 for CSEXT*
+
+		The -i versions are encoded as extr*i rd,rs1,0,shimm5
 
 	WITH_indcsr:
 		Indirect CSR access.
@@ -262,7 +261,7 @@ Non-standard or system-specific behaviors:
 		number of data bits; the "ES16" status is signalled
 		after that many received bits.
 
-The length and polynomial of the entropy buffer can
+		The length and polynomial of the entropy buffer can
 		be set by the Zkr_acc_bits and Zkr_acc_poly parameters;
 		however, note that the unit asserts ES16 after 16 valid
 		rng_incr strobes regardless of the Zkr_acc_bits length.
