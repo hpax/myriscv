@@ -2,10 +2,13 @@ MAKEFLAGS = -R -r
 
 prefix   := $(CURDIR)/gnu
 bindir   := $(prefix)/bin
+acprefix := $(prefix)/autoconf
+acbindir := $(acprefix)/bin
 
 tooldir   = gnusrc
 binutils  = $(tooldir)/binutils
 
+ac_config  = --prefix=$(acprefix)
 all_config = --prefix=$(prefix)
 
 all: gnu
@@ -23,14 +26,14 @@ riscv_config = $(all_config) \
 	   --disable-libmudflap --disable-libssp \
 	   --disable-libquadmath --disable-libgomp --disable-nls \
 	   --disable-tm-clone-registry \
-	   --enable-multilib --with-multilib-generator=$(riscv_multilibs)
+	   --enable-multilib --with-multilib-generator=$(riscv_multilib)
 export riscv_config
 
 riscv_binutils_configargs := \
 	--disable-gold --disable-gprof --disable-sim
 export riscv_binutils_configargs
 
-pathify       = PATH='$(bindir):$(PATH)'
+pathify       = PATH='$(bindir):$(acbindir):$(PATH)'
 # -R -r fails, and one can't disable it, so strip all of MAKEFLAGS
 # except any job-related options. Sigh.
 gnu_makeflags = MAKEFLAGS=' $(filter -j% --job%,$(MAKEFLAGS))'
@@ -97,12 +100,12 @@ gnu.autotools.build:
 	mkdir -p $@
 	cd $@ && tar xvvf ../gnusrc/$(autoconf).tar.xz
 	cd $@/$(autoconf) && \
-		$(rsetup) $(autotools-disable) ./configure $(all_config)
+		$(rsetup) $(autotools-disable) ./configure $(ac_config)
 	$(RMAKE) -C $@/$(autoconf)
 	$(RMAKE) -C $@/$(autoconf) install
 	cd $@ && tar xvvf ../gnusrc/$(automake).tar.xz
 	cd $@/$(automake) && \
-		$(rsetup) $(autotools-disable) ./configure $(all_config)
+		$(rsetup) $(autotools-disable) ./configure $(ac_config)
 	$(RMAKE) -C $@/$(automake)
 	$(RMAKE) -C $@/$(automake) install
 	: >$@.stamp
@@ -115,3 +118,7 @@ gnu.autotools.build:
 .PHONY: gnu.riscv.build
 gnu.riscv.build: autotools
 	$(rsetup) MAKE='$(MAKE)' ./riscvbuild.sh
+
+# Helper to dump some configuration variables
+config:
+	@printenv | grep '^riscv_' | sort
