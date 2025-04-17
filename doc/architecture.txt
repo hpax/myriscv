@@ -267,6 +267,14 @@ Non-standard or system-specific behaviors:
 		rng_incr strobes regardless of the Zkr_acc_bits length.
 
 
+Nonstandard CSR numbers:
+
+	0x7f0		USER_CONTEXT
+	0x7f1		(reserved)
+	0x7f2		CIE
+	0x7f3		WAITFOR
+	0xbe1-0xbff	Used for indirect CSR access (x1-x31)
+
 System architecture:
 
 	The system architecture is only partly compatible with the
@@ -291,7 +299,7 @@ Register contexts:
 
 	There are no scratch register CSRs as they are no longer needed.
 
-	The CSR user_context (0x7f0) contains the current user
+	The "user_context" CSR contains the current user
 	context; the operating system can set this to quickly switch
 	tasks. user_context is *not* changed when going to machine
 	context.
@@ -360,8 +368,8 @@ Interrupts:
 	causes 0-15 are ignored.
 
 	Each register context has a separate interrupt flag, given as
-	a bitmask in the cie CSR (context interrupt enable,
-	0x7f1). Normally the interrupt flag in machine context would
+	a bitmask in the "cie" CSR (context interrupt
+	enable). Normally the interrupt flag in machine context would
 	be left at 0, of course. If the parameter WITH_mstatus is
 	enabled, the standard mstatus CSR acts as a "window" into this
 	CSR, with bit 1 corresponding to the flag for the current user
@@ -411,8 +419,8 @@ Interrupts:
 
 Reset condition:
 
-	pc			= RESET_PC (0x10)
-	mtvec			= MTVEC_RESET (0x80)
+	pc			= RESET_PC (default 0x10)
+	mtvec			= MTVEC_RESET (default 0x80)
 	user_context		= max value for the user context
 	executing context	= machine context
 	cie			= 0
@@ -428,7 +436,7 @@ CSRs:
 
 WITH_waitfor:
 
-	Writing a mask to the waitfor CSR (0x7f2) will wait until any
+	Writing a mask to the "waitfor" CSR will wait until any
 	of the interrupt sources in the mask become pending in the mip
 	register, whether or not they are enabled in either mie or
 	cie. If an interrupt arrives that *is* enabled in mie and cie,
