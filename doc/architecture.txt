@@ -341,8 +341,23 @@ Register contexts:
 	contexts is 32 as the CIE CSR (see below) is a bitmask. The
 	number of contexts does not have to be a power of 2, although
 	in an FPGA it makes sense to make it support the *addressable*
-	size of the RAM arrays (specifically, in "simple dual port"
-	mode.)
+	size of the RAM arrays (specifically, with separate 32-bit
+	read and write ports.) Each context requires 1K byte
+	(8 kbit) of memory.
+
+	For example, for Altera FPGAs, these values (or multiples
+	thereof) make sense in terms of using various types of memory
+	arrays efficiently:
+
+	    MLAB:	 2 contexts
+	    M4K:	 4 contexts
+	    M9K, M10K:	 8 contexts
+	    M18K, M20K:	16 contexts
+
+	Note that since two read ports are required, most FPGAs will
+	need two copies of the register file, so two RAM arrays will
+	be used, regardless of if the RAM arrays are fully occupied or
+	not.
 
 	User contexts range from 0 to CONTEXTS-n-1), where n is the
 	number of system contexts. Currently the only system context
