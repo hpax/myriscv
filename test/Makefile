@@ -12,7 +12,6 @@ HEXDUMP	= hexdump
 
 include ../tools/riscv-opts.mk
 
-# gcc seems to not understand Zmmul, but adding m and -mno-div works...
 CFLAGS  = $(riscv_flags) -I./include
 SFLAGS  = $(CFLAGS) -D__ASSEMBLY__ -Wa,-ahlsm=$*.lst
 LDFLAGS	= $(CFLAGS) -Wl,-T,test.ld -Wl,-Map=$*.map
