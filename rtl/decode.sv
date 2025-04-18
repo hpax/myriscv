@@ -17,7 +17,8 @@ module decode_comb #(`CONFIG)
    input [31:0]	d_pc,		// PC of instruction
    input mcontext_t d_mcontext,	// Machine context of instruction
 
-   output	decoded_insn_t op
+   output decoded_insn_t op,
+   output d_pred_t d_pred
    );
 
    // Expand RV32C instructions if applicable
@@ -27,11 +28,9 @@ module decode_comb #(`CONFIG)
    // The only fused pair currently supported is a c.nop as the second
    // instruction, so it can safely be ignored.
    wire [31:0]	 i;
-   wire [31:0]	 cinst;
    wire		 is_16 = d_insn_16;
 
-   rv32c_comb #(`CFG) rvc (.d(d_din), .q(cinst));
-   assign i = EARLY_RVC ? d_din : cinst;
+   rv32c_comb #(`CFG, .enabled(WITH_RVC & !EARLY_RVC)) rvc (.d(d_din), .q(i));
 
    // Immediate formats
    wire signed [31:0] i_imm = $signed(i[31:20]);
@@ -50,11 +49,13 @@ module decode_comb #(`CONFIG)
 
    always @(*)
      begin
+	logic can_pred;
+
 	op	      = 'bx;
 	op.i16	      = is_16;
 	op.mcontext   = d_mcontext;
 
-	op.undead     = 1'b1;	// It is assumed to be a real instruction
+	op.undead     = 1'b1; // It is assumed to be a real instruction
 	op.itype      = INSN_ERR;
 	op.pc	      = d_pc & PC_MASK;
 	op.pc_valid   = 1'b1;
@@ -76,6 +77,8 @@ module decode_comb #(`CONFIG)
 
 	op.funct7     = i[31:25];
 	op.funct3     = i[14:12];
+
+	can_pred      = 1'b0;
 
 	unique case (i[6:0])
 	  LOAD: begin
@@ -127,7 +130,7 @@ module decode_comb #(`CONFIG)
 	  end
 
 	  JALR: begin
-	     op.itype      = INSN_JAL;
+	     op.itype     = INSN_JAL;
 	     op.rs1_valid = 1'b1;
 	     op.rd_e      = 1'b1;
 	     op.imm	  = i_imm;
@@ -209,19 +212,20 @@ module decode_comb #(`CONFIG)
 	  end
 
 	  AUIPC: begin
-	     op.itype  = INSN_ALU;
-	     op.funct3 = ALU_ADD;
-	     op.rs1.r  = 5'b0;	// rs1 = immediate 0
-	     op.rd_e   = 1'b1;
-	     op.imm    = op.pc + u_imm;
+	     op.itype	= INSN_ALU;
+	     op.funct3	= ALU_ADD;
+	     op.rs1.r	= 5'b0;	// rs1 = immediate 0
+	     op.rd_e	= 1'b1;
+	     can_pred   = 1'b1;
 	  end
 
 	  LUI: begin
 	     op.itype  = INSN_ALU;
 	     op.funct3 = ALU_ADD;
-	     op.rs1.r  = 5'b0;	// rs1 = immediate 0
+	     op.rs1.r  = 5'b0; // rs1 = immediate 0
 	     op.rd_e   = 1'b1;
 	     op.imm    = u_imm;
+	     can_pred  = 1'b1;
 	  end
 
 	  // CUSTOM0 is CUSTOM1 as OP_IMM is to OP
@@ -257,11 +261,19 @@ module decode_comb #(`CONFIG)
 
 	// x0 can never be written, and always is zero (effectively
 	// an immediate.) This enforces that constraint.
-	if (!op.rd.r)
-	  begin
-	     op.rd_e = 1'b0;
-	     op.rd_m = 1'b0;
-	  end
+	if (!op.rd.r) begin
+	   op.rd_e  = 1'b0;
+	   op.rd_m  = 1'b0;
+	   can_pred = 1'b0;
+	end
+
+	if (can_pred) begin
+	   d_pred.rnum = op.rd.r;
+	   d_pred.imm  = op.imm;
+	end else begin
+	   d_pred.rnum = 5'b0;
+	   d_pred.imm  = 32'b0;
+	end
 
 	// For the benefit of the fast register decoder, squash reading
 	// rs1 if it is zero. It is not safe to do the same for rs2, without
@@ -382,8 +394,8 @@ module decode #(`CONFIG)
   input	       clk,
   input	       clken,
 
-  input [31:0] d_din, // From fetch stage
-  input	       d_insn_16, // 16-bit instruction packet
+  input [31:0] d_din,	     // From fetch stage
+  input	       d_insn_16,    // 16-bit instruction packet
   input	       d_pred_taken, // F predicted taken branch
   input [31:0] d_pc,
   input	       mcontext_t d_mcontext,
@@ -394,8 +406,9 @@ module decode #(`CONFIG)
   output       d_valid_o,
   output       d_busy,
 
-  output       decoded_insn_t d_op
-			 );
+  output       decoded_insn_t d_op,
+  output       d_pred_t d_pred
+);
 
    wire			      d_clken;
 
@@ -408,7 +421,8 @@ module decode #(`CONFIG)
    // Purely combinatorial decode
    decode_comb #(`CFG) comb (
      .d_din (d_din), .d_insn_16(d_insn_16), .d_pred_taken(d_pred_taken),
-     .d_pc (d_pc & PC_MASK), .d_mcontext(d_mcontext), .op(c_op)
+     .d_pc (d_pc & PC_MASK), .d_mcontext(d_mcontext), .op(c_op),
+     .d_pred (d_pred)
      );
 
    // Additional, sequence-dependent

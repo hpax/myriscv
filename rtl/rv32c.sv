@@ -11,11 +11,11 @@
 `include "myriscv.vh"
 
 module rv32c_comb #(`CONFIG,
-		    parameter logic [31:0] INVALID = { 31'bx, 1'b0 },
-		    parameter bit	  MATCH_BINUTILS = 1'b0
+		    parameter bit enabled = 1'b1,
+		    parameter bit MATCH_BINUTILS = 1'b0
 		    )
    (
-    input [31:0]  d, // Input; [31:16] used only for passthrough
+    input  [31:0] d, // Input; [31:16] used only for passthrough
     output [31:0] q
     );
 
@@ -91,21 +91,14 @@ module rv32c_comb #(`CONFIG,
 
    always @(*)
      begin
-	o = INVALID;
-
-	if (!WITH_RVC) begin
-	   unique case (i[1:0])
-	     2'b11:
-	       o = i;		// Not compressed
-	     2'b00, 2'b01, 2'b10:
-	       o = INVALID;	// Compressed instructions not supported
-	     default:
-	       o = 32'bx;	// For simulation
-	   endcase
+	if (!enabled) begin
+	   // This unit is bypassed
+	   o = i;
 	end else begin
 	   logic signed [5:0] ci_imm;
-
 	   ci_imm = { i[12], i[6:2] };
+
+	   o = INVALID_INSN;
 
 	   unique case (i[1:0])
 	     2'b11: begin
@@ -146,7 +139,7 @@ module rv32c_comb #(`CONFIG,
 			 if (WITH_Zcb)
 			   o = insn_s(p1, p2, {i[5], 1'b0}, 3'b001, STORE);
 		       default:
-			 o = INVALID;
+			 o = INVALID_INSN;
 		     endcase
 		  end
 
@@ -206,7 +199,7 @@ module rv32c_comb #(`CONFIG,
 		  end
 
 		  3'b100: begin	// Arithmetic
-		     o = INVALID;
+		     o = INVALID_INSN;
 		     unique casez ({i[12:10], i[6:5]})
 		       5'b?_0?_??:	// C.SRLI, C.SRAI (including 63-32)
 			 o = insn_i(p1, p1,  {1'b0, i[10], 4'b0, ci_imm}, 3'b101, OP_IMM);
@@ -240,10 +233,10 @@ module rv32c_comb #(`CONFIG,
 			     3'b101: // C.NOT
 			       o = insn_i(p1, p1, ~12'sb0, 3'b100, OP_IMM);
 			     default:
-			       o = INVALID;
+			       o = INVALID_INSN;
 			   endcase // unique casez (i[4:2])
 		       default:
-			 o = INVALID;
+			 o = INVALID_INSN;
 		     endcase
 		  end
 

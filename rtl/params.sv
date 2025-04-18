@@ -91,10 +91,12 @@ parameter logic [31:0]    csrval_impid    = 32'h0;
 
 // Parameterization for timing tweaks
 parameter bit	     ALU_EARLY_DECODE   = 1'b0;
-parameter bit	     PREDICT_JALR_ZERO	= 1'b0;
 parameter bit	     EARLY_RVC		= 1'b1;
 parameter bit	     BITCNT_SEPARATE	= 1'b1;
 parameter bit	     EARLY_BYPASS_MUX	= 1'b0;
+
+// Allow prediction of AUIPC+J(AL)R, LUI+J(AL)R or J(AL)R imm(zero)
+parameter bit	     PREDICT_JALR	= 1'b0;
 
 // Allow cached multiply forwarding for latency
 parameter bit	     FORWARD_MUL	= 1'b1;

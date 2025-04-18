@@ -31,6 +31,8 @@ module predict_branch #(`CONFIG)
    input	     f2_is_16,
    input	     f2_valid,
    input [31:0]	     f2_pc,
+   input d_pred_t    d_pred,
+   input	     d_usable,
    output reg	     take,
    output reg [31:0] next_pc
    );
@@ -60,10 +62,10 @@ module predict_branch #(`CONFIG)
 
    function automatic logic [31:0] add_pc
      (
-     input signed [31:0] pc,
-     input signed [31:0] offset
-       );
-      add_pc			     = (pc + offset) & PC_MASK;
+      input signed [31:0] pc,
+      input signed [31:0] offset
+   );
+      add_pc = (pc + offset) & PC_MASK;
    endfunction
 
    always @(*)
@@ -95,7 +97,7 @@ module predict_branch #(`CONFIG)
 
 	if (f2_valid)
 	  unique casez (i[6:0])
-	    7'b?????01: begin		// RVC quadrant 1
+	    7'b?????01: if (WITH_RVC) begin	// RVC quadrant 1
 	       unique casez (i[15:13])
 		 3'b?01: begin		// C.J(AL)
 		    take   = 1'b1;	// Unconditional
@@ -112,15 +114,24 @@ module predict_branch #(`CONFIG)
 		 end
 	       endcase // unique casez (i[15:13])
 	    end
+	    7'b0000010: if (WITH_RVC) begin // RVC quadrant 2 with rs2 = 0
+	       if (PREDICT_JALR && d_usable && i[15:13] == 3'b100) begin
+		  // if rs1 is zero this is not J(AL)R, but it is
+		  // faster to test d_pred.rnum.
+		  take = d_pred.rnum && i[11:7] == d_pred.rnum;
+		  if (take)
+		    next_pc = d_pred.imm & PC_MASK;
+	       end
+	    end
 	    JAL: begin
 	       take   = 1'b1;		// Unconditional
 	       next_pc = bj_pc;
 	    end
 	    JALR: begin
-	       if (PREDICT_JALR_ZERO && !i[19:12]) begin
-		  // j[al]r addr(zero)
-		  take		= 1'b1;	// Unconditional
-		  next_pc	= add_pc(32'b0, i_imm);	// Absolute!
+	       if (PREDICT_JALR) begin
+		  take = i[19:12] == d_pred.rnum;
+		  if (take)
+		    next_pc = add_pc(d_pred.imm, i_imm);
 	       end
 	    end
 	    BRANCH: begin
@@ -136,13 +147,13 @@ module predict_branch #(`CONFIG)
 endmodule
 
 module fetch #(`CONFIG)
-  (
+   (
    input	     clk,
    input	     clken,
    input	     rst_n,
 
-   input	     restart, // Killed in the E stage
-   input [31:0]	     restart_pc, // PC to restart from
+   input	     restart,			  // Killed in the E stage
+   input [31:0]	     restart_pc,		  // PC to restart from
    input	     mcontext_t restart_mcontext, // Machine context to restart from
    output reg [31:0] ibus_a,
    input [31:0]	     ibus_rdata,
@@ -169,11 +180,15 @@ module fetch #(`CONFIG)
    // hard RAM blocks.
    output	     f_valid_o,
    output	     regnum_t f_rs1,
-   output	     regnum_t f_rs2
-   );
+   output	     regnum_t f_rs2,
+
+   // Combinatorial inputs from the D stage for the purpose of helping
+   // predicting J(AL)R
+   input	     d_pred_t d_pred
+);
 
    wire [31:0]	     next_pc;
-   reg  [15:0]	     pref_16;	// Prefetched upper halfword
+   reg [15:0]	     pref_16;	// Prefetched upper halfword
    reg		     pref_valid;
 
    reg [31:0]	     f2_pc;
@@ -184,16 +199,18 @@ module fetch #(`CONFIG)
    logic	     f2_have_32;
    logic	     f2_is_16;
 
-   wire		     br_take;
+   wire			   br_take;
    // Branch prediction
    predict_branch #(`CFG) pred (
-     .f2_insn	(f2_insn),
-     .f2_is_16	(f2_is_16),
-     .f2_valid  (f2_valid),
-     .f2_pc	(f2_pc),
-     .take	(br_take),
-     .next_pc	(next_pc)
-     );
+      .f2_insn	    (f2_insn),
+      .f2_is_16	    (f2_is_16),
+      .f2_valid     (f2_valid),
+      .f2_pc	    (f2_pc),
+      .d_pred       (d_pred),
+      .d_usable     (d_usable),
+      .take	    (br_take),
+      .next_pc	    (next_pc)
+   );
 
    // Opportunistically skip padding c.nops by treating them as
    // the upper part of a 32-bit instruction for the purpose of
@@ -206,8 +223,8 @@ module fetch #(`CONFIG)
    wire		     f_stalled = f_stall & d_valid_i;
 
    // f2_have_data is true if ibus_rdata contains usable data
-   reg	     ibus_valid_q;
-   wire	     f2_have_data = ibus_valid_q & ibus_ready & ~f_stalled;
+   reg		     ibus_valid_q;
+   wire		     f2_have_data = ibus_valid_q & ibus_ready & ~f_stalled;
 
    // This benefits simulation by catching data read from the
    // bus while not ready.
@@ -259,17 +276,17 @@ module fetch #(`CONFIG)
    // in parallel with the branch prediction decode and possibly
    // leverage some of the same logic elements.
    decode_srcregs dsr (
-		       .insn (f2_insn),
-		       .mc   (d_mcontext),
-		       .rs1  (f_rs1),
-		       .rs2  (f_rs2)
-		       );
+      .insn (f2_insn),
+      .mc   (d_mcontext),
+      .rs1  (f_rs1),
+      .rs2  (f_rs2)
+   );
    assign f_valid_o = f2_valid & ~f_stalled;
 
    // Early RVC decode, if enabled
-   wire [31:0] f2_decoded_insn;
-   rv32c_comb #(`CFG) rvc (.d(f2_insn), .q(f2_decoded_insn));
-   wire [31:0] f2_insn_final = EARLY_RVC ? f2_decoded_insn : f2_insn;
+   wire [31:0] f2_insn_final;
+   rv32c_comb #(`CFG, .enabled(WITH_RVC && EARLY_RVC))
+   rvc (.d(f2_insn), .q(f2_insn_final));
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
@@ -279,7 +296,7 @@ module fetch #(`CONFIG)
 	  ibus_a_q     <= RESET_PC & PC_MASK;
 	  d_valid_i    <= 1'b0;
 	  d_pred_taken <= 1'b0;
-	  d_insn       <= 32'bx;
+	  d_insn       <= INVALID_INSN;
 	  d_mcontext.m <= CTX_MACHINE;
 	  d_mcontext.u <= CTX_MAX_USER;
 	  pref_valid   <= 1'b0;
@@ -295,7 +312,7 @@ module fetch #(`CONFIG)
 	       ibus_a_q		<= restart_pc & PC_MASK;
 	       d_valid_i	<= 1'b0;
 	       d_pred_taken	<= 1'b0;
-	       d_insn		<= 32'bx;
+	       d_insn		<= INVALID_INSN;
 	       d_mcontext       <= restart_mcontext;
 	       pref_valid	<= 1'b0;
 	       pref_16		<= 16'bx;
@@ -313,18 +330,18 @@ module fetch #(`CONFIG)
 
 	       if (~f_stalled)
 		 begin
-		    d_valid_i	    <= f2_valid;
+		    d_valid_i	 <= f2_valid;
 
 		    // Should this really be here for !f2_valid?
-		    d_pred_taken    <= f2_valid & br_take;
+		    d_pred_taken <= f2_valid & br_take;
 
 		    // If f2_valid == 0, this is only a partial
 		    // instruction fetch.
 		    if (f2_valid) begin
-		       d_insn       <= f2_insn_final;
-		       d_pc	    <= f2_pc;
-		       d_insn_16    <= f2_is_16;
-		       f2_pc	    <= next_pc;
+		       d_insn	 <= f2_insn_final;
+		       d_pc	 <= f2_pc;
+		       d_insn_16 <= f2_is_16;
+		       f2_pc	 <= next_pc;
 		    end
 		 end
 	    end

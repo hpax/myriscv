@@ -356,6 +356,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    wire	       d_insn_pred_taken;
    wire	[31:0] d_insn_pc;
    wire	       f_valid_o;
+   d_pred_t    d_pred;
    regnum_t    f_rs1;
    regnum_t    f_rs2;
 
@@ -383,7 +384,9 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .d_pred_taken	(d_insn_pred_taken),
      .d_pc		(d_insn_pc),
      .d_mcontext        (d_mcontext),
-     .d_insn_16		(d_insn_16)
+     .d_insn_16		(d_insn_16),
+
+     .d_pred            (d_pred)
      );
 
    // Decode unit (D stage)
@@ -408,7 +411,9 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .d_killed		(d_killed),
      .d_valid_o		(d_valid_o),
      .d_busy		(d_busy),
-     .d_op		(d_op)
+     .d_op		(d_op),
+
+     .d_pred            (d_pred)
      );
 
    // Interrupt latching

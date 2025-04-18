@@ -273,6 +273,18 @@ typedef struct packed {
    cbo_op_t    op;
 } cbo_t;
 
+// Information forwarded from the D to F2 stages to
+// allow AUIPC/LUI -> JALR prediction
+typedef struct packed {
+   logic  [4:0] rnum;
+   logic [31:0] imm;
+} d_pred_t;
+
+// What d_insn is set to either after decoding an invalid RVC instruction
+// or before the first d_valid_i assertion after reset or a pipeline kill.
+// This must be selected so d_pred will not contain invalid information.
+const logic [31:0] INVALID_INSN = { 27'bx, 5'b11111 };
+
 endpackage
 
 `endif
