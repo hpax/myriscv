@@ -230,23 +230,25 @@ module decode_comb #(`CONFIG)
 
 	  // CUSTOM0 is CUSTOM1 as OP_IMM is to OP
 	  CUSTOM0, CUSTOM1: begin
-	     op.itype           = INSN_XALU;
-	     op.rs1_valid	= 1'b1;
-	     op.rs2_valid	= i[5];
-	     op.rd_e		= 1'b1;
-	     op.imm             = i_imm;
+	     logic [4:0] altcontext;
+	     
+	     op.itype 	  = INSN_XALU;
+	     op.rs1_valid = 1'b1;
+	     op.rs2_valid = i[5];
+	     op.rd_e 	  = 1'b1;
+	     op.imm 	  = i_imm;
 
-	     // .sm .xu and .ux actually can support any ALU operation
-	     // with funct3 == 0 EXCEPT MUL
+	     altcontext   = op.mcontext.u;
+	     if (op.rs2_valid & i[31])
+	       altcontext = i[29:25] & CTX_MASK;
+	     
 	     unique casez (op.funct3)
-	       3'b000: begin	// .xu
-		  op.rs1.c  = op.mcontext.u;
+	       3'b0?0: begin	// .xu, .xc
+		  		// funct3 == 010 not currently used
+		  op.rs1.c  = altcontext;
 	       end
-	       3'b001: begin	// .ux
-		  op.rd.c   = op.mcontext.u;
-	       end
-	       3'b011: begin	// .sm - switch to machine mode
-		  op.rd.c   = CTX_MACHINE;
+	       3'b0?1: begin	// .ux, .cx, .su, .sc
+		  op.rd.c   = altcontext;
 	       end
 	       default: begin
 		  // Nothing special here
@@ -461,12 +463,16 @@ module decode_srcregs #(`CONFIG)
 	5'b???_11: begin		// 32-bit instruction
 	   rs1.r = insn[19:15];
 	   rs2.r = insn[24:20];
-	   unique case ({insn[14:12], insn[6:0]})
-	     { 3'b000, CUSTOM0 },
-	     { 3'b000, CUSTOM1 }: begin
-		rs1.c = mc.u;	// .xu instruction
+	   unique casez ({insn[31], insn[14:12], insn[6:0]})
+	     { 1'b?, 3'b000, CUSTOM0 },
+	     { 1'b0, 3'b000, CUSTOM1 }: begin
+		rs1.c = mc.u;			// .xu instruction
 	     end
-	     // .ux and .sm don't have to be considered, because
+	     { 1'b1, 3'b000, CUSTOM1 }: begin
+		rs1.c = insn[29:25] & CTX_MASK; // .xc instruction
+	     end
+
+	     // .ux, .cx, .su and .sc don't have to be considered, because
 	     // rd is not begin decoded here.
 	     default: begin
 		// Default contexts

@@ -57,7 +57,8 @@ module regfile
    reg [31:0] rs2_dq;
 
    // Combinatorial clearing on input if zero_init is not available
-   wire	      rs1_null = !zero_init & rs1_zero;
+   // Not needed as rs1_valid is squished in the decode stage
+   wire	      rs1_null = 1'b0; // !zero_init & rs1_zero;
    wire	      rs2_null = !zero_init & rs2_zero;
 
    assign rs1_data = rs1_null ? 'b0 : rs1_dq;

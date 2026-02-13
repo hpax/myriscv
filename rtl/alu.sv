@@ -34,12 +34,6 @@ module alu_decode #(`CONFIG)
 	ctl.cond  = cond_t'(op.funct3);
 	ctl.bcop  = {op.rs2.r[4], op.rs2.r[1:0]};
 
-	// "Extended add" opcodes (.ux, .xu, .js etc)
-	if (itype == INSN_XALU && !funct3[2]) begin
-	   itype  = INSN_ALU;
-	   funct3 = ALU_ADD;
-	end
-
 	unique case (itype)
 	  INSN_BR: begin
 	     // A branch is an SET as far as the ALU is
@@ -182,6 +176,15 @@ module alu_decode #(`CONFIG)
 
 	  INSN_XALU: begin
 	     unique casez (funct3)
+	       3'b0??: begin
+		  if (!STRICT_UNDEFINED ||
+		      (funct3[1:0] != 2'b10 &&
+		       (!op.rs2.valid || funct7[6] || !funct7[4:0]))) begin
+		     ctl.unit 	= ALUSRC_ADD;
+		     ctl.invert = op.rs2.valid & funct7[5];
+		  end
+	       end
+
 	       3'b101: begin		// extr*
 		  if (WITH_extr) begin
 		     ctl.unit	      = ALUSRC_SHIFT;

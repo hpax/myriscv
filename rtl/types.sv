@@ -260,18 +260,20 @@ typedef struct packed {
 } rng_bus_t;
 
 // Cache block operation types
-typedef enum logic [1:0] {
-   CBO_INVAL = 2'b00,
-   CBO_CLEAN = 2'b01,
-   CBO_FLUSH = 2'b10,
-   CBO_ZERO  = 2'b11,		// Encoded as 00100 in the ISA
-   CBO_X     = 2'bxx
-} cbo_op_t;
-
 typedef struct packed {
-   logic       valid;
-   cbo_op_t    op;
+   logic wb;			// Write back this cache line
+   logic invd;			// Invalidate this cache line
 } cbo_t;
+
+const cbo_t CBO_NONE  = 2'b00;
+const cbo_t CBO_INVAL = 2'b01;
+const cbo_t CBO_CLEAN = 2'b10;
+const cbo_t CBO_FLUSH = 2'b11;
+const cbo_t CBO_X     = 2'bxx;
+
+function automatic logic cbo_valid(cbo_t cbo);
+   cbo_valid = cbo != CBO_NONE;
+endfunction
 
 // Information forwarded from the D to F2 stages to
 // allow AUIPC/LUI -> JALR prediction

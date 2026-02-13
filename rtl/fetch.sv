@@ -298,7 +298,7 @@ module fetch #(`CONFIG)
 	  d_pred_taken <= 1'b0;
 	  d_insn       <= INVALID_INSN;
 	  d_mcontext.m <= CTX_MACHINE;
-	  d_mcontext.u <= CTX_MAX_USER;
+	  d_mcontext.u <= CTX_MIN_USER;
 	  pref_valid   <= 1'b0;
 	  pref_16      <= 16'bx;
 	  ibus_valid_q <= 1'b0; // Data not ready yet

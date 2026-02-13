@@ -26,8 +26,11 @@ parameter bit WITH_Zkr		= 1'b1; // seed CSR (needs external bit source)
 parameter bit WITH_Zalrsc	= 1'b1; // LR/SC instructions
 parameter bit WITH_Ziccrse	= 1'b1; // LR/SC guarantee forward progress
 parameter bit WITH_indcsr	= 1'b0; // Indirect CSR access
+parameter bit WITH_regcsr       = 1'b1; // Register file CSR access
 parameter bit WITH_waitfor      = 1'b1; // waitfor CSR
 parameter bit WITH_mstatus	= 1'b0; // mstatus CSR as a window into CIE
+parameter bit WITH_sys_context  = 1'b1; // sys_context CSR
+parameter bit WITH_ncontexts	= 1'b0; // ncontexts CSR
 
 parameter bit STRICT_UNDEFINED	= 1'b0; // Strict opcode checking
 parameter bit TRAP_BADINSN	= 1'b1;
@@ -134,11 +137,12 @@ parameter logic [31:0] INVALID_DATA	= 32'h0000_0000;
 
 // Number of supported register contexts; min 2, max 32
 // In the future, more than one system context may be supported,
-// e.g. NMI and debug mode. That will reduce CTX_MAX_USER.
+// e.g. NMI and debug mode. That will increase CTX_MIN_USER,
+// and thus the number of available context.
 parameter int CONTEXTS		      = 8;
 parameter logic [4:0] CTX_MASK        = (1'b1 << $clog2(CONTEXTS)) - 1'b1;
-parameter logic [4:0] CTX_MACHINE     = CONTEXTS - 1'b1;
-parameter logic [4:0] CTX_MAX_USER    = CTX_MACHINE - 1'b1;
+parameter logic [4:0] CTX_MACHINE     = 5'd0;
+parameter logic [4:0] CTX_MIN_USER    = 5'd1;
 parameter logic [4:0] CTX_X           = 5'bx & CTX_MASK;
 
 // These are not currently implemented and must not be set
@@ -149,3 +153,8 @@ parameter bit WITH_Zaamo        = 1'b0; // AMO instructions
 // ram_base and ram_base_bits... need to figure out how to do that correctly
 // in all cases...
 parameter logic [31:0] PC_MASK	= (addr_mask(tcm_base,tcm_size_bits)|addr_mask(ram_base,ram_size_bits)) & ~(WITH_RVC ? 2'b01 : 2'b11);
+
+// Set this bit if and only if the register file implementation guarantees
+// that a read of register x0 (in any context) will return zero.
+// This register is never written.
+parameter bit REGFILE_ZERO_INIT = 1'b1;

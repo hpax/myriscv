@@ -71,8 +71,7 @@ module ldst (
      if (~rst_n) begin
 	dbus_valid_q	  <= 1'b0;
 	memop_st_q	  <= 1'b0;
-	memop_cbo_q.valid <= 1'b0;
-	memop_cbo_q.op    <= CBO_X;
+	memop_cbo         <= CBO_NONE;
      end else if (clken) begin
 	dbus_valid_q     <= dbus_valid;
 	if (~busy) begin
@@ -84,7 +83,7 @@ module ldst (
    logic		      misaligned_comb;
    reg			      misaligned_q;
    always @(*)
-     if (memop_cbo.valid)
+     if (cbo_valid(memop_cbo))
        misaligned_comb = 1'b0;	// Never split a CBO
      else
        unique case (size)

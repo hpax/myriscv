@@ -12,7 +12,7 @@ Standard options:
 	C	- Compression operations (= Zca Zcb)
 	Zkr	- Entropy source (*)
 	Zkt	- Data-independent execution latency
-	Zalrsc	- LR/SC instructions for atomicity
+	Zalrsc	- LR/SC instructions for atomicity (*)
 	Zicbom	- Cache block management operations
 	Ziccif	- Aligned instruction fetches are atomic
 	Zicclsm	- Unaligned memory accesses
@@ -23,10 +23,11 @@ Standard options:
 	Zmmul	- Integer multiplication
 	Ztso	- Total store ordering (implicit in a uniprocessor)
 
-	* = see below for non-standard or configurable behavior
+	* = see below for non-standard, implementation-specific,
+	    or configurable behavior
 
 
-Private extensions:
+Private instruction set extensions:
 
 	The Zicbom instructions (cbo.*):
 		The cbo.* instructions allow a memory offset to be
@@ -68,7 +69,7 @@ Private extensions:
 			funct7[6]/instr[31] = 1
 
 		Shift right complement sign -
-		        srcs(i)
+			srcs(i)
 			Same encoding as sra(i) with
 			funct7[6]/instr[31] = 1
 
@@ -139,6 +140,9 @@ Private extensions:
 		should be accessed via x0..x31. This can also be seen as
 		rs2 = register number, funct7 = 1011111.
 
+		XXX: this support may be discontinued if a CSR
+		register file is motivated.
+
 	Without STRICT_UNDEFINED:
 		Additional RVC encoding:
 			c.ecall	- opcode 0x8002
@@ -202,6 +206,9 @@ Non-standard or system-specific behaviors:
 		LR/SC instructions (lr.b, lr.h, lr.bu, lr.hu, sc.b,
 		sc.h) are supported by setting funct3 to the same
 		value as the equivalent load or store instruction.
+
+		There is currently no support for LR/SC to I/O or to
+		prevent DMA to external memory.
 
 	WITH_Zkr:
 		Enable the Zkr random number generator architecture
@@ -273,6 +280,7 @@ Nonstandard CSR numbers:
 	0x7f1		(reserved)
 	0x7f2		CIE
 	0x7f3		WAITFOR
+	0x7f4		SYS_CONTEXT
 	0xbe1-0xbff	Used for indirect CSR access (x1-x31)
 
 System architecture:
@@ -293,36 +301,57 @@ Register contexts:
 	of a "forced large" register file by providing multiple
 	register contexts (register banks.)
 
-	One register context (machine context) is used for
+	One register context (machine context, context 0) is used for
 	interrupts/exceptions; the CPU will automatically switch to
 	this context, and return when executing MEPC.
 
-	There are no scratch register CSRs as they are no longer needed.
+	There are no scratch register CSRs; however, software can
+	reserve register contexts for scratch if needed.
 
-	The "user_context" CSR contains the current user
-	context; the operating system can set this to quickly switch
+	The "user_context" CSR contains the current user context; the
+	operating system can set this to quickly switch
 	tasks. user_context is *not* changed when going to machine
-	context.
+	context or when transferring to a specific context with the
+	.sc instructions (which are intended primarity for switching
+	to machine context.) The user context CSR is writable.
+
+	The optional "sys_context" CSR (WITH_sys_context) contains the
+	currently executing context. This is set to on interrupts,
+	exceptions or when using the .sc instructions (see below); it
+	is set to user_context when the mret instruction is executed.
+	It is a readonly CSR if enabled; the underlying register
+	always exists.
 
 	The following special instructions are provided that provide
-	access across register contexts. They have immediate (CUSTOM0)
-	and register (CUSTOM1) forms. They are executed as if they
-	were ALU (OP-IMM/OP) instructions with funct3 == 000 (add); in
-	the register form they take the same funct7 as the OP opcodes,
-	*except MUL* (funct7 == 0000001). Thus, "add.xu" here really
-	means "add.xu, addi.xu, sub.xu, ...".
+	access across register contexts. CUSTOM1 is used for register
+	forms; if funct7 == 0000000 then also have immediate (CUSTOM0)
+	forms.
 
-		add.xu	- funct3 == 000
-			  rs1 is forced to the user context.
+		add.xu	- funct3 == 000, funct7 == 0000000
+		sub.xu	- funct3 == 000, funct7 == 0100000
+		  	  rs1 is forced to the user context.
 
-		add.ux	- funct3 == 001
+		add.ux	- funct3 == 001, funct7 == 0000000
+		sub.ux	- funct3 == 001, funct7 == 0100000
 			  rd is forced to the user context.
 
-		add.sm	- funct3 == 011
-			  rd is forced to machine context, and the
-			  CPU switches to machine context before
-			  executing the next instruction. mepc or any
-			  of the other machine status registers
+		add.xc	- funct3 == 000, funct7 == 10ccccc 
+		sub.xc	- funct3 == 000, funct7 == 11ccccc 
+		  	  rs1 is forced to the context in insn[29:25].
+
+		add.cx	- funct3 == 001, funct7 == 10ccccc 
+		sub.cx	- funct3 == 001, funct7 == 11ccccc
+		  	  rd is forced to the context in insn[29:25].
+
+		add.su	- funct3 == 011, funct7 == 0000000
+		sub.su	- funct3 == 011, funct7 == 0100000
+		add.sc	- funct3 == 011, funct7 == 10ccccc
+		sub.sc  - funct3 == 011, funct7 == 11ccccc
+			  rd is forced to user context (.su) or the
+			  context in insn[29:25] (.sc), and the CPU
+			  switches to that context before executing
+			  the next instruction. user_context, mepc or
+			  any of the other machine status registers
 			  are unaffected.
 
 			  This is intended to be used to implement
@@ -335,6 +364,10 @@ Register contexts:
 			  If writing a register is not wanted, just
 			  set rd == x0.
 
+			  The assembler implements the suffix .sm as
+			  an alias for .sc with context 0
+			  (CTX_MACHINE).
+
 	The total number of contexts is set with the parameter
 	CONTEXTS. This must include the machine context and at least
 	one user context (so minimum 2); the maximum number of
@@ -342,27 +375,28 @@ Register contexts:
 	number of contexts does not have to be a power of 2, although
 	in an FPGA it makes sense to make it support the *addressable*
 	size of the RAM arrays (specifically, with separate 32-bit
-	read and write ports.) Each context requires 1K byte
-	(8 kbit) of memory.
+	read and write ports.) Each context requires 256 32-bit words
+	= 1K bytes = 8K bits of register file memory.
 
-	For example, for Altera FPGAs, these values (or multiples
-	thereof) make sense in terms of using various types of memory
-	arrays efficiently:
+	See implementation.txt.
 
-	    MLAB:	 2 contexts
-	    M4K:	 4 contexts
-	    M9K, M10K:	 8 contexts
-	    M18K, M20K:	16 contexts
+	User contexts range from CTX_MIN_USER to CONTEXTS-1.
+	Currently the only system context is machine context
+	(CTX_MACHINE == 0), but in the future it might be possible to
+	configure additional contexts like NMI and/or debug
+	contexts. Thus, if CONTEXTS == 8, in the current
+	implementation user contexts range from 1 to 7.
 
-	Note that since two read ports are required, most FPGAs will
-	need two copies of the register file, so two RAM arrays will
-	be used, regardless of if the RAM arrays are fully occupied or
-	not.
+	After reset, user_context contains CTX_MIN_USER.
 
-	User contexts range from 0 to CONTEXTS-n-1), where n is the
-	number of system contexts. Currently the only system context
-	is machine context, but in the future it might be possible to
-	configure additional contexts like NMI and/or debug contexts.
+	The optional readonly ncontexts CSR (WITH_ncontexts) contains
+	CTX_MIN_USER in bits [7:0] and CONTEXTS-1 in bits [15:8],
+	representing the valid range of user contexts.
+
+	The .xc/.cx instructions make it possible to reserve one or
+	more contexts for use as scratch registers, if so would be
+	necessary or useful.
+
 
 Interrupts:
 
@@ -436,8 +470,8 @@ Reset condition:
 
 	pc			= RESET_PC (default 0x10)
 	mtvec			= MTVEC_RESET (default 0x80)
-	user_context		= max value for the user context
-	executing context	= machine context
+	user_context		= CTX_MIN_USER
+	executing context	= 0 (machine context)
 	cie			= 0
 
 	Values are CPU parameters and their default values unless otherwise

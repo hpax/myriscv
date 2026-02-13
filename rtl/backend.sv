@@ -141,6 +141,11 @@ module backend #(`CONFIG)
    reg [CONTEXTS-1:0] cie = 'b0; // Context interrupt enable
    wire [31:0] csrval_misa = WITH_misa ? MISA : 32'b0;
 
+   wire [31:0] csrval_ncontexts;
+   assign csrval_ncontexts[31:16] = 16'b0;
+   assign csrval_ncontexts[15:8]  = WITH_ncontexts ? CONTEXTS-1 : 8'b0;
+   assign csrval_ncontexts[7:0]   = WITH_ncontexts ? CTX_MIN_USER : 8'b0;
+
    //
    // Pipeline control signals and pipeline stage input/output
    //
@@ -189,7 +194,7 @@ module backend #(`CONFIG)
        m_din <= e_dout;
 
    // Register file
-   regfile #(.contexts(CONTEXTS)) regs
+   regfile #(.contexts(CONTEXTS), .zero_init(REGFILE_ZERO_INIT)) regs
      (
      .rst_n    ( rst_n ),
      .clk      ( clk ),
@@ -252,6 +257,8 @@ module backend #(`CONFIG)
 	       e_src2 <= m_dout;	// Data comes from the M stage
 	     else if (d_rs2_w)
 	       e_src2 <= w_dout;	// Data comes from the W stage
+	     else if (!REGFILE_ZERO_INIT && !d_op.rs2.r)
+	       e_src2 <= 32'b0;		// Data comes from register x0
 	     else
 	       e_src2 <= d_rs2_data;	// Data comes from the register file
 	  end
@@ -384,6 +391,7 @@ module backend #(`CONFIG)
    // should be conditioned on e_accept & e_op.csrr.
    always @(*) begin
       e_rng_rstb = 1'b0;
+      e_csr_rval = 32'b0;
 
       unique case (ncsr)
 	CSR_MTVEC:
@@ -422,6 +430,10 @@ module backend #(`CONFIG)
 	  WITH_mstatus & cie[e_op.mcontext.u], 1'b0 };
 	CSR_USER_CONTEXT:
 	  e_csr_rval  = e_op.mcontext.u;
+	CSR_SYS_CONTEXT:
+	  e_csr_rval  = WITH_sys_context ? e_op.mcontext.m : 32'b0;
+	CSR_NCONTEXTS:
+	  e_csr_rval  = csrval_ncontexts;
 	CSR_CIE:
 	  e_csr_rval = cie;
 	CSR_SEED: begin
@@ -561,10 +573,10 @@ module backend #(`CONFIG)
 		e_trap			= e_aluctl.unit == ALUSRC_ERR;
 		e_mcause		= MCAUSE_BADINSN;
 	     end else if (e_op.funct3 == 3'b011) begin
-		// .sm		-> switch to machine mode
+		// .su, .sc	-> switch to context
 		e_jump			= !e_op.pred_taken;
 		e_jump_pc		= e_succ_pc;
-		e_restart_mcontext.m	= CTX_MACHINE;
+		e_restart_mcontext.m	= e_op.rd.c;
 	     end
 	     INSN_JAL: begin	// JAL, JALR
 		e_jump	  = !e_op.pred_taken;
@@ -651,7 +663,7 @@ module backend #(`CONFIG)
 	m_xcpt		   <= 1'b0;
 	m_restartpc	   <= RESET_PC & PC_MASK;
 	m_restart_mcontext.m <= CTX_MACHINE;
-	m_restart_mcontext.u <= CTX_MAX_USER;
+	m_restart_mcontext.u <= CTX_MIN_USER;
 	m_mepc		   <= 32'bx;
 	m_mcause	   <= 32'bx;
      end else if (clken & ~(m_fencei & (m_busy | m_valid_o))) begin
@@ -760,15 +772,15 @@ module backend #(`CONFIG)
 
    always @(*) begin
       ldst_valid = e_accept & insn_mem(e_op.itype);
-      ldst_cbo   = { 1'b0, CBO_X };
+      ldst_cbo   = CBO_NONE;
 
       if (ldst_valid && e_op.itype == INSN_CBO) begin
 	 unique casez (e_op.rs2.r)
-	   5'b00000: ldst_cbo = { 1'b1, CBO_INVAL };
-	   5'b00001: ldst_cbo = { 1'b1, CBO_CLEAN };
-	   5'b00010: ldst_cbo = { 1'b1, CBO_FLUSH };
-	   5'b00100: ldst_cbo = { 1'b1, CBO_ZERO  };
-	   default:  ldst_cbo = { 1'b0, CBO_X };
+	   5'b00000: ldst_cbo = CBO_INVAL;
+	   5'b00001: ldst_cbo = CBO_CLEAN;
+	   5'b00010: ldst_cbo = CBO_FLUSH;
+	   // 5'b00100: ldst_cbo = CBO_ZERO;
+	   default:  ldst_cbo = CBO_X;
 	 endcase
 	 ldst_valid = ldst_cbo.valid;
       end
