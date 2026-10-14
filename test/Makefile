@@ -1,3 +1,4 @@
+# Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 #!/usr/bin/make -R -r
 
 CROSS	= $(realpath ../tools/gnu/bin)/riscv32-hpa-elf-
@@ -18,9 +19,11 @@ LDFLAGS	= $(CFLAGS) -Wl,-T,test.ld -Wl,-Map=$*.map
 
 TESTDIRS = $(wildcard tests/*)
 TESTS    = $(foreach d,$(TESTDIRS),$(d)/$(notdir $(d)).elf)
+TESTNAMES = $(notdir $(TESTDIRS))
 gendeps = -MD -MF $(@D)/.$(@F).d -MT $@
 
 TESTHEX  = $(TESTS:.elf=.tcm.hex) $(TESTS:.elf=.mem.hex)
+BENCH    = bench
 
 tcm_start  := 0
 tcm_size   := 16384
@@ -28,12 +31,32 @@ mem_start  := 0x40000000
 
 .SECONDARY:
 
+.PHONY: all tests bench run $(TESTNAMES) $(addprefix run-,$(TESTNAMES))
+
 LIB = lib/libtest.a
 LIBCSRC = $(wildcard lib/*.c)
 LIBSSRC = $(wildcard lib/*.S)
 LIBOBJS = $(LIBCSRC:.c=.o) $(LIBSSRC:.S=.o)
 
-all: $(TESTHEX)
+all: tests
+
+tests: $(TESTHEX)
+
+bench:
+	$(MAKE) -C $(BENCH)
+
+run: $(addprefix run-,$(TESTNAMES))
+
+define test-rule
+$(1): tests/$(1)/$(1).tcm.hex tests/$(1)/$(1).mem.hex
+
+run-$(1): $(1)
+	$(MAKE) -C $(BENCH) run TEST=$(1) \
+		TCM_INIT_FILE=$(abspath tests/$(1)/$(1).tcm.hex) \
+		MEM_INIT_FILE=$(abspath tests/$(1)/$(1).mem.hex)
+endef
+
+$(foreach test,$(TESTNAMES),$(eval $(call test-rule,$(test))))
 
 %.hex: %.bin
 	$(HEXDUMP) -v -e '"" 8/4 "%08x " "\n"' $< > $@
@@ -63,8 +86,9 @@ $(LIB): $(LIBOBJS)
 clean:
 	find . $(patsubst %,-name '*%' -o,.hex .bin .elf .o .s .d .a) -false \
 		| xargs -rt rm -f
+	$(MAKE) -C $(BENCH) clean
 
-tests.d:
+tests.d: $(TESTDIRS)
 	( for d in $(TESTDIRS); do \
 		e="$$d/$$(basename $$d).elf" ; \
 		echo -n "OBJS_$$e =" ; \

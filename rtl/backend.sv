@@ -782,7 +782,7 @@ module backend #(`CONFIG)
 	   // 5'b00100: ldst_cbo = CBO_ZERO;
 	   default:  ldst_cbo = CBO_X;
 	 endcase
-	 ldst_valid = ldst_cbo.valid;
+	 ldst_valid = cbo_valid(ldst_cbo);
       end
    end
 

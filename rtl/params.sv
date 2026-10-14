@@ -109,9 +109,6 @@ parameter bit	     FORWARD_MUL	= 1'b1;
 // pseudo-32-bit instruction.
 parameter bit	     FUSE_CNOP		= 1'b0;
 
-// Source file for TCM memory content
-parameter string     TCM_INIT_FILE = "";
-
 //
 // The base addresses and the size bits do not need to agree,
 // however, the address reported to the output bus is always

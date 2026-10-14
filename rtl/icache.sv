@@ -13,8 +13,8 @@
 //
 module icache
   #(
-   parameter addr_bits = 25, // RAM address size
-   parameter car_bit = addr_bits,
+   parameter ram_bits = 25, // RAM address size
+   parameter car_bit = ram_bits,
    parameter line_bits = 2,  // Only one supported right now
    parameter row_bits = 10   // = 2^12 bytes = 4K
 )
@@ -107,6 +107,7 @@ module icache
    reg [tag_bits-1:0] cvalid_tag;
    reg [row_bits-1:0] cvalid_row;
    reg		      imem_inval_q;
+   reg		      imem_inval_geo_q;
    reg		      have_data_q;
    reg		      cvalid_we;
    reg		      cvalid_set;
@@ -116,13 +117,13 @@ module icache
    always @(posedge clk) begin
       cvalid_tag   <= imem_tag;
       cvalid_row   <= imem_row;
-      imem_invt_q  <= imem_inval;	// Invalidate on tag match
-      imem_igeo_q  <= imem_inval_geo;	// Invalidate geographically
+      imem_inval_q     <= imem_inval;	// Invalidate on tag match
+      imem_inval_geo_q <= imem_inval_geo;	// Invalidate geographically
       have_data_q  <= have_data;
    end
 
    always @(*) begin
-      cvalid_we  = have_data_q | imem_igeo_q |
+      cvalid_we  = have_data_q | imem_inval_geo_q |
 		   (imem_inval_q & (cvalid_tag == imem_tag_cmp));
       cvalid_set = have_data_q;
    end

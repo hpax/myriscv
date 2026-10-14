@@ -39,6 +39,13 @@ module extmem
    reg			mem_valid_q;
    assign mem_ready = mem_valid_q & ~busy;
 
+   initial begin : init_mem
+      string init_file;
+
+      if ($value$plusargs("mem_init=%s", init_file))
+	$readmemh(init_file, mem);
+   end
+
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
 	busy	  <= 1'b0;

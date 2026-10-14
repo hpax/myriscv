@@ -38,9 +38,11 @@ module tcm #(`CONFIG)
    localparam		 nwords = 1 << (tcm_size_bits-2);
    reg [3:0][7:0]	 mem[0:nwords-1];
 
-   initial begin
-     if (TCM_INIT_FILE != "")
-       $readmemh({TCM_INIT_FILE}, mem);
+   initial begin : init_mem
+     string init_file;
+
+     if ($value$plusargs("tcm_init=%s", init_file))
+       $readmemh(init_file, mem);
    end
 
    // XXX: clken on the reads breaks something; figure that out

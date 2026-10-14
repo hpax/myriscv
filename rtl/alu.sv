@@ -138,9 +138,8 @@ module alu_decode #(`CONFIG)
 		  if (WITH_setext || !funct7[1:0]) begin
 		     // bits 1:0 in funct7 can be used to obtain the
 		     // other possible condition codes
-		     ctl.cond[2] = ~funct7[1];
-		     ctl.cond[1] =  funct3[0];
-		     ctl.cond[0] =  funct7[0];
+		     ctl.cond = riscv::cond_t'({~funct7[1],
+						 funct3[0], funct7[0]});
 		     ctl.unit	 = ALUSRC_SET;
 		  end
 	       end
@@ -179,9 +178,9 @@ module alu_decode #(`CONFIG)
 	       3'b0??: begin
 		  if (!STRICT_UNDEFINED ||
 		      (funct3[1:0] != 2'b10 &&
-		       (!op.rs2.valid || funct7[6] || !funct7[4:0]))) begin
+		       (!op.rs2_valid || funct7[6] || !funct7[4:0]))) begin
 		     ctl.unit 	= ALUSRC_ADD;
-		     ctl.invert = op.rs2.valid & funct7[5];
+		     ctl.invert = op.rs2_valid & funct7[5];
 		  end
 	       end
 

@@ -1,3 +1,4 @@
+// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 //
 // Very simple test bench
 //
@@ -59,8 +60,7 @@ module test #(
    //
    myriscv #(
      .NUM_IRQS		(NUM_IRQS),
-     .ram_size_bits	(ram_size_bits),
-     .TCM_INIT_FILE	("/home/hpa/hwhacks/riscv/myriscv/test/test2.hex")
+     .ram_size_bits	(ram_size_bits)
    ) cpu (
      .rst_n	( rst_n ),
      .clk	( clk ),
@@ -116,7 +116,6 @@ module test #(
    // I/O
 
    assign irq = 'b0;
-   assign io_rdata = io_addr;
 
    reg io_sleeping = 1'b0;
    reg [7:0] io_sleep_ctr;
@@ -168,7 +167,7 @@ module test #(
 	   end
 
 	   if (io_wrq && io_wbe[0] && io_addr == 32'hffff_fff8)
-	     $stop;		// Simulation break
+	     $finish;
 	end
      end
 endmodule

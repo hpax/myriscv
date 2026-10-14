@@ -71,7 +71,7 @@ module ldst (
      if (~rst_n) begin
 	dbus_valid_q	  <= 1'b0;
 	memop_st_q	  <= 1'b0;
-	memop_cbo         <= CBO_NONE;
+	memop_cbo_q       <= CBO_NONE;
      end else if (clken) begin
 	dbus_valid_q     <= dbus_valid;
 	if (~busy) begin

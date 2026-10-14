@@ -227,13 +227,13 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 
 	      dbus_ready_cbo <= 1'b0;
 
-	      if (~mem_valid & dbus_mem_sel & ~dbus_cbo.valid) begin
+	      if (~mem_valid & dbus_mem_sel & ~cbo_valid(dbus_cbo)) begin
 		 // Note: CBO requests don't go to actual memory; they
 		 // will go to the dcache when implemented.
 		 mem_addr    <= dbus_a[ram_size_bits-1:0];
 		 mem_is_dbus <= 1'b1;
-		 mem_valid   <= ~dbus_cbo.valid;
-		 dbus_ready_cbo <= dbus_cbo.valid;
+		 mem_valid   <= ~cbo_valid(dbus_cbo);
+		 dbus_ready_cbo <= cbo_valid(dbus_cbo);
 		 mem_wrq     <= dbus_wrq;
 		 mem_wdata   <= dbus_wdata;
 		 mem_wbe     <= dbus_wbe;
@@ -266,7 +266,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      end else if (clken) begin
 	dbus_ready_io <= 1'b0;
 
-	if (~io_valid & dbus_io_sel & ~dbus_cbo.valid) begin
+	if (~io_valid & dbus_io_sel & ~cbo_valid(dbus_cbo)) begin
 	   io_addr       <= dbus_a;
 	   io_wdata      <= dbus_wdata;
 	   io_valid      <= 1'b1;

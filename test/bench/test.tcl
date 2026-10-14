@@ -1,3 +1,4 @@
+# Default Questa waveform setup for the generic test bench.
 add log -r *
 add wave /cpu/rst_n
 add wave /cpu/clk
