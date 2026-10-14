@@ -15,7 +15,7 @@ QUARTUS_DIR := ../quartus
 IP_SRCS     := $(addprefix $(QUARTUS_DIR)/, \
 	altmult18.v altmult14.v altmult18x15x2.v)
 RTL_SRCS    := $(addprefix $(RTL_DIR)/, \
-	riscv.sv types.sv mult.sv shifter.sv alu.sv)
+	riscv.sv types.sv mult.sv shifter.sv alu.sv rv32c.sv)
 UNITDIRS    := $(sort $(foreach vector,$(wildcard */tests/*.in), \
 	$(word 1,$(subst /, ,$(vector)))))
 
@@ -41,7 +41,7 @@ run-$(1): build-$(1)
 	for input in $(1)/tests/*.in; do \
 		output="$$$${input%.in}.out"; \
 		echo "Running $$$$input"; \
-		$(VSIM) -c -modelsimini $(1)/modelsim.ini -t 1ns \
+		$(VSIM) -c -modelsimini $(1)/modelsim.ini -t 1ps \
 			-L altera_ver -L lpm_ver -L sgate_ver -L altera_mf_ver \
 			-L altera_lnsim_ver -L cycloneive_ver -L work bench \
 			-ginfile=$$$$(realpath "$$$$input") \
