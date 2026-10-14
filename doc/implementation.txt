@@ -1,0 +1,50 @@
+Details for implementation in specific FPGA techologies.
+
+Register file:
+
+	The register file memory used requires three independently
+	addressable ports: two read and one write. Most FPGAs
+	implement this as two copies of memory with one read and one
+	write port each (usually called "simple dual port mode"), so
+	two RAM arrays will be used, regardless of if the RAM arrays
+	are fully occupied or not.
+
+	For example, for Altera FPGAs, these values (or multiples
+	thereof, not necessarily by powers of 2) for CONTEXTS make
+	sense in terms of using various types of memory arrays
+	efficiently:
+
+		Block type	32-bit words	   CONTEXTS
+		M4K (x2)		128		 4
+		M9K, M10K (x2):		256		 8
+		M18K, M20K (x2):	512		16
+
+	Two clock cycles are available for register file read accesses:
+	the address is available late in the F2 stage and used
+	early in the E stage.
+
+	For register file writes, the address is available early, the
+	write/byte enables moderately early, and the data late in the
+	M stage.
+
+	Due to forwarding, a read and write to the same address at the
+	same time is a don't care. However, if the hardware is subject
+	to metastability issues for such an access, then additional
+	logic needs to be added to suppress the read.
+
+	-> XXX: can the forwarding network be simplified if internal
+		bypass is supported?
+
+	Register x0 (in any context) is never written; if the
+	implementation can guarantee an uninitialized register will
+	always be read as zero, enable the parameter REGFILE_ZERO_INIT
+	to reduce logic.
+
+	The current implementation requires write byte enables for the
+	register file. They are only used for the low half of
+	unaligned load operations and is guaranteed to be immediately
+	followed by a write to the same address with the complementary
+	byte enables, during which time a read to that location is a
+	don't care; thus if write enables are not supported a holding
+	register can be used for the low (up to) 24 bits and the write
+	deferred until the data is complete.
