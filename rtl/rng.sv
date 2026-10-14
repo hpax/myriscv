@@ -18,6 +18,10 @@
 // rng_full is asserted if the entropy counter is full; this can be used
 // to power-manage the entropy source if needed.
 //
+// The output data (rdata) is valid ONLY in the cycle following rstb assertion;
+// if it needs to be latched then that needs to happen in logic external to this
+// module.
+//
 `include "myriscv.vh"
 
 // Primitive polynomials of degrees 0-32.
@@ -38,7 +42,7 @@ function automatic logic [32:0] primitive_polynomial(input degree);
       8: poly =  9'b100101011;
       9: poly = 10'b1000101101;
      10: poly = 11'b10111100101;
-     11: poly = 12'b100101110011;		
+     11: poly = 12'b100101110011;
      12: poly = 13'b1011101000101;
      13: poly = 14'b10011101001111;
      14: poly = 15'b100101001100101;
@@ -122,9 +126,9 @@ module rng_zkr #(`CONFIG)
       rdata = 32'b0;
 
       if (WITH_Zkr) begin
+	 rdata[31:30] = status;
 	 if (!Zkr_secure || status == RNG_ES16)
 	   rdata[Zkr_bits-1:0] = acc[Zkr_bits-1:0];
-	 rdata[31:30]  = status;
       end
    end
 endmodule

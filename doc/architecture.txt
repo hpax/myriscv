@@ -241,7 +241,8 @@ Non-standard or system-specific behaviors:
 		non-perfect bit source.
 
 		rng_incr should be pulsed when enough data bits have
-		been received to count as one bit of true entropy.
+		been received to count as one bit of true
+		entropy.
 
 		The parameter Zkr_secure (default 1) controls if the
 		value currently in the entropy accumulator should be
@@ -266,12 +267,9 @@ Non-standard or system-specific behaviors:
 		to any value between 1 and 30 bits by setting the
 		Zkr_bits parameter; the seed CSR will contain that
 		number of data bits; the "ES16" status is signalled
-		after that many received bits.
-
-		The length and polynomial of the entropy buffer can
-		be set by the Zkr_acc_bits and Zkr_acc_poly parameters;
-		however, note that the unit asserts ES16 after 16 valid
-		rng_incr strobes regardless of the Zkr_acc_bits length.
+		after that many received bits. A suitable LSFR
+		polynomial is automatically chosen based on the
+		Zkr_bits configuration.
 
 
 Nonstandard CSR numbers:
@@ -374,11 +372,10 @@ Register contexts:
 	contexts is 32 as the CIE CSR (see below) is a bitmask. The
 	number of contexts does not have to be a power of 2, although
 	in an FPGA it makes sense to make it support the *addressable*
-	size of the RAM arrays (specifically, with separate 32-bit
-	read and write ports.) Each context requires 256 32-bit words
-	= 1K bytes = 8K bits of register file memory.
+	size of the RAM arrays.
 
-	See implementation.txt.
+	See implementation.txt for details of the hardware resource
+	costs of contexts.
 
 	User contexts range from CTX_MIN_USER to CONTEXTS-1.
 	Currently the only system context is machine context
