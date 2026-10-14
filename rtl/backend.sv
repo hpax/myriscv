@@ -166,7 +166,7 @@ module backend #(`CONFIG)
 
    // E-stage pipeline synchronization signals
    logic	   e_trap;
-   logic	   e_jump;
+   logic	   e_restart;		// Pipeline restart needed
    logic	   e_really_busy;	// Uninterruptably busy
    logic	   e_waiting;		// Waiting for an event
    logic	   e_irq_ok;		// May take interrupts
@@ -510,6 +510,10 @@ module backend #(`CONFIG)
    //
    // Traps have the highest priority, followed by interrupts.
    //
+   // e_pc is the expected PC for the current instruction. If this is
+   // different from e_op.pc for an instruction that would otherwise
+   // be accepted this constitutes a branch mispredict.
+   //
    // e_succ_pc is always the subsequent instruction.
    // It is used to set the target register of JAL(R).
    //
@@ -518,19 +522,21 @@ module backend #(`CONFIG)
    // e_next_pc reflects jumps, but not traps or interrupts;
    // it is used to set mepc after an interrupt.
    //
-   // e_restartpc should always reflect the latest instruction
-   // executed, in case *another* pipeline stage pulls kill.
+   // e_restartpc is the next instruction to be executed, regardless
+   // of if a pipeline restart is required or not.
    //
    // For dead cycles, all are equivalent to the current PC.
    // e_succ_pc and e_next_pc are *not* masked, in order to detect
    // the BADPC trap.
    //
+   reg   [31:0] e_pc;
    logic [31:0] e_restartpc;
    mcontext_t   e_restart_mcontext;
    logic [31:0]	e_succ_pc;
    logic [31:0]	e_next_pc;
    logic [31:0]	e_jump_pc;
 
+   logic	e_mispredict;
    logic	e_fencei;
 
    // Values to write to these register IF they are to be written...
@@ -540,23 +546,29 @@ module backend #(`CONFIG)
    wire		do_vector_interrupts = IRQ_VECTOR_BITS && (mtvec & 1);
    wire [31:0]	mtvec_addr = { mtvec[31:2], 2'b00 } & PC_MASK;
 
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n)
+       e_pc <= RESET_PC & PC_MASK;
+     else if (e_accept)
+       e_pc <= e_restartpc;
+
    always @(*)
      begin
-	e_trap      = 1'b0;
-	e_jump      = 1'b0;	// Mispredicted jump or branch
-	e_fencei    = 1'b0;
-	e_succ_pc   = successor_pc(e_op, e_accept);
-	e_jump_pc   = 32'bx;
-	e_next_pc   = e_succ_pc;
-	e_restartpc = e_succ_pc;
+	e_fencei	   = 1'b0;
+	e_succ_pc	   = successor_pc(e_op, e_accept);
+	e_next_pc	   = e_succ_pc;
+	e_restart	   = 1'b0;
+	e_mispredict       = 1'b0;
+	e_restartpc	   = e_succ_pc;
 	e_restart_mcontext = e_op.mcontext;
-	e_mepc      = 32'bx;
-	e_mcause    = 32'bx;
+	e_trap		   = 1'b0;
+	e_mepc		   = 32'bx;
+	e_mcause	   = 32'bx;
 
 	if (e_accept) begin
 	   unique case (e_op.itype)
 	     INSN_ERR: if (TRAP_BADINSN) begin
-		e_trap      = 1'b1;
+		e_trap   = 1'b1;
 		e_mcause = MCAUSE_BADINSN;
 	     end
 	     INSN_ECALL: begin
@@ -574,32 +586,31 @@ module backend #(`CONFIG)
 		e_mcause		= MCAUSE_BADINSN;
 	     end else if (e_op.funct3 == 3'b011) begin
 		// .su, .sc	-> switch to context
-		e_jump			= !e_op.pred_taken;
-		e_jump_pc		= e_succ_pc;
-		e_restart_mcontext.m	= e_op.rd.c;
+		// Could check if the context changes
+		e_restart	     = 1'b1;
+		e_restart_mcontext.m = e_op.rd.c;
 	     end
 	     INSN_JAL: begin	// JAL, JALR
-		e_jump	  = !e_op.pred_taken;
-		e_jump_pc = e_addr;
+		e_next_pc = e_addr;
 	     end
 	     INSN_BR: begin
-		e_jump	  = e_cmp_out != e_op.pred_taken;
-		e_jump_pc = e_op.imm;
+		if (e_cmp_out)
+		  e_next_pc = e_op.imm;
 	     end
 	     INSN_MRET: begin
-		e_jump               = !e_op.pred_taken;
-		e_jump_pc            = mepc;
+		// Could test if the context changes
+		e_restart            = 1'b1;
+		e_next_pc            = mepc;
 		e_restart_mcontext.m = e_restart_mcontext.u;
 	     end
 	     INSN_FENCEI: begin
-		e_fencei	     = 1'b1;
+		e_fencei             = 1'b1;
 	     end
 	     default: begin
 		if (csrw_user_context) begin
-		   // Force a mispredict kill when writing the user context;
+		   // Force a restart when writing the user context;
 		   // the actual CSR write is done by the restart.
-		   e_jump    = !e_op.pred_taken;
-		   e_jump_pc = e_succ_pc;
+		   e_restart            = 1'b1;
 		   e_restart_mcontext.u = tocontext(e_csr_wval);
 		   e_restart_mcontext.m = CTX_MACHINE;
 		end
@@ -607,30 +618,31 @@ module backend #(`CONFIG)
 	     end
 	   endcase
 
-	   // If e_jump is set, a branch was mispredicted...
-	   if (e_jump & !e_op.pred_taken)
-	     e_next_pc = e_jump_pc;
-
 	   // For an invalid PC, unless we are taking another trap...
-	   if (TRAP_BADPC) begin
-	      if (!e_trap && (e_next_pc & ~PC_MASK)) begin
-		 e_trap = 1'b1;
-		 e_mcause = MCAUSE_BADPC;
-	      end
+	   if (TRAP_BADPC && !e_trap && (e_next_pc & ~PC_MASK)) begin
+	      e_trap   = 1'b1;
+	      e_mcause = MCAUSE_BADPC;
 	   end
 
-	   if (e_trap) begin
-	      e_restartpc = mtvec_addr;
+	   // Are we in the wrong place? Branch mispredict!
+	   // In that case suppress any traps, too!
+	   if ((e_pc ^ e_op.pc) & PC_MASK) begin
+	      e_trap               = 1'b0;
+	      e_restart            = 1'b1;
+	      e_restartpc          = e_pc;
+	   end else if (e_trap) begin
+	      e_restart            = 1'b1;
+	      e_restartpc          = mtvec_addr;
 	      e_restart_mcontext.m = CTX_MACHINE;
 	   end else begin
-	      e_restartpc = e_next_pc;
+	      e_restartpc          = e_next_pc;
 	   end
 	end // if (e_accept)
 
 	if (e_trap) begin
-	   e_mepc       = e_op.pc;
+	   e_mepc        = e_op.pc;
 	end else if (e_irq & e_irq_ok) begin
-	   e_restartpc = mtvec_addr;
+	   e_restartpc   = mtvec_addr;
 	   if (do_vector_interrupts)
 	     e_restartpc += e_irq_vector << IRQ_VECTOR_BITS;
 	   e_mepc	 = e_next_pc;
@@ -640,7 +652,7 @@ module backend #(`CONFIG)
 	e_mepc      &= PC_MASK;
 	e_restartpc &= PC_MASK;
 
-	e_kill = e_trap | (e_irq & ~e_really_busy) | e_jump | e_fencei;
+	e_kill = e_restart | (e_irq & ~e_really_busy) | e_fencei;
      end
 
    //
@@ -648,7 +660,7 @@ module backend #(`CONFIG)
    //
    // These are notionally in the M stage, but DO NOT depend on
    // m_valid_i or m_busy; the pipeline will be killed at that point,
-   // and these operations are touching E stage stage not M stage.
+   // and these operations are touching E stage registers not M stage.
    //
    reg	       m_xcpt;		// trap or interrupt
    reg [31:0]  m_mepc;		// epc to be written if m_xcpt

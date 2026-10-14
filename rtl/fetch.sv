@@ -167,7 +167,6 @@ module fetch #(`CONFIG)
    //
    output reg [31:0] d_insn,
    output reg	     d_valid_i,
-   output reg	     d_pred_taken,
    output reg [31:0] d_pc,
    output	     mcontext_t d_mcontext,
    // This flag can be clear for pair of fused 16-bit instructions;
@@ -295,7 +294,6 @@ module fetch #(`CONFIG)
 	  f2_pc        <= RESET_PC & PC_MASK;
 	  ibus_a_q     <= RESET_PC & PC_MASK;
 	  d_valid_i    <= 1'b0;
-	  d_pred_taken <= 1'b0;
 	  d_insn       <= INVALID_INSN;
 	  d_mcontext.m <= CTX_MACHINE;
 	  d_mcontext.u <= CTX_MIN_USER;
@@ -311,7 +309,6 @@ module fetch #(`CONFIG)
 	       f2_pc		<= restart_pc & PC_MASK;
 	       ibus_a_q		<= restart_pc & PC_MASK;
 	       d_valid_i	<= 1'b0;
-	       d_pred_taken	<= 1'b0;
 	       d_insn		<= INVALID_INSN;
 	       d_mcontext       <= restart_mcontext;
 	       pref_valid	<= 1'b0;
@@ -331,9 +328,6 @@ module fetch #(`CONFIG)
 	       if (~f_stalled)
 		 begin
 		    d_valid_i	 <= f2_valid;
-
-		    // Should this really be here for !f2_valid?
-		    d_pred_taken <= f2_valid & br_take;
 
 		    // If f2_valid == 0, this is only a partial
 		    // instruction fetch.

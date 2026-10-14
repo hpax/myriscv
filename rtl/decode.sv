@@ -13,7 +13,6 @@ module decode_comb #(`CONFIG)
   (
    input [31:0]	d_din,		// From fetch stage
    input	d_insn_16,	// 16-bit instruction but not a fused pair!
-   input	d_pred_taken,	// Control transfer predicted taken
    input [31:0]	d_pc,		// PC of instruction
    input mcontext_t d_mcontext,	// Machine context of instruction
 
@@ -73,7 +72,6 @@ module decode_comb #(`CONFIG)
 	op.lrsc       = 1'b0;
 	op.csrw       = 1'b0;
 	op.csrr       = 1'b0;
-	op.pred_taken = d_pred_taken;
 
 	op.funct7     = i[31:25];
 	op.funct3     = i[14:12];
@@ -398,7 +396,6 @@ module decode #(`CONFIG)
 
   input [31:0] d_din,	     // From fetch stage
   input	       d_insn_16,    // 16-bit instruction packet
-  input	       d_pred_taken, // F predicted taken branch
   input [31:0] d_pc,
   input	       mcontext_t d_mcontext,
 
@@ -422,7 +419,7 @@ module decode #(`CONFIG)
 
    // Purely combinatorial decode
    decode_comb #(`CFG) comb (
-     .d_din (d_din), .d_insn_16(d_insn_16), .d_pred_taken(d_pred_taken),
+     .d_din (d_din), .d_insn_16(d_insn_16),
      .d_pc (d_pc & PC_MASK), .d_mcontext(d_mcontext), .op(c_op),
      .d_pred (d_pred)
      );

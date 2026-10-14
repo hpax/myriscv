@@ -353,7 +353,6 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    mcontext_t  d_mcontext;
    wire	       d_insn_16;
    wire	       d_valid_i;
-   wire	       d_insn_pred_taken;
    wire	[31:0] d_insn_pc;
    wire	       f_valid_o;
    d_pred_t    d_pred;
@@ -381,7 +380,6 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 
      .d_valid_i		(d_valid_i),
      .d_insn		(d_insn),
-     .d_pred_taken	(d_insn_pred_taken),
      .d_pc		(d_insn_pc),
      .d_mcontext        (d_mcontext),
      .d_insn_16		(d_insn_16),
@@ -403,7 +401,6 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 
      .d_din		(d_insn),
      .d_insn_16		(d_insn_16),
-     .d_pred_taken	(d_insn_pred_taken),
      .d_pc		(d_insn_pc),
      .d_mcontext	(d_mcontext),
      .d_valid_i		(d_valid_i),

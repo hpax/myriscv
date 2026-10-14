@@ -76,9 +76,6 @@ typedef struct packed {
 
    // Atomic (LR/SC) memory operation
    logic	 lrsc;
-
-   // Jump prediced taken?
-   logic	 pred_taken;
 } decoded_insn_t;
 
 function automatic decoded_insn_t dummy_op(
@@ -110,7 +107,6 @@ function automatic decoded_insn_t dummy_op(
    dummy_op.pc_valid   = pc_valid;
    dummy_op.i16        = i16;
    dummy_op.mcontext   = mcontext;
-   dummy_op.pred_taken = 1'b0;
 endfunction
 
 function automatic decoded_insn_t killed_op;
