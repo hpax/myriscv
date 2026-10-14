@@ -1,0 +1,12 @@
+*/work/
+*/incremental_db/
+*/db/
+*/*.rpt
+*/modelsim.ini
+*/transcript
+*/vsim.wlf
+*/tests/*.out
+*/*.qws
+*/*.qdf
+transcript
+vish_stacktrace.vstf
