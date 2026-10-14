@@ -568,34 +568,36 @@ module backend #(`CONFIG)
 	if (e_accept) begin
 	   unique case (e_op.itype)
 	     INSN_ERR: if (TRAP_BADINSN) begin
-		e_trap   = 1'b1;
-		e_mcause = MCAUSE_BADINSN;
+		e_trap		      = 1'b1;
+		e_mcause              = MCAUSE_BADINSN;
 	     end
 	     INSN_ECALL: begin
 		// ECALL, EBREAK
-		e_trap   = 1'b1;
-		e_mcause = e_op.imm[0] ? MCAUSE_BREAK : MCAUSE_ECALLM;
+		e_trap                = 1'b1;
+		e_mcause              = e_op.imm[0]
+					? MCAUSE_BREAK : MCAUSE_ECALLM;
 	     end
 	     INSN_ALU: if (TRAP_BADALU) begin
-		e_trap	 = e_aluctl.unit == ALUSRC_ERR;
-		e_mcause = MCAUSE_BADINSN;
+		e_trap                = e_aluctl.unit == ALUSRC_ERR;
+		e_mcause              = MCAUSE_BADINSN;
 	     end
 	     INSN_XALU:
 	     if (TRAP_BADALU) begin
-		e_trap			= e_aluctl.unit == ALUSRC_ERR;
-		e_mcause		= MCAUSE_BADINSN;
+		e_trap		      = e_aluctl.unit == ALUSRC_ERR;
+		e_mcause	      = MCAUSE_BADINSN;
 	     end else if (e_op.funct3 == 3'b011) begin
 		// .su, .sc	-> switch to context
 		// Could check if the context changes
+		// XXX: make sure that the rest of the instruction retires!
 		e_restart	     = 1'b1;
 		e_restart_mcontext.m = e_op.rd.c;
 	     end
 	     INSN_JAL: begin	// JAL, JALR
-		e_next_pc = e_addr;
+		e_next_pc	     = e_addr;
 	     end
 	     INSN_BR: begin
 		if (e_cmp_out)
-		  e_next_pc = e_op.imm;
+		  e_next_pc          = e_op.imm;
 	     end
 	     INSN_MRET: begin
 		// Could test if the context changes
@@ -617,6 +619,10 @@ module backend #(`CONFIG)
 		// No control transfer
 	     end
 	   endcase
+
+	   // By specification, bit 0 in jump targets is ignored
+	   // and does not cause a bad PC trap
+	   e_next_pc[0] = 1'b0;
 
 	   // For an invalid PC, unless we are taking another trap...
 	   if (TRAP_BADPC && !e_trap && (e_next_pc & ~PC_MASK)) begin
