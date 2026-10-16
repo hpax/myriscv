@@ -5,4 +5,10 @@ incremental_db/
 output_files/
 simulation/
 *.rpt
+*.rpt.*
 *.qws
+*.log
+*.dse
+dse/
+transcript
+.qsys_edit
