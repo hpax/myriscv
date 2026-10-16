@@ -38,12 +38,15 @@ module tcm #(`CONFIG)
    localparam		 nwords = 1 << (tcm_size_bits-2);
    reg [3:0][7:0]	 mem[0:nwords-1];
 
+ `ifdef MODEL_TECH
+   // Quartus doesn't like init_file begin a parameter here...
    initial begin : init_mem
-     string init_file;
+      string init_file;
 
-     if ($value$plusargs("tcm_init=%s", init_file))
-       $readmemh(init_file, mem);
+      if ($value$plusargs("tcm_init=%s", init_file))
+	$readmemh(init_file, mem);
    end
+ `endif
 
    // XXX: clken on the reads breaks something; figure that out
    // later...
@@ -70,7 +73,7 @@ module tcm #(`CONFIG)
 endmodule
 
 `else
-module tcm
+module tcm #(`CONFIG)
   #(
     parameter	     sizebits = 14	// log2(bytes)
     )
