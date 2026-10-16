@@ -136,4 +136,6 @@ set_global_assignment -name QIP_FILE alt_regfile.qip
 set_global_assignment -name QIP_FILE altmult18.qip
 set_global_assignment -name QIP_FILE altmult14.qip
 set_global_assignment -name QIP_FILE altmult18x15x2.qip
+set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"
+
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
