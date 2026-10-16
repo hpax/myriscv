@@ -146,6 +146,12 @@ extmem_test:
 	jalr (s0)			// Should be uncached
 	jalr (s0)			// Should be cached
 	jalr (s0)			// Should be cached w/o overrun?
+
+	// Test LUI/AUIPC -> JALR forwarding
+	la ra,0x40000000		// Uses LUI
+	jalr (ra)
+	call 0x40000000			// Uses AUIPC
+
 	call _print_hex
 	print_crlf
 

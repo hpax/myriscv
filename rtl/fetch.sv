@@ -115,10 +115,12 @@ module predict_branch #(`CONFIG)
 	       endcase // unique casez (i[15:13])
 	    end
 	    7'b0000010: if (WITH_RVC) begin // RVC quadrant 2 with rs2 = 0
-	       if (PREDICT_JALR && d_usable && i[15:13] == 3'b100) begin
-		  // if rs1 is zero this is not J(AL)R, but it is
-		  // faster to test d_pred.rnum.
-		  take = d_pred.rnum && i[11:7] == d_pred.rnum;
+	       if (PREDICT_JALR && i[15:13] == 3'b100) begin
+		  // if rs1 is zero this is not J(AL)R, but it doesn't
+		  // matter, as it is EBREAK/ECALL which are treated
+		  // as exceptions and thus will always abort
+		  // the pipeline anyway.
+		  take = 1'b1; // && d_usable && i[11:7] == d_pred.rnum;
 		  if (take)
 		    next_pc = d_pred.imm & PC_MASK;
 	       end
@@ -129,7 +131,7 @@ module predict_branch #(`CONFIG)
 	    end
 	    JALR: begin
 	       if (PREDICT_JALR) begin
-		  take = i[19:12] == d_pred.rnum;
+		  take = 1'b1; // d_usable && i[19:12] == d_pred.rnum;
 		  if (take)
 		    next_pc = add_pc(d_pred.imm, i_imm);
 	       end
@@ -206,7 +208,7 @@ module fetch #(`CONFIG)
       .f2_valid     (f2_valid),
       .f2_pc	    (f2_pc),
       .d_pred       (d_pred),
-      .d_usable     (d_usable),
+      .d_usable     (d_valid_i),
       .take	    (br_take),
       .next_pc	    (next_pc)
    );
