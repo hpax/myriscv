@@ -152,6 +152,6 @@ parameter bit WITH_Zaamo        = 1'b0; // AMO instructions
 parameter logic [31:0] PC_MASK	= (addr_mask(tcm_base,tcm_size_bits)|addr_mask(ram_base,ram_size_bits)) & ~(WITH_RVC ? 2'b01 : 2'b11);
 
 // Set this bit if and only if the register file implementation guarantees
-// that a read of register x0 (in any context) will return zero.
-// This register is never written.
+// that a read of register x0 (in any context) will return zero from reset.
+// This register is guaranteed to never be written. See rtl/regfile.sv.
 parameter bit REGFILE_ZERO_INIT = 1'b1;
