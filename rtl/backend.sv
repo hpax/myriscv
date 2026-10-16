@@ -165,20 +165,30 @@ module backend #(`CONFIG)
    logic lrsc_hold;		// Inhibit interrupts (atomic sequence)
 
    // E-stage pipeline synchronization signals
-   logic	   e_trap;
-   logic	   e_restart;		// Pipeline restart needed
+   logic	   e_restart;           // Pipeline restart needed
+   logic	   e_trap;		// Taking a trap
    logic	   e_really_busy;	// Uninterruptably busy
    logic	   e_waiting;		// Waiting for an event
    logic	   e_irq_ok;		// May take interrupts
+   logic	   e_pc_ok;		// e_op.pc == e_pc
 
    assign e_really_busy = 1'b0;
    assign e_busy        = e_waiting | e_really_busy;
    assign e_irq_ok      = cie[e_op.mcontext.m] & ~lrsc_hold & ~e_really_busy;
 
+   // e_op contains an instruction which *could* be accepted.
    // m_kill will not be reflected in e_valid_i because it ends
    // up on the wrong side of a register; this could be fixed,
    // though...
-   wire   e_accept  = e_valid_i & ~e_busy & ~m_kill;
+
+   // e_op contains an instruction which *could* be accepted
+   wire e_acceptable = e_valid_i & ~e_really_busy & ~m_kill;
+
+   // Trigger a branch mispredict restart
+   wire	e_mispredict = e_acceptable & ~e_pc_ok & e_op.pc_valid;
+
+   // Actually perform this instruction
+   wire	e_accept     = e_acceptable & ~e_waiting & e_pc_ok;
 
    // This does not consider m_trap due to a speed path.
    assign e_valid_o = e_accept;
@@ -228,7 +238,7 @@ module backend #(`CONFIG)
    logic [31:0] e_src2;
 
    generate
-      if (EARLY_BYPASS_MUX) begin
+      if (EARLY_BYPASS_MUX) begin : bypass_early
 	always @(negedge rst_n or posedge clk)
 	  if (~rst_n) begin
 	     e_src1 <= 32'bx;
@@ -262,7 +272,7 @@ module backend #(`CONFIG)
 	     else
 	       e_src2 <= d_rs2_data;	// Data comes from the register file
 	  end
-      end else begin
+      end else begin : bypass_late
 	 // Late MUX
 	 reg e_rs1_m;
 	 reg e_rs1_w;
@@ -345,7 +355,7 @@ module backend #(`CONFIG)
    wire	       e_cmp_out;
 
    generate
-      if (ALU_EARLY_DECODE) begin
+      if (ALU_EARLY_DECODE) begin : alu_decode_early
 	 aluctl_t d_aluctl;
 	 alu_decode #(`CFG) alu_decode (.op(d_op), .ctl(d_aluctl));
 	 always @(negedge rst_n or posedge clk)
@@ -353,7 +363,7 @@ module backend #(`CONFIG)
 	     e_aluctl <= 'bx;
 	   else if (e_clken)
 	     e_aluctl <= d_aluctl;
-      end else begin
+      end else begin : alu_decode
 	 alu_decode #(`CFG) alu_decode (.op(e_op), .ctl(e_aluctl));
       end
    endgenerate
@@ -536,7 +546,6 @@ module backend #(`CONFIG)
    logic [31:0]	e_next_pc;
    logic [31:0]	e_jump_pc;
 
-   logic	e_mispredict;
    logic	e_fencei;
 
    // Values to write to these register IF they are to be written...
@@ -549,23 +558,27 @@ module backend #(`CONFIG)
    always @(negedge rst_n or posedge clk)
      if (~rst_n)
        e_pc <= RESET_PC & PC_MASK;
-     else if (e_accept)
+     else if (e_accept & (e_kill | ~e_stall)) // e_kill correct here?
        e_pc <= e_restartpc;
+
+   assign e_pc_ok = e_op.pc == e_pc;
 
    always @(*)
      begin
 	e_fencei	   = 1'b0;
-	e_succ_pc	   = successor_pc(e_op, e_accept);
-	e_next_pc	   = e_succ_pc;
+	e_succ_pc	   = e_pc;
+	e_next_pc	   = e_pc;
+	e_restartpc	   = e_pc;
 	e_restart	   = 1'b0;
-	e_mispredict       = 1'b0;
-	e_restartpc	   = e_succ_pc;
 	e_restart_mcontext = e_op.mcontext;
 	e_trap		   = 1'b0;
 	e_mepc		   = 32'bx;
 	e_mcause	   = 32'bx;
 
 	if (e_accept) begin
+	   e_succ_pc  += e_op.i16 ? 3'd2 : 3'd4;
+	   e_next_pc   = e_succ_pc;
+
 	   unique case (e_op.itype)
 	     INSN_ERR: if (TRAP_BADINSN) begin
 		e_trap		      = 1'b1;
@@ -630,35 +643,28 @@ module backend #(`CONFIG)
 	      e_mcause = MCAUSE_BADPC;
 	   end
 
-	   // Are we in the wrong place? Branch mispredict!
-	   // In that case suppress any traps, too!
-	   if ((e_pc ^ e_op.pc) & PC_MASK) begin
-	      e_trap               = 1'b0;
-	      e_restart            = 1'b1;
-	      e_restartpc          = e_pc;
-	   end else if (e_trap) begin
-	      e_restart            = 1'b1;
+	   if (e_trap) begin
+	      e_mepc               = e_op.pc;
 	      e_restartpc          = mtvec_addr;
 	      e_restart_mcontext.m = CTX_MACHINE;
 	   end else begin
 	      e_restartpc          = e_next_pc;
 	   end
-	end // if (e_accept)
+	end
 
-	if (e_trap) begin
-	   e_mepc        = e_op.pc;
-	end else if (e_irq & e_irq_ok) begin
-	   e_restartpc   = mtvec_addr;
+	if (~e_trap & e_irq & e_irq_ok) begin
+	   e_restartpc    = mtvec_addr;
 	   if (do_vector_interrupts)
 	     e_restartpc += e_irq_vector << IRQ_VECTOR_BITS;
 	   e_mepc	 = e_next_pc;
 	   e_mcause	 = MCAUSE_IRQ | e_irq_vector;
+	   e_restart     = 1'b1;
 	end
 
 	e_mepc      &= PC_MASK;
 	e_restartpc &= PC_MASK;
 
-	e_kill = e_restart | (e_irq & ~e_really_busy) | e_fencei;
+	e_kill = e_restart | e_trap | e_mispredict | e_fencei;
      end
 
    //
@@ -845,7 +851,7 @@ module backend #(`CONFIG)
    assign lrsc_hold = WITH_Zalrsc & WITH_Ziccrse & (lrsc_hold_q | is_lr);
 
    generate
-      if (WITH_Zalrsc && WITH_Ziccrse && Ziccrse_bits) begin
+      if (WITH_Zalrsc && WITH_Ziccrse && Ziccrse_bits) begin : zirccrse
 	 reg [Ziccrse_bits-1:0] lrsc_hold_ctr;
 
 	 always @(negedge rst_n or posedge clk)
@@ -859,13 +865,13 @@ module backend #(`CONFIG)
 	   end
 
 	 assign lrsc_clear_hold = &lrsc_hold_ctr;
-      end else begin
+      end else begin : no_zirccrse
 	 assign lrsc_clear_hold = 1'b0;
       end
    endgenerate
 
    generate
-      if (WITH_Zalrsc) begin
+      if (WITH_Zalrsc) begin : zalrsc
 	 always @(negedge rst_n or posedge clk)
 	   if (~rst_n) begin
 	      lrsc_resv     <= 1'b0;
@@ -880,7 +886,7 @@ module backend #(`CONFIG)
 		 lrsc_hold_q <= WITH_Ziccrse;
 	      end
 	   end
-      end else begin
+      end else begin : no_zalrsc
 	 assign lrsc_resv   = 1'b0;
 	 assign lrsc_hold_q = 1'b0;
       end
