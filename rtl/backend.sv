@@ -204,7 +204,7 @@ module backend #(`CONFIG)
        m_din <= e_dout;
 
    // Register file
-   regfile #(.contexts(CONTEXTS), .zero_init(REGFILE_ZERO_INIT)) regs
+   regfile #(`CFG) regs
      (
      .rst_n    ( rst_n ),
      .clk      ( clk ),
