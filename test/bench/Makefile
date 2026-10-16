@@ -2,8 +2,8 @@
 #
 # Build and run the generic SystemVerilog test bench.
 
-QUESTA_BIN ?= /opt/altera/bin
-QUESTA_ENV = env -i HOME="$(HOME)" PATH="$(QUESTA_BIN):/usr/bin:/bin"
+# QUESTA_BIN ?= /opt/altera/bin
+# QUESTA_ENV = env -i HOME="$(HOME)" PATH="$(QUESTA_BIN):/usr/bin:/bin"
 VLIB       = $(QUESTA_ENV) vlib
 VMAP       = $(QUESTA_ENV) vmap
 VLOG       = $(QUESTA_ENV) vlog
@@ -28,21 +28,32 @@ all: $(STAMP)
 $(RTL_DIR)/params.vh: $(RTL_DIR)/params.sv $(RTL_DIR)/params.pl
 	$(MAKE) -C $(RTL_DIR) params.vh
 
+GUI ?= 0
+
+ifeq ($(GUI),1)
+VLOGOPT ?= +acc=prn -allowwriteaccess
+VSIMOPT ?= -nocollapse -do ../bench/test.tcl
+else
+VLOGOPT =
+VSIMOPT = -c -do "run 30 us; quit -f"
+endif
+
 $(STAMP): $(IP_SRCS) $(RTL_SRCS) $(BENCH_SRCS) $(RTL_DIR)/params.vh FORCE
 	-$(QUESTA_ENV) vdel -lib $(WORK) -all
 	$(VLIB) $(WORK)
 	$(VMAP) work $(WORK)
-	$(VLOG) -sv -work work +incdir+$(RTL_DIR) $(IP_SRCS) $(RTL_SRCS) \
+	$(VLOG) -sv $(VLOGOPT) \
+		-work work +incdir+$(RTL_DIR) $(IP_SRCS) $(RTL_SRCS) \
 		$(BENCH_SRCS)
 	touch $@
 
 run: $(STAMP)
-	$(VSIM) -c -t 1ps -L altera_ver -L lpm_ver -L sgate_ver \
+	$(VSIM) -t 1ps -L altera_ver -L lpm_ver -L sgate_ver \
 		-L altera_mf_ver -L altera_lnsim_ver -L cycloneive_ver \
 		-L work test \
 		$(if $(TCM_INIT_FILE),+tcm_init=$(TCM_INIT_FILE)) \
 		$(if $(MEM_INIT_FILE),+mem_init=$(MEM_INIT_FILE)) \
-		-do "run 30 us; quit -f"
+		$(VSIMOPT)
 
 clean:
 	-$(QUESTA_ENV) vdel -lib $(WORK) -all
