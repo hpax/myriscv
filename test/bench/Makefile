@@ -14,7 +14,7 @@ QUARTUS_DIR := ../../quartus
 IP_SRCS := $(addprefix $(QUARTUS_DIR)/, \
 	altmult18.v altmult14.v altmult18x15x2.v)
 RTL_SRCS := $(addprefix $(RTL_DIR)/, \
-	riscv.sv types.sv counter.sv tcm.sv shifter.sv rv32c.sv \
+	riscv.sv types.sv functions.sv counter.sv tcm.sv shifter.sv rv32c.sv \
 	regfile.sv pipeline.sv myriscv.sv mult.sv ldst.sv fetch.sv \
 	backend.sv decode.sv alu.sv rng.sv icache.sv)
 BENCH_SRCS := test.sv extmem.sv

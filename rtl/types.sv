@@ -3,7 +3,7 @@
 
 `include "config.vh"
 
-package my_riscv;
+package myriscv_types;
 
 typedef enum logic [3:0] {
 	INSN_NOP    = 4'b0000,	// No-op instruction (unless decoded as ALU)

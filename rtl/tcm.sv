@@ -41,12 +41,11 @@ module tcm #(`CONFIG)
    // Quartus doesn't like init_file begin a parameter here...
 `ifndef SYNTHESIS
    initial begin : init_tcm
-      string init_file = TCM_INIT_FILE;
-      string plusarg_init_file;
-      if ($value$plusargs("tcm_init=%s", plusarg_init_file))
-	init_file = plusarg_init_file;
+      string init_file;
+      if (!$value$plusargs("tcm_init=%s", init_file))
+	init_file = TCM_INIT_FILE;
       if (init_file != "")
-	$readmemh(TCM_INIT_FILE, mem);
+	$readmemh(init_file, mem);
    end
 `else
    generate

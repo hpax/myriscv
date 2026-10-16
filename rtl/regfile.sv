@@ -78,20 +78,21 @@ module regfile #(`CONFIG)
    //
    // Putting a clken on the read seems to generate a dual-clock
    // memory. Does this need to be fixed?
+   wire [31:0] wr_mask = {{8{rd_wbe[3]}}, {8{rd_wbe[2]}},
+			  {8{rd_wbe[1]}}, {8{rd_wbe[0]}}};
+
    always @(posedge clk) begin
       if (rs_valid) begin
 	 rs1_dq <= r[ix1];
 	 rs2_dq <= r[ix2];
       end
       if (clken & rd_wren) begin
-	 logic [31:0] wr_mask = {{8{rd_wbe[3]}}, {8{rd_wbe[2]}},
-				 {8{rd_wbe[1]}}, {8{rd_wbe[0]}}};
 	 if (rd.r == 5'd0 && |rd_wbe)
 	   $display("ERROR: writing to register %d:0 at t=%0t",
 		    rd.c, $time);
 	 if ($isunknown(rd_data & wr_mask))
 	   $display("ERROR: writing x or z to register %d:%d at t=%0t",
-		    rd.c, rc.r, $time);
+		    rd.c, rd.r, $time);
 	 if (rd_wbe[0]) r[ixd][0] <= rd_data[7:0];
 	 if (rd_wbe[1]) r[ixd][1] <= rd_data[15:8];
 	 if (rd_wbe[2]) r[ixd][2] <= rd_data[23:16];

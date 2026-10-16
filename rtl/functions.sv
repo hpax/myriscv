@@ -1,7 +1,9 @@
 // Compute a mask of all bits that can be set to 1 for the values
 // (base, base + 2^bits], even if base is not aligned
 
-function logic [31:0] addr_mask(input [31:0] base, input int bits);
+package myriscv_functions;
+
+function automatic logic [31:0] addr_mask(input [31:0] base, input int bits);
    logic [31:0] mask;
    logic [31:0]	bmask;
 
@@ -13,3 +15,5 @@ function logic [31:0] addr_mask(input [31:0] base, input int bits);
 
    addr_mask = mask;
 endfunction
+
+endpackage
