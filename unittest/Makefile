@@ -15,7 +15,7 @@ QUARTUS_DIR := ../quartus
 IP_SRCS     := $(addprefix $(QUARTUS_DIR)/, \
 	altmult18.v altmult14.v altmult18x15x2.v)
 RTL_SRCS    := $(addprefix $(RTL_DIR)/, \
-	riscv.sv types.sv mult.sv shifter.sv alu.sv rv32c.sv)
+	riscv.sv types.sv functions.sv mult.sv shifter.sv alu.sv rv32c.sv)
 UNITDIRS    := $(sort $(foreach vector,$(wildcard */tests/*.in), \
 	$(word 1,$(subst /, ,$(vector)))))
 
