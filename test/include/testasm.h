@@ -27,6 +27,14 @@
 	sb \r,%lo(TTY)(zero)
 	.endm
 
+	// Branch to .Lfail unless actual equals the immediate expected value.
+	// Clobbers t0.
+	.macro assert_eq actual:req, expected:req
+	li t0,\expected
+	nop
+	bne \actual,t0,.Lfail
+	.endm
+
 	// Stop the simulation with a given status
 	.macro finish status=TEST_STOP
 1:
