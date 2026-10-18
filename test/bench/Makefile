@@ -35,7 +35,7 @@ VLOGOPT ?= +acc=prn -allowwriteaccess
 VSIMOPT ?= -nocollapse -do ../bench/test.tcl
 else
 VLOGOPT =
-VSIMOPT = -c -do "run 30 us; quit -f"
+VSIMOPT = -c -do "run 100 us; quit -f"
 endif
 
 $(STAMP): $(IP_SRCS) $(RTL_SRCS) $(BENCH_SRCS) $(RTL_DIR)/params.vh FORCE
