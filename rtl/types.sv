@@ -47,6 +47,9 @@ typedef struct packed {
    rcontext_t u;		// Current user context (user_context csr)
 } mcontext_t;
 
+// Return stack position type
+typedef logic [`RET_STACK_MAX_LG2-1:0] retstack_t;
+
 typedef struct packed {
    logic         undead;	// It is an executable instruction
 
@@ -65,6 +68,7 @@ typedef struct packed {
    logic	 pc_valid;	// This PC is meaningful, even if undead=0!
    logic	 i16;		// Compressed (16-bit) instruction
    mcontext_t	 mcontext;	// Machine context
+   retstack_t    retstack;	// Position of return stack for restart
 
    // Sub-opcodes; may be modified from the input instruction
    logic   [2:0] funct3;
@@ -86,27 +90,29 @@ function automatic decoded_insn_t dummy_op(
   input	       i16,
   input	       mcontext_t mcontext
   );
-   dummy_op.undead     = undead;
-   dummy_op.itype      = itype;
-   dummy_op.rd	       = 'bx;
-   dummy_op.rd_e       = 1'b0;
-   dummy_op.rd_m       = 1'b0;
-   dummy_op.rs1        = 'bx;
-   dummy_op.rs1_valid  = 1'b0;
-   dummy_op.rs2        = 'bx;
-   dummy_op.rs2_valid  = 1'b0;
-   dummy_op.imm        = 'bx;
-   dummy_op.funct3     = 'bx;
-   dummy_op.funct7     = 'bx;
+   dummy_op.undead    = undead;
+   dummy_op.itype     = itype;
+   dummy_op.rd	      = 'bx;
+   dummy_op.rd_e      = 1'b0;
+   dummy_op.rd_m      = 1'b0;
+   dummy_op.rs1       = 'bx;
+   dummy_op.rs1_valid = 1'b0;
+   dummy_op.rs2       = 'bx;
+   dummy_op.rs2_valid = 1'b0;
+   dummy_op.imm       = 'bx;
+   dummy_op.funct3    = 'bx;
+   dummy_op.funct7    = 'bx;
 
-   dummy_op.csrr       = 1'b0;
-   dummy_op.csrw       = 1'b0;
-   dummy_op.lrsc       = 1'b0;
+   dummy_op.csrr      = 1'b0;
+   dummy_op.csrw      = 1'b0;
+   dummy_op.lrsc      = 1'b0;
 
-   dummy_op.pc	       = pc;
-   dummy_op.pc_valid   = pc_valid;
-   dummy_op.i16        = i16;
-   dummy_op.mcontext   = mcontext;
+   dummy_op.pc	      = pc;
+   dummy_op.pc_valid  = pc_valid;
+   dummy_op.i16       = i16;
+   dummy_op.mcontext  = mcontext;
+
+   dummy_op.retstack  = 'bx;
 endfunction
 
 function automatic decoded_insn_t killed_op;

@@ -11,13 +11,14 @@
 // Combinatorial decoder
 module decode_comb #(`CONFIG)
   (
-   input [31:0]	d_din,		// From fetch stage
-   input	d_insn_16,	// 16-bit instruction but not a fused pair!
-   input [31:0]	d_pc,		// PC of instruction
-   input mcontext_t d_mcontext,	// Machine context of instruction
+   input [31:0]	d_din,		       // From fetch stage
+   input	d_insn_16,	       // 16-bit instruction but not a fused pair!
+   input [31:0]	d_pc,		       // PC of instruction
+   input	mcontext_t d_mcontext, // Machine context of instruction
+   input retstack_t d_retstack,	       // Return stack ptr for rollbacks
 
-   output decoded_insn_t op,
-   output d_pred_t d_pred
+   output	decoded_insn_t op,
+   output	d_pred_t d_pred
    );
 
    // Expand RV32C instructions if applicable
@@ -50,33 +51,34 @@ module decode_comb #(`CONFIG)
      begin
 	logic can_pred;
 
-	op	      = 'bx;
-	op.i16	      = is_16;
-	op.mcontext   = d_mcontext;
+	op	     = 'bx;
+	op.i16	     = is_16;
+	op.mcontext  = d_mcontext;
+	op.retstack  = d_retstack;
 
-	op.undead     = 1'b1; // It is assumed to be a real instruction
-	op.itype      = INSN_ERR;
-	op.pc	      = d_pc & PC_MASK;
-	op.pc_valid   = 1'b1;
-	op.rd.r       = i[11:7];
-	op.rd.c       = op.mcontext.m;
-	op.rd_e       = 1'b0;
-	op.rd_m       = 1'b0;
-	op.rs1.r      = i[19:15];
-	op.rs1.c      = op.mcontext.m;
-	op.rs1_valid  = 1'b0;
-	op.rs2.r      = i[24:20];
-	op.rs2.c      = op.mcontext.m;
-	op.rs2_valid  = 1'b0;
-	op.imm	      = 'bx;
-	op.lrsc       = 1'b0;
-	op.csrw       = 1'b0;
-	op.csrr       = 1'b0;
+	op.undead    = 1'b1; // It is assumed to be a real instruction
+	op.itype     = INSN_ERR;
+	op.pc	     = d_pc & PC_MASK;
+	op.pc_valid  = 1'b1;
+	op.rd.r      = i[11:7];
+	op.rd.c      = op.mcontext.m;
+	op.rd_e      = 1'b0;
+	op.rd_m      = 1'b0;
+	op.rs1.r     = i[19:15];
+	op.rs1.c     = op.mcontext.m;
+	op.rs1_valid = 1'b0;
+	op.rs2.r     = i[24:20];
+	op.rs2.c     = op.mcontext.m;
+	op.rs2_valid = 1'b0;
+	op.imm	     = 'bx;
+	op.lrsc      = 1'b0;
+	op.csrw      = 1'b0;
+	op.csrr      = 1'b0;
 
-	op.funct7     = i[31:25];
-	op.funct3     = i[14:12];
+	op.funct7    = i[31:25];
+	op.funct3    = i[14:12];
 
-	can_pred      = 1'b0;
+	can_pred     = 1'b0;
 
 	unique case (i[6:0])
 	  LOAD: begin
@@ -395,10 +397,11 @@ module decode #(`CONFIG)
   input	       clk,
   input	       clken,
 
-  input [31:0] d_din,	     // From fetch stage
-  input	       d_insn_16,    // 16-bit instruction packet
+  input [31:0] d_din,	  // From fetch stage
+  input	       d_insn_16, // 16-bit instruction packet
   input [31:0] d_pc,
   input	       mcontext_t d_mcontext,
+  input	       retstack_t d_retstack,
 
   input	       d_valid_i,
   input	       d_stall,
@@ -421,8 +424,8 @@ module decode #(`CONFIG)
    // Purely combinatorial decode
    decode_comb #(`CFG) comb (
      .d_din (d_din), .d_insn_16(d_insn_16),
-     .d_pc (d_pc & PC_MASK), .d_mcontext(d_mcontext), .op(c_op),
-     .d_pred (d_pred)
+     .d_pc (d_pc & PC_MASK), .d_mcontext(d_mcontext), .d_retstack(d_retstack),
+     .op(c_op), .d_pred (d_pred)
      );
 
    // Additional, sequence-dependent

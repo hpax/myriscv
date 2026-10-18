@@ -36,7 +36,7 @@ module backend #(`CONFIG)
 
  // These are ports rather than parameters mainly to benefit simulation;
  // they are expected to be synthesis-time constants when generating logic.
- input [NUM_IRQS:0]	   irq_intable,  // IRQ events can trigger interrupts
+ input [NUM_IRQS:0]	   irq_intable,	 // IRQ events can trigger interrupts
  input [NUM_IRQS:0]	   irq_waitable, // IRQ events can be waited for
 
  input			   e_valid_i,
@@ -44,8 +44,9 @@ module backend #(`CONFIG)
  input			   decoded_insn_t e_op,
  output reg		   e_valid_o,
  output reg		   m_kill,
- output reg [31:0]	   m_restartpc, // Address for the front end after kill
+ output reg [31:0]	   m_restartpc,	 // Address for the front end after kill
  output			   mcontext_t m_restart_mcontext,
+ output			   retstack_t m_restart_retstack,
  output reg		   e_busy,
  input			   d_rs1_e,
  input			   d_rs1_m,
@@ -681,15 +682,16 @@ module backend #(`CONFIG)
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	m_kill		   <= 1'b0;
-	m_fencei	   <= 1'b0;
-	m_trap		   <= 1'b0;
-	m_xcpt		   <= 1'b0;
-	m_restartpc	   <= RESET_PC & PC_MASK;
+	m_kill		     <= 1'b0;
+	m_fencei	     <= 1'b0;
+	m_trap		     <= 1'b0;
+	m_xcpt		     <= 1'b0;
+	m_restartpc	     <= RESET_PC & PC_MASK;
 	m_restart_mcontext.m <= CTX_MACHINE;
 	m_restart_mcontext.u <= CTX_MIN_USER;
-	m_mepc		   <= 32'bx;
-	m_mcause	   <= 32'bx;
+	m_restart_retstack   <= 'bx;
+	m_mepc		     <= 32'bx;
+	m_mcause	     <= 32'bx;
      end else if (clken & ~(m_fencei & (m_busy | m_valid_o))) begin
 	// For FENCE.I, keep asserting kill until the pipeline
 	// is fully drained (the result of the last active instruction
@@ -700,6 +702,8 @@ module backend #(`CONFIG)
 	m_xcpt		   <= e_trap | (e_irq & e_irq_ok);
 	m_restartpc	   <= e_restartpc & PC_MASK;
 	m_restart_mcontext <= e_restart_mcontext;
+	if (e_accept)
+	  m_restart_retstack <= e_op.retstack;
 	m_mepc		   <= e_mepc & PC_MASK;
 	m_mcause	   <= e_mcause;
      end

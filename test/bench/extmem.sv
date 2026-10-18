@@ -39,8 +39,14 @@ module extmem
    reg			mem_valid_q;
    assign mem_ready = mem_valid_q & ~busy;
 
+   // In case x causes logic errors
+   parameter logic [31:0] deadbeef = 32'hdeadbeef;
+
    initial begin : init_mem
       string init_file;
+
+      for (int i = 0; i < (1 << ram_bits); i++)
+	mem[i] = deadbeef;
 
       if ($value$plusargs("mem_init=%s", init_file))
 	$readmemh(init_file, mem);

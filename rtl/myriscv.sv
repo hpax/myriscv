@@ -348,12 +348,14 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    wire	       f_restart;
    wire [31:0] f_restartpc;
    mcontext_t  f_restart_mcontext;
+   retstack_t  f_restart_retstack;
    wire	       f_stall;
    wire [31:0] d_insn;
    mcontext_t  d_mcontext;
    wire	       d_insn_16;
    wire	       d_valid_i;
    wire	[31:0] d_insn_pc;
+   retstack_t  d_retstack;
    wire	       f_valid_o;
    d_pred_t    d_pred;
    regnum_t    f_rs1;
@@ -367,6 +369,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .restart		(f_restart),
      .restart_pc	(f_restartpc),
      .restart_mcontext  (f_restart_mcontext),
+     .restart_retstack  (f_restart_retstack),
      .ibus_a		(ibus_a),
      .ibus_rdata	(ibus_rdata),
      .ibus_valid	(ibus_valid),
@@ -383,6 +386,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .d_pc		(d_insn_pc),
      .d_mcontext        (d_mcontext),
      .d_insn_16		(d_insn_16),
+     .d_retstack        (d_retstack),
 
      .d_pred            (d_pred)
      );
@@ -409,6 +413,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .d_valid_o		(d_valid_o),
      .d_busy		(d_busy),
      .d_op		(d_op),
+     .d_retstack        (d_retstack),
 
      .d_pred            (d_pred)
      );
@@ -457,6 +462,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    wire	       m_kill;
    wire	[31:0] m_restartpc;
    mcontext_t  m_restart_mcontext;
+   retstack_t  m_restart_retstack;
 
    wire [31:0] e_dout;
    wire [31:0] m_din;
@@ -510,6 +516,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .m_kill		(m_kill),
      .m_restartpc	(m_restartpc),
      .m_restart_mcontext (m_restart_mcontext),
+     .m_restart_retstack (m_restart_retstack),
 
      .ctr_time          (ctr_time),
      .ctr_cycle		(ctr_cycle),
@@ -530,6 +537,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 
    assign f_restartpc        = m_restartpc;
    assign f_restart_mcontext = m_restart_mcontext;
+   assign f_restart_retstack = m_restart_retstack;
    assign d_killed           = m_kill;
 
    //

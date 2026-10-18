@@ -101,6 +101,15 @@ parameter bit	     EARLY_BYPASS_MUX	   = 1'b0;
 // Allow prediction of AUIPC+J(AL)R, LUI+J(AL)R or J(AL)R imm(zero)
 parameter bit	     PREDICT_JALR	   = 1'b1;
 
+// Predict returns. The value of this parameter is lg2 of the size
+// of the call/return stack. Set to -1 to disable return prediction
+// entirely. This maximum value of this parameter is defined by
+// RET_STACK_MAX_LG2 as defined in config.vh; that value, however,
+// can be increased without any area penalty.
+//
+// This depends on PREDICT_JALR.
+parameter int        PREDICT_RET	   = 8; // 8 kbit (M8K/M9K)
+
 // Allow cached multiply forwarding for latency
 parameter bit	     FORWARD_MUL	   = 1'b1;
 
