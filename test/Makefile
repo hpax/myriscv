@@ -74,19 +74,23 @@ $(LIB): $(LIBOBJS)
 %.elf: test.ld $(LIB)
 	$(CC) $(LDFLAGS) $(LDFLAGS_$@) -o $@ $(OBJS_$@) $(LIB)
 
-%.o: %.S
+GENINCLUDE = ../rtl/params.h
+../rtl/params.h: ../rtl/params.sv
+	$(MAKE) -C ../rtl
+
+%.o: %.S $(GENINCLUDE)
 	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -c -o $@ $<
 
-%.s: %.S
+%.s: %.S $(GENINCLUDE)
 	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -E -o $@ $<
 
-%.o: %.c
+%.o: %.c $(GENINCLUDE)
 	$(CC) $(CFLAGS) $(CFLAGS_$<) $(gendeps) -c -o $@ $<
 
-%.s: %.c
+%.s: %.c $(GENINCLUDE)
 	$(CC) $(CFLAGS) $(CFLAGS_$<) $(gendeps) -S -o $@ $<
 
-%.i: %.c
+%.i: %.c $(GENINCLUDE)
 	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -E -o $@ $<
 
 clean:

@@ -2,6 +2,7 @@
 #define _TEST_H 1
 
 #include "riscv.h"
+#include "../../rtl/params.h"
 
 /*
  * Test output status codes - all constants directly correspond to the
