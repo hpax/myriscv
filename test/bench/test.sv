@@ -137,6 +137,10 @@ module test #(
 	if (io_valid & ~io_sleeping) begin
 	   logic [3:0][7:0] data;
 	   logic [3:0][7:0] dstr;
+	   logic [7:0]	    chr;
+	   logic	    putc;
+
+	   putc = 1'b0;
 
 	   io_sleep_ctr <= io_sleep - 1'b1;
 	   io_sleeping  <= |io_sleep;
@@ -144,30 +148,56 @@ module test #(
 	   data = io_wrq ? io_wdata : io_rdata;
 	   for (int i = 0; i < 4; i++) begin
 	      dstr[i] = data[3-i];
-	      if (dstr[i] < 8'h20)
-		dstr[i] = 8'h20;
+	      if (dstr[i] < 8'h20 || dstr[i] > 8'h7e)
+		dstr[i] = 8'h2e; // Non-ASCII character; print as .
 	   end
 
 	   if (io_wrq && io_wbe[3] && busaddr == 32'hffff_fffc) begin
-	      logic [7:0] chr;
+	      // Byte address -1 is console output; it prints bytes
+	      // directly to the console without ASCIIfying the output,
+	      // and so can print newline, tab, unicode, etc.
 	      chr = io_wdata[31:24];
+	      putc = 1'b1;
+	   end else if (io_wrq && |io_wbe && busaddr[31:8] == 24'hffff_fe) begin
+	      // Byte address -512 + char:
+	      // Hack to print a single fixed character using only the
+	      // bus address, allowing it to be executed without clobbering
+	      // any registers at all.
+	      logic [7:0] chr;
+	      chr[7:2] = busaddr[7:2];
+	      chr[1]   = |io_wbe[3:2];
+	      chr[0]   = io_wbe[3] | io_wbe[1];
+	      putc     = 1'b1;
+	   end
+
+	   if (putc) begin
 	      if (!need_nl) begin
-		 // Print a timestamp prefix at the beginning of the line
-		 $write("(%d) ", $time/CLOCK);
+		 // Print a console output prefix at the beginning of the line
+		 $write("(%d) >> ", $time/CLOCK);
 	      end
 	      $write("%c", chr);
 	      need_nl = chr != 8'd10;
 	   end else begin
-	      if (need_nl)
-		$display("");
-	      $display("(%d) io: %h %s %b %h \"%s\"",
-		      $time/CLOCK, io_addr, io_wrq ? "w" : "r",
-		      io_wbe, data, dstr);
-	      need_nl = 1'b0;
-	   end
+	      if (need_nl) begin
+		 $display("");
+		 need_nl = 1'b0;
+	      end
 
-	   if (io_wrq && io_wbe[0] && io_addr == 32'hffff_fff8)
-	     $finish;
+	      if (io_wrq && &io_wbe && busaddr == 32'hffff_fff8) begin
+		 // Address -8 is test termination; should be a 4-byte
+		 // write with a status string:
+		 // "PASS" - test passed
+		 // "FAIL" - test failed
+		 // "STOP" - test is not self-checking, no error detected
+		 // "TRAP" - test failed with an unexpected trap
+		 $display("(%d) %s: test terminating", $time/CLOCK, dstr);
+		 $finish;
+	      end else begin
+		 $display("(%d) io: %h %s %b %h \"%s\"",
+			  $time/CLOCK, io_addr, io_wrq ? "w" : "r",
+			  io_wbe, data, dstr);
+	      end
+	   end
 	end
      end
 endmodule

@@ -1,4 +1,4 @@
-#include "asm.h"
+#include "test.h"
 
 icache_size = 4096
 
@@ -81,7 +81,7 @@ unalign_test:
 	sb a0,%lo(TTY)(zero)
 	mv a0,s1
 	jal _print_hex
-	print_crlf
+	crlf
 
 	.option rvc
 
@@ -97,7 +97,7 @@ mult_test:
 	jal _print_hex
 	mv a0,s0
 	jal _print_hex
-	print_crlf
+	crlf
 
 	/* Test without forwarding */
 	la a0,mult_str
@@ -108,7 +108,7 @@ mult_test:
 	jal _print_hex
 	mul a0,s0,s1
 	jal _print_hex
-	print_crlf
+	crlf
 
 	/* Signed multiply test */
 	la a0,mults_str
@@ -120,7 +120,7 @@ mult_test:
 	jal _print_hex
 	mv a0,s0
 	jal _print_hex
-	print_crlf
+	crlf
 
 	/* Mixed multiply test */
 	la a0,multsu_str
@@ -132,7 +132,7 @@ mult_test:
 	jal _print_hex
 	mv a0,s0
 	jal _print_hex
-	print_crlf
+	crlf
 
 	/* Test writing to and running from external memory */
 extmem_test:
@@ -153,7 +153,7 @@ extmem_test:
 	call 0x40000000			// Uses AUIPC
 
 	call _print_hex
-	print_crlf
+	crlf
 
 	/* What does fence.i actually do */
 	fence.i

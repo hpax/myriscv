@@ -1,4 +1,4 @@
-#include "asm.h"
+#include "test.h"
 
 	.section ".text.hot","ax"
 	.globl __start
@@ -13,6 +13,7 @@ __start:
 	bnez a1,1b
 
 2:
+	li a0,TEST_STOP
 	ebreak
 	j 2b
 

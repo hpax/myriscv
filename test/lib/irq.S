@@ -1,4 +1,4 @@
-#include "asm.h"
+#include "test.h"
 
 	.section ".init.irq","ax"
 	.globl _mtvec
@@ -40,20 +40,25 @@ _mtvec:
 	.globl _irq_common
 	.balign 4
 _irq_common:
+	mv s11,a0
 	print "Interrupt/exception triggered!\nmepc   = "
 	csrr a0,mepc
 	call _print_hex
 	print ", mcause = "
 	csrr a0,mcause
+
+	/* If trap is not EBREAK, set exit cause to TRAP */
+	li a1,MCAUSE_BREAK
+	beq a0,a1,1f
+	li s11,TEST_TRAP
+1:
+
 	call _print_hex
-	print_crlf
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	j stop
+	crlf
+
+2:
+	sw s11,%lo(STOP)(zero)
+	j 2b
 
 	.weakref _irq_0, _irq_common
 	.weakref _irq_1, _irq_common

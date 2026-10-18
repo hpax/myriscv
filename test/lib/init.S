@@ -2,6 +2,8 @@
 TTY = -1
 	.globl STOP
 STOP = -8
+	.global TTYCHR
+TTYCHR = -512
 
 	.section ".null","a"
 	.balign 4

@@ -1,4 +1,4 @@
-#include "asm.h"
+#include "test.h"
 
 	.section ".text.hot.print_str","ax"
 	.globl _print_str
@@ -53,12 +53,4 @@ _print_hex:
 	lw a5,16(sp)
 	add sp,sp,16
 
-	ret
-
-	.section ".text.hot.print_crlf","ax"
-	.globl _print_crlf
-	.balign 4
-_print_crlf:
-	li a0,10
-	sw a0,%lo(TTY)(zero)
 	ret

@@ -1,4 +1,4 @@
-#include "asm.h"
+#include "test.h"
 
 	.section ".text.hot.__start","ax"
 	.balign 4

@@ -13,7 +13,7 @@ HEXDUMP	= hexdump
 
 include ../tools/riscv-opts.mk
 
-CFLAGS  = $(riscv_flags) -I./include
+CFLAGS  = $(riscv_flags) -nostdlib -I./include
 SFLAGS  = $(CFLAGS) -D__ASSEMBLY__ -Wa,-ahlsm=$*.lst
 LDFLAGS	= $(CFLAGS) -Wl,-T,test.ld -Wl,-Map=$*.map
 
@@ -77,11 +77,17 @@ $(LIB): $(LIBOBJS)
 %.o: %.S
 	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -c -o $@ $<
 
+%.s: %.S
+	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -E -o $@ $<
+
 %.o: %.c
 	$(CC) $(CFLAGS) $(CFLAGS_$<) $(gendeps) -c -o $@ $<
 
 %.s: %.c
 	$(CC) $(CFLAGS) $(CFLAGS_$<) $(gendeps) -S -o $@ $<
+
+%.i: %.c
+	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -E -o $@ $<
 
 clean:
 	find . $(patsubst %,-name '*%' -o,.hex .bin .elf .o .s .d .a) -false \
@@ -100,5 +106,6 @@ tests.d: $(TESTDIRS)
 	  done ) > $@
 
 -include tests.d
+-include */.*.d
 -include tests/*/*.mk
 -include tests/*/.*.d
