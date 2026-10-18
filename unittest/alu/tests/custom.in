@@ -1,0 +1,13 @@
+; Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
+; Private custom ALU operations. rs2 supplies extract position or width.
+
+; extru/extrs: funct7[4:0] is field width, funct7[5] selects sign extension.
+x 0x08:00000:101 0x12345678 0x00000008 ; extru bits 8..15 = 00000056
+x 0x28:00000:101 0x12345680 0x00000000 ; extrs low byte = ffffff80
+x 0x08:00000:101 0x12345678 0x00000010 ; extru bits 16..23 = 00000034
+
+; zext/sext: rs2 supplies the extension width.
+x 0x00:00000:111 0x12345678 0x00000008 ; zext 8 = 00000078
+x 0x20:00000:111 0x12345680 0x00000008 ; sext 8 = ffffff80
+x 0x00:00000:111 0x12345680 0x00000010 ; zext 16 = 00005680
+x 0x20:00000:111 0x12345680 0x00000010 ; sext 16 = 00005680

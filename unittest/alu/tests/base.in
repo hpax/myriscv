@@ -1,0 +1,23 @@
+; Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
+; Format: type funct7:rs2:funct3 src1 src2
+; Expected result follows each vector in a comment.
+
+; RV32I register arithmetic and comparisons
+a 0x00:00000:000 0x12345678 0x11111111 ; add  = 23456789
+a 0x20:00000:000 0x12345678 0x11111111 ; sub  = 01234567
+a 0x00:00000:010 0xffffffff 0x00000001 ; slt  = 00000001
+a 0x00:00000:010 0x00000001 0xffffffff ; slt  = 00000000
+a 0x00:00000:011 0xffffffff 0x00000001 ; sltu = 00000000
+a 0x00:00000:011 0x00000001 0xffffffff ; sltu = 00000001
+a 0x00:00000:100 0x12345678 0x11111111 ; xor  = 03254769
+a 0x00:00000:110 0x12345678 0x11111111 ; or   = 13355779
+a 0x00:00000:111 0x12345678 0x11111111 ; and  = 10101010
+
+; RV32I immediate arithmetic and comparisons
+ai 0x00:00000:000 0x12345678 0xffffffff ; addi  -1 = 12345677
+ai 0x00:00000:010 0x12345678 0x00000001 ; slti   1 = 00000000
+ai 0x00:00000:010 0xffffffff 0x00000001 ; slti   1 = 00000001
+ai 0x00:00000:011 0xfffffffe 0xffffffff ; sltiu -1 = 00000001
+ai 0x00:00000:100 0x12345678 0xffffffff ; xori  -1 = edcba987
+ai 0x00:00000:110 0x12345600 0x00000055 ; ori   55 = 12345655
+ai 0x00:00000:111 0x12345678 0x000005a5 ; andi 5a5 = 00000420
