@@ -119,7 +119,7 @@ module sh_maskgen
 	unique case ( op.smask )
 	  SMASK_ONE:  q[i] = i == amt;
 	  SMASK_LO:   q[i] = i < amt;
-	  SMASK_HI:   q[i] = ~i < amt;
+	  SMASK_HI:   q[i] = i >= amt;
 	  SMASK_UP:   q[i] = amt && i >= amt;
 	  default:    q[i] = 1'bx;
 	endcase
