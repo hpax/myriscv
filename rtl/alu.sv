@@ -80,8 +80,7 @@ module alu_decode #(`CONFIG)
 		    end
 		    6'b1_0010?: begin	// SEXT.B/H
 		       ctl.unit    = ALUSRC_SHIFT;
-		       ctl.shiftop = SHIFTOP_EXTRS;
-		       ctl.shiftop.wimm = op.rs2.r[0] ? 5'd16 : 5'd8;
+		       ctl.shiftop = op.rs2.r[0] ? SHIFTOP_SEXTH : SHIFTOP_SEXTB;
 		    end
 		    6'b0_?????: begin
 		       ctl.unit = ALUSRC_SHIFT;
