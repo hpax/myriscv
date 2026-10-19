@@ -189,7 +189,7 @@ typedef enum shiftop_t {
 	     SHIFTOP_SRA   = { 5'd0,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_WIMMm1, 2'b10 },
 	     SHIFTOP_SRO   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_ANY,    2'b01 }, // Shift right 1's
 	     SHIFTOP_ROL   = { 5'b0,  SROT_LEFT,  SMPOS_WIMM,  SMASK_LO,   SPOS_ANY,    2'b00 },
-	     SHIFTOP_ROR   = { 5'b0,  SROT_RIGHT, SMPOS_WIMM,  SMASK_HI,   SPOS_ANY,    2'b00 },
+	     SHIFTOP_ROR   = { 5'b0,  SROT_RIGHT, SMPOS_WIMM,  SMASK_LO,   SPOS_ANY,    2'b00 },
 	     SHIFTOP_ZEXTB = { 5'd8,  SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 },
 	     SHIFTOP_ZEXTH = { 5'd16, SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 },
 	     SHIFTOP_SEXTB = { 5'd8,  SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_WIMMm1, 2'b10 },
@@ -210,7 +210,7 @@ const shiftop_t SHIFTOP_SRL   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SP
 const shiftop_t SHIFTOP_SRA   = { 5'd0,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_WIMMm1, 2'b10 };
 const shiftop_t SHIFTOP_SRO   = { 5'bx,  SROT_RIGHT, SMPOS_CNT,   SMASK_HI,   SPOS_ANY,    2'b01 }; // Shift right 1's
 const shiftop_t SHIFTOP_ROL   = { 5'b0,  SROT_LEFT,  SMPOS_WIMM,  SMASK_LO,   SPOS_ANY,    2'b00 };
-const shiftop_t SHIFTOP_ROR   = { 5'b0,  SROT_RIGHT, SMPOS_WIMM,  SMASK_HI,   SPOS_ANY,    2'b00 };
+const shiftop_t SHIFTOP_ROR   = { 5'b0,  SROT_RIGHT, SMPOS_WIMM,  SMASK_LO,   SPOS_ANY,    2'b00 };
 const shiftop_t SHIFTOP_ZEXTB = { 5'd8,  SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 };
 const shiftop_t SHIFTOP_ZEXTH = { 5'd16, SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_ANY,    2'b00 };
 const shiftop_t SHIFTOP_SEXTB = { 5'd8,  SROT_NONE,  SMPOS_WIMM,  SMASK_UP,   SPOS_WIMMm1, 2'b10 };
