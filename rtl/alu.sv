@@ -257,9 +257,10 @@ module bitwise (
    always @(*)
      begin
 	unique case (op)
-	  2'b01: q = src1 ^ src2;
-	  2'b10: q = src1 | src2;
-	  2'b11: q = src1 & src2;
+	  ALU_XOR[1:0]: q   = src1 ^ src2;		// 2'b00
+	  // 2'b01 is SRL/SRA and doesn't go through this module
+	  ALU_OR[1:0]:  q   = src1 | src2;		// 2'b10
+	  ALU_AND[1:0]: q   = src1 & src2;		// 2'b11
 	  default: q = 'bx;
 	endcase // unique case (op)
      end
