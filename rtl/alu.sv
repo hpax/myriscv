@@ -518,7 +518,7 @@ module zicond
    input pol
    );
 
-   assign dst = src1 & {32{pol ^ |src2}};
+   assign dst = src1 & {32{pol ^ ~|src2}};
 endmodule // zicond
 
 //
