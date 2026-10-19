@@ -31,3 +31,42 @@ break:
 	ebreak
 	print "ERROR: fall through after EBREAK\n"
 	finish TEST_FAIL
+
+	.section ".text.hot.__assert_fail","ax"
+	.balign 4
+	.globl __assert_fail
+__assert_fail:
+	mv s0,a0
+	print "Assertion failed: "
+	mv a0,s0
+	call _print_str
+	print " in "
+	mv a0,a1
+	call _print_str
+	print " @ "
+	mv a0,a2
+	call _print_str
+	putc ':'
+	mv a0,a3
+	call _print_dec
+	crlf
+	finish TEST_FAIL
+
+	.section ".text.hot.__asm_assert_fail","ax"
+	.balign 4
+	.globl __asm_assert_fail
+__asm_assert_fail:
+	mv s0,a0
+	print "Assertion failed at pc "
+	mv a0,s0
+	call _print_hex
+	mv a0,a1
+	call _print_str
+	print " @ "
+	mv a0,a2
+	call _print_str
+	putc ':'
+	mv a0,a3
+	call _print_dec
+	crlf
+	finish TEST_FAIL

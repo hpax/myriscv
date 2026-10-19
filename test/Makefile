@@ -13,9 +13,10 @@ HEXDUMP	= hexdump
 
 include ../tools/riscv-opts.mk
 
-CFLAGS  = $(riscv_flags) -nostdlib -I./include
+CFLAGS  = $(riscv_flags) -nostdlib -ffunction-sections -fdata-sections \
+	  -I./include
 SFLAGS  = $(CFLAGS) -D__ASSEMBLY__ -Wa,-ahlsm=$*.lst
-LDFLAGS	= $(CFLAGS) -Wl,-T,test.ld -Wl,-Map=$*.map
+LDFLAGS	= $(CFLAGS) -Wl,-T,test.ld -Wl,-Map=$*.map -Wl,--gc-sections
 
 TESTDIRS = $(wildcard tests/*)
 TESTS    = $(foreach d,$(TESTDIRS),$(d)/$(notdir $(d)).elf)

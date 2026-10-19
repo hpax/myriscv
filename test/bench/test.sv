@@ -163,7 +163,6 @@ module test #(
 	      // Hack to print a single fixed character using only the
 	      // bus address, allowing it to be executed without clobbering
 	      // any registers at all.
-	      logic [7:0] chr;
 	      chr[7:2] = busaddr[7:2];
 	      chr[1]   = |io_wbe[3:2];
 	      chr[0]   = io_wbe[3] | io_wbe[1];

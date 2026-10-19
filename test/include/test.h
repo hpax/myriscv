@@ -45,6 +45,17 @@ static inline __attribute__((noreturn)) void stop(unsigned int status)
     __builtin_unreachable();
 }
 
+
+__attribute__((noreturn)) void
+__assert_fail(const void *what, const void *file,
+	      const void *func, unsigned long line);
+
+#define assert(x)					     \
+    do {						     \
+	if (!__builtin_expect(!!(x),1))			     \
+	    __assert_fail(#x, __FILE__, __func__, __LINE__); \
+    } while (0)
+
 #endif
 
 #endif

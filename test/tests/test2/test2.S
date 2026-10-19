@@ -77,8 +77,7 @@ unalign_test:
 	lw s1,(s0)
 	lw a0,4(s0)
 	jal _print_hex
-	li a0,':
-	sb a0,%lo(TTY)(zero)
+	putc ':'
 	mv a0,s1
 	jal _print_hex
 	crlf
@@ -275,12 +274,8 @@ icache4:
 
 done:
 	/* Done with tests */
-	la a0,done_str
-	jal _print_str
-	ebreak
-	la a0,ebreak_failed_str
-	jal _print_str
-	j stop
+	li a0,TEST_STOP
+	j break
 
 	ret
 

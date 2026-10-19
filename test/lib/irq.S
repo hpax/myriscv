@@ -41,7 +41,7 @@ _mtvec:
 	.balign 4
 _irq_common:
 	mv s11,a0
-	print "Interrupt/exception triggered!\nmepc   = "
+	print "\nInterrupt/exception triggered!\nmepc   = "
 	csrr a0,mepc
 	call _print_hex
 	print ", mcause = "
