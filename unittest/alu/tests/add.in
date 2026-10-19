@@ -1,4 +1,0 @@
-; Format: type funct7:rs2:funct3 src1 src2
-; funct7:rs2:funct3 are binary and optional, or hex with leading 0x
-; src1/src2 are hex
-a 0::0 1 2		; ADD 1,2

@@ -52,7 +52,8 @@ module bench;
    int fin;
    int fout;
    int line;
-   
+   logic [31:0] result;
+
    initial begin
       clk 	  <= 1'b1;
 
@@ -62,7 +63,7 @@ module bench;
       fout         = $fopen(outfile, "w");
       if (!fout) $stop;
 
-      rst_n 	  <= 1'b0;
+      rst_n	  <= 1'b0;
       #10.5 rst_n <= 1'b1;
    end
 
@@ -74,8 +75,15 @@ module bench;
 
       if (!line || m_valid) begin
 	 if (line) begin
+	    bit ok;
 	    #1ps;
-	   $fdisplay(fout, " -> %x %b\n", m_dst, m_cmp_out);
+	   $fwrite(fout, " -> %x %b", m_dst, m_cmp_out);
+	   if ($isunknown(result))
+	     $fdisplay(fout, "");
+	   else if (m_dst == result)
+	     $fdisplay(fout, " PASS");
+	   else
+	     $fdisplay(fout, " FAIL");
 	 end
 
 	 have_insn = 1'b0;
@@ -89,15 +97,18 @@ module bench;
 
 	    line++;
 
-	    e_op = 'bx;
-	    fields = $sscanf(txt, "%s %s %x %x",
-	      itype, opfields, e_src1, e_src2);
+	    e_op   = 'bx;
+	    e_src1 = 'b0;
+	    e_src2 = 'b0;
+	    result = 'bz;
+	    fields = $sscanf(txt, "%s %s %x %x %x",
+	      itype, opfields, e_src1, e_src2, result);
 
 	    if (fields == 1 && itype == "q")
 	      $finish;
-	    
+
 	    if (fields >= 1 && itype != "#" && itype != ";") begin
-	       if (fields != 4)
+	       if (fields < 4)
 		 $fatal(1, "Invalid test vector: %s", txt);
 
 	       first_colon = -1;
@@ -126,7 +137,7 @@ module bench;
 	       e_op.rs1_valid = 1'b1;
 	       e_op.rd.r      = 32'd30;
 	       e_op.rd_e      = 1'b1;
-	       
+
 	       if (itype.getc(1) == "i") begin
 		  e_op.rs2_valid = 1'b0;
 		  itype = {itype.getc(0)};
@@ -139,32 +150,32 @@ module bench;
 		     e_op.rs2.r   = e_src2[4:0];
 		     e_src2[11:5] |= e_op.funct7;
 		     e_op.funct7  = e_src2[11:5];
-		     e_src2 	  = $signed(e_src2[11:0]);
+		     e_src2	  = $signed(e_src2[11:0]);
 		     itype = {itype, "i"};
 		  end
 	       end else if (itype == "m") begin
-		  e_op.itype 	  = INSN_MUL;
+		  e_op.itype	  = INSN_MUL;
 		  e_op.rs2_valid  = 1'b1;
 	       end else if (itype == "j") begin
-		  e_op.itype 	  = INSN_JAL;
+		  e_op.itype	  = INSN_JAL;
 		  e_op.rs1_valid  = 1'b0;
 		  e_op.rs2_valid  = 1'b0;
-		  e_src2 	  = $signed({e_src2[19:1], 1'b0});
+		  e_src2	  = $signed({e_src2[19:1], 1'b0});
 	       end else if (itype == "jr") begin
-		  e_op.itype 	  = INSN_JAL;
+		  e_op.itype	  = INSN_JAL;
 		  e_op.rs2_valid  = 1'b0;
 	       end else if (itype == "b") begin
-		  e_op.itype 	  = INSN_BR;
+		  e_op.itype	  = INSN_BR;
 		  e_op.rs2_valid  = 1'b1;
 		  e_op.rd_e       = 1'b0;
-		  e_src2 	  = $signed({e_src2[12:1], 1'b0});
+		  e_src2	  = $signed({e_src2[12:1], 1'b0});
 	       end else begin
 		  $stop;
 	       end
 
-	       $fwrite("%8d: %-2s %b:%b:%b %x %x -> ",
+	       $fwrite(fout, "%8d: %-2s %b:%b:%b %x %x (%x) ",
 		 line, itype, e_op.funct7, e_op.rs2.r, e_op.funct3,
-		 e_src1, e_src2);
+		 e_src1, e_src2, result);
 
 	       have_insn = 1'b1;
 	    end
@@ -172,7 +183,3 @@ module bench;
       end
    end
 endmodule
-
-      
-	    
-	       
