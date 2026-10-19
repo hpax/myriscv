@@ -369,7 +369,7 @@ module clz #(
 	   clz #(hw) l (.d(dl), .q(ql));
 	   clz #(hw) h (.d(dh), .q(qh));
 
-	   assign q = qh[$clog2(hw)] ? { 1'b1, ql } : { 1'b0, qh };
+	   assign q = qh[$clog2(hw)] ? ql + hw : qh;
 	end
    endgenerate
 endmodule // clz
@@ -398,7 +398,7 @@ module ctz #(
 	   ctz #(hw) l (.d(dl), .q(ql));
 	   ctz #(hw) h (.d(dh), .q(qh));
 
-	   assign q = ql[$clog2(hw)] ? { 1'b1, qh } : { 1'b0, ql };
+	   assign q = ql[$clog2(hw)] ? qh + hw : ql;
 	end
    endgenerate
 endmodule // ctz
