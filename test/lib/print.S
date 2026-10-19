@@ -74,7 +74,7 @@ _print_dec:
 	lw a4,-4(a2)
 	blt a0,a4,.L_skip_leading
 
-	li a1,4			/* Current bit position */
+	li a1,4			/* Current bit value */
 	sll a4,a4,2
 .L_digit_loop:
 	li a5,0x30

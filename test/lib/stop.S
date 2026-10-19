@@ -60,9 +60,9 @@ __asm_assert_fail:
 	print "Assertion failed at pc "
 	mv a0,s0
 	call _print_hex
+	print " @ "
 	mv a0,a1
 	call _print_str
-	print " @ "
 	mv a0,a2
 	call _print_str
 	putc ':'
