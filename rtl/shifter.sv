@@ -95,6 +95,8 @@ endmodule
 
 //
 // Construct the output mask.
+// Note that a 1 here means the output is the "sign" bit
+// and 0 means the output of the rotate array.
 //
 module sh_maskgen
   #(
@@ -115,14 +117,17 @@ module sh_maskgen
 	default:    amt = 'bx;
       endcase
 
-      for (int i = 0; i < width; i++)
-	unique case ( op.smask )
-	  SMASK_ONE:  q[i] = i == amt;
-	  SMASK_LO:   q[i] = i < amt;
-	  SMASK_HI:   q[i] = i >= amt;
-	  SMASK_UP:   q[i] = amt && i >= amt;
-	  default:    q[i] = 1'bx;
-	endcase
+      for (int i = 0; i < width; i++) begin
+	 logic [$clog2(width)-1:0] ii;
+	 ii = i;
+	 unique case ( op.smask )
+	   SMASK_ONE:  q[i] = ii == amt;
+	   SMASK_LO:   q[i] = ii < amt;
+	   SMASK_HI:   q[i] = ii > ~amt;
+	   SMASK_UP:   q[i] = amt && ii >= amt;
+	   default:    q[i] = 1'bx;
+	 endcase
+      end
    end
 endmodule
 
@@ -131,22 +136,28 @@ endmodule
 //
 module sh_signmux
   #(
-    parameter width = 32
+   parameter width = 32,
+   parameter wbits = $clog2(width)
     )
    (
-    input [$clog2(width)-1:0] shamt,
-    input shiftop_t           op,
-    input [width-1:0]	      d,
-    output		      q
+    input [wbits-1:0]	shamt,
+    input shiftop_t	op,
+    input [width-1:0]	d,
+    output logic	q
     );
 
-   localparam		wb = $clog2(width);
+   always_comb begin
+      logic [wbits-1:0] pos;
+      logic   [wbits:0] epos;
 
-   wire [wb-1:0]	offs   = ({wb{op.spos}} & shamt) - 1'b1;
-   wire [wb:0]		swsum  = offs + op.wimm;
-   wire [wb-1:0]	pos    = swsum[wb-1:0] | {wb{op.spos & swsum[wb]}};
+      epos = op.wimm - 1'b1;
+      if (op.spos)
+	epos += shamt;
 
-   assign q = (d[pos] & op.sand) ^ op.sxor;
+      // Saturating addition.
+      pos = epos[wbits-1:0] | {wbits{epos[wbits]}};
+      q = (d[pos] & op.sand) ^ op.sxor;
+   end
 endmodule // sign_mux
 
 //
