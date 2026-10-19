@@ -159,9 +159,10 @@ module decode_comb #(`CONFIG)
 	  end
 
 	  JAL: begin
-	     op.itype     = INSN_JAL;
-	     op.rd_e      = 1'b1;
-	     op.imm       = op.pc + j_imm;
+	     op.itype = INSN_JAL;
+	     op.rd_e  = 1'b1;
+	     op.rs1.r = 5'd0;	// To prevent rs1 from being a constant
+	     op.imm   = op.pc + j_imm;
 	  end
 
 	  OP, OP_IMM: begin
