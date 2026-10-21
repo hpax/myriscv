@@ -68,18 +68,28 @@ _print_dec:
 	sw a5,16(sp)
 
 	la a2,decimal_table+4
-	add a3,a2,9*4-8		/* End of non-unit digit table */
-
 	/* Handle the top digit specially to avoid overflow */
 	lw a4,-4(a2)
-	blt a0,a4,.L_skip_leading
+	add a3,a2,%lo(.L_dt_size-4)	/* End of non-unit digit table */
+
+	bltu a0,a4,.L_skip_leading
 
 	li a1,4			/* Current bit value */
 	sll a4,a4,2
-.L_digit_loop:
+	j .L_do_digit
+
+	.balign 4
+.L_next_digit:
+	lw a4,(a2)
+	add a2,a2,4
+.L_do_normal_digit:
+	li a1,8
+	sll a4,a4,3
+
+.L_do_digit:
 	li a5,0x30
 .L_bit_loop:
-	ble a0,a4,.L_lower
+	bltu a0,a4,.L_lower
 	add a5,a5,a1
 	sub a0,a0,a4
 .L_lower:
@@ -87,22 +97,7 @@ _print_dec:
 	srl a4,a4,1
 	bnez a1,.L_bit_loop
 	putcr a5
-	beq a2,a3,.L_unit
-
-.L_next_digit:
-	lw a4,(a2)
-	add a2,a2,4
-.L_do_digit:
-	li a1,8
-	sll a4,a4,3
-	j .L_digit_loop
-
-	.balign 4
-.L_skip_leading:
-	lw a4,(a2)
-	add a2,a2,4
-	bge a0,a4,.L_do_digit
-	bne a2,a3,.L_skip_leading
+	bne a2,a3,.L_next_digit
 
 .L_unit:
 	add a0,a0,0x30
@@ -117,16 +112,26 @@ _print_dec:
 
 	ret
 
+	.balign 4
+.L_skip_leading:
+	lw a4,(a2)
+	add a2,a2,4
+	bgeu a0,a4,.L_do_normal_digit
+	bne a2,a3,.L_skip_leading
+	j .L_unit
+
 	.section ".rodata.hot.print_dec","a"
 	.balign 4
 decimal_table:
-	.long 10000000000
 	.long  1000000000
 	.long   100000000
 	.long    10000000
 	.long     1000000
+
 	.long      100000
 	.long       10000
 	.long        1000
 	.long	      100
 	.long	       10
+
+.L_dt_size = . - decimal_table
