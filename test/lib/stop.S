@@ -63,10 +63,8 @@ __asm_assert_fail:
 	print " @ "
 	mv a0,a1
 	call _print_str
-	mv a0,a2
-	call _print_str
 	putc ':'
-	mv a0,a3
+	mv a0,a2
 	call _print_dec
 	crlf
 	finish TEST_FAIL
