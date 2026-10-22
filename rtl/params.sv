@@ -31,6 +31,7 @@ parameter bit WITH_waitfor      	   = 1'b1; // waitfor CSR
 parameter bit WITH_mstatus		   = 1'b0; // mstatus CSR as a window into CIE
 parameter bit WITH_sys_context  	   = 1'b1; // sys_context CSR
 parameter bit WITH_ncontexts		   = 1'b0; // ncontexts CSR
+parameter bit WITH_mscratch                = 1'b0; // mscratch CSR
 
 parameter bit STRICT_UNDEFINED		   = 1'b0; // Strict opcode checking
 parameter bit TRAP_BADINSN		   = 1'b1;

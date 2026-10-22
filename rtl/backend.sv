@@ -390,6 +390,11 @@ module backend #(`CONFIG)
      .rdata(e_rng_out), .rstb(e_rng_rstb));
 
    //
+   // mscratch CSR
+   //
+   logic [31:0] csrval_mscratch;
+
+   //
    // CSR read/write logic
    //
    logic [31:0]	e_csr_rval;
@@ -446,7 +451,9 @@ module backend #(`CONFIG)
 	CSR_NCONTEXTS:
 	  e_csr_rval  = csrval_ncontexts;
 	CSR_CIE:
-	  e_csr_rval = cie;
+	  e_csr_rval  = cie;
+	CSR_MSCRATCH:
+	  e_csr_rval  = WITH_mscratch ? csrval_mscratch : 32'b0;
 	CSR_SEED: begin
 	   e_csr_rval = e_rng_out;
 	   e_rng_rstb = e_accept & (e_op.csrr | e_op.csrw);
@@ -464,16 +471,59 @@ module backend #(`CONFIG)
        default: e_csr_wval  = 32'bx;
      endcase
 
-   wire		csrw_mtvec	  = MTVEC_WMASK && e_op.csrw && ncsr == CSR_MTVEC;
-   wire		csrw_mepc	  = e_op.csrw && ncsr == CSR_MEPC;
-   wire		csrw_mcause	  = e_op.csrw && ncsr == CSR_MCAUSE;
-   wire		csrw_mip	  = NUM_IRQS && e_op.csrw && ncsr == CSR_MIP;
-   wire		csrw_mie	  = NUM_IRQS && e_op.csrw && ncsr == CSR_MIE;
-   wire		csrw_mstatus	  = WITH_mstatus && e_op.csrw && ncsr == CSR_MSTATUS;
-   wire		csrw_user_context = e_op.csrw && ncsr == CSR_USER_CONTEXT;
-   wire		csrw_cie	  = NUM_IRQS && e_op.csrw && ncsr == CSR_CIE;
-   wire		csrw_waitfor	  = WITH_waitfor && NUM_IRQS &&
-		e_op.csrw && ncsr == CSR_WAITFOR;
+   logic csrw_mtvec;
+   logic csrw_mepc;
+   logic csrw_mcause;
+   logic csrw_mip;
+   logic csrw_mie;
+   logic csrw_mstatus;
+   logic csrw_user_context;
+   logic csrw_cie;
+   logic csrw_waitfor;
+   logic csrw_mscratch;
+
+   always_comb
+     begin
+        csrw_mtvec        = 1'b0;
+        csrw_mepc         = 1'b0;
+        csrw_mcause       = 1'b0;
+        csrw_mip          = 1'b0;
+        csrw_mie          = 1'b0;
+        csrw_mstatus      = 1'b0;
+        csrw_user_context = 1'b0;
+        csrw_cie          = 1'b0;
+        csrw_waitfor      = 1'b0;
+        csrw_mscratch     = 1'b0;
+
+	if (e_accept & e_op.csrw) begin
+	   unique case (ncsr)
+	     CSR_MTVEC:		csrw_mtvec	  = |MTVEC_WMASK;
+	     CSR_MEPC:          csrw_mepc	  = 1'b1;
+	     CSR_MCAUSE:        csrw_mcause	  = 1'b1;
+	     CSR_MIP:           csrw_mip	  = NUM_IRQS != 0;
+	     CSR_MIE:           csrw_mie	  = NUM_IRQS != 0;
+	     CSR_MSTATUS:       csrw_mstatus	  = WITH_mstatus;
+	     CSR_USER_CONTEXT:  csrw_user_context = 1'b1;
+	     CSR_CIE:		csrw_cie	  = NUM_IRQS != 0;
+	     CSR_WAITFOR:       csrw_waitfor	  = WITH_waitfor && NUM_IRQS;
+	     CSR_MSCRATCH:      csrw_mscratch     = WITH_mscratch;
+	     default: begin end
+	   endcase
+	end
+     end
+
+   //
+   // mscratch register, if implemented; it isn't that useful for
+   // anything other than CSR logic testing given the register context
+   // system, but it *is* useful for that...
+   //
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n)
+       csrval_mscratch <= 'b0;
+     else if (clken)
+       if (csrw_mscratch) begin
+	  csrval_mscratch <= e_csr_wval;
+       end
 
    //
    // Interrupt recognition
