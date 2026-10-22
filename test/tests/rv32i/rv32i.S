@@ -113,8 +113,8 @@ __start:
 	rdcycle a1
 	bltu a1,a0,.Lfail
 #endif
-#if 0 // MYRISCV_WITH_regcsr
-	// XXX: mscratch is not implemented at this time, necessary?
+#if MYRISCV_WITH_regcsr
+	/* The test framework enables WITH_mscratch regardless of default */
 	li a0,0x13579bdf
 	csrrw a1,mscratch,a0
 	csrr a1,mscratch

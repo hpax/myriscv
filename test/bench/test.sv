@@ -60,7 +60,8 @@ module test #(
    //
    myriscv #(
      .NUM_IRQS		(NUM_IRQS),
-     .ram_size_bits	(ram_size_bits)
+     .ram_size_bits	(ram_size_bits),
+     .WITH_mscratch     (1'b1)	// For CSR ISA testing
    ) cpu (
      .rst_n	( rst_n ),
      .clk	( clk ),
