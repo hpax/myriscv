@@ -4,7 +4,7 @@
 
 `include "myriscv.vh"
 
-module pipe_ctl
+module pipe_ctl #(`CONFIG)
 (
   input	     rst_n,
   input	     clk,

@@ -361,7 +361,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    regnum_t    f_rs1;
    regnum_t    f_rs2;
 
-   fetch fetch (
+   fetch #(`CFG) fetch (
      .clk		(clk),
      .clken		(clken),
      .rst_n		(rst_n),
@@ -398,7 +398,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    wire	       d_valid_o;
    wire	       d_busy;
 
-   decode decode (
+   decode #(`CFG) decode (
      .rst_n		(rst_n),
      .clk		(clk),
      .clken		(clken),
@@ -470,12 +470,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    rng_bus_t   rng;
    assign rng = { rng_data, rng_stb, rng_incr, rng_bist, rng_dead };
 
-   backend
-     #(.NUM_IRQS	 ( NUM_IRQS ),
-       .IRQ_BITS	 ( IRQ_BITS ),
-       .ALU_EARLY_DECODE ( ALU_EARLY_DECODE ),
-       .EARLY_BYPASS_MUX ( EARLY_BYPASS_MUX )
-       ) backend (
+   backend #(`CFG) backend (
      .rst_n		(rst_n),
      .clk		(clk),
      .clken		(clken),
@@ -543,7 +538,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    //
    // Pipeline control
    //
-   pipe_ctl pipe_ctl (
+   pipe_ctl #(`CFG) pipe_ctl (
      .rst_n	(rst_n),
      .clk	(clk),
      .clken	(clken),
