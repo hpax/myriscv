@@ -56,15 +56,23 @@ __assert_fail:
 	.balign 4
 	.globl __asm_assert_fail
 __asm_assert_fail:
+	mv s1,t0		/* Expected value */
 	mv s0,a0
 	print "Assertion failed at pc "
 	mv a0,s0
 	call _print_hex
 	print " @ "
-	mv a0,a1
+	mv a0,a1		/* File name */
 	call _print_str
 	putc ':'
-	mv a0,a2
+	mv a0,a2		/* Line */
 	call _print_dec
+	crlf
+	print "Expected "
+	mv a0,s1		/* Expected value */
+	call _print_hex
+	print " actual "
+	mv a0,a3		/* Actual value */
+	call _print_hex
 	crlf
 	finish TEST_FAIL

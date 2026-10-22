@@ -38,6 +38,7 @@
 
 	.subsection 1
 972:
+	mv a3,\actual
 	la a0,970b
 	la a1,971f
 	li a2,\line
