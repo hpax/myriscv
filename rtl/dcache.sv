@@ -363,7 +363,7 @@ module dcache #(`CONFIG)
 	 assign dmem_wrq   = dbus_wrq;
 	 assign dmem_wbe   = dbus_wbe;
 	 assign dbus_rdata = dmem_rdata;
-	 assign dbus_ready = dmem_ready;
+	 assign dbus_ready = dmem_ready | cbo_valid(dbus_cbo);
 	 assign dbus_busy  = dmem_busy;
       end
    endgenerate
