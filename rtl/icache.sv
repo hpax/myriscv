@@ -16,8 +16,8 @@
 module icache
   #(
    `CONFIG,
-   parameter line_bits = 2, // Only one supported right now
-   parameter row_bits = 10  // = 2^12 bytes = 4K
+   parameter int line_bits = 2, // Only one supported right now
+   parameter int row_bits = icache_size_bits - line_bits  // = 2^12 bytes = 4K
 )
    (
    input		     rst_n,

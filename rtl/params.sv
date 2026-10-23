@@ -125,7 +125,7 @@ parameter bit	     FUSE_CNOP		   = 1'b0;
 // the low bits of the CPU address; so if the base is not a
 // multiple of the size the address window will be shifted.
 //
-// It is required that tcm_base 	  <= ram_base < io_base.
+// It is required that tcm_base <= ram_base < io_base.
 // Memory references below tcm_base will pulse the buserr output;
 // this can be used to trap NULL pointer references.
 //
@@ -138,9 +138,13 @@ parameter int	       tcm_size_bits	   = 14;
 parameter logic [31:0] ram_base		   = 32'h4000_0000;
 parameter int	       ram_size_bits	   = 25;
 parameter int          car_bit             = ram_size_bits;
-// Log2 of data-cache capacity in bytes. Cache lines are one 32-bit word.
-parameter int          dcache_size_bits    = 12;
 parameter logic [31:0] io_base		   = 32'h8000_0000;
+
+// Log2 of icache capacity in bytes. Cache lines are one 32-bit word.
+parameter int          icache_size_bits    = 12;
+// Log2 of dcache capacity in bytes. Cache lines are one 32-bit word.
+// Set to 0 to disable the dcache entirely.
+parameter int          dcache_size_bits    = 12;
 
 // What reading from a nonexistent memory spaces returns
 parameter logic [31:0] INVALID_DATA	   = 32'h0000_0000;

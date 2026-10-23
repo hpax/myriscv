@@ -7,7 +7,7 @@
 //
 `include "myriscv.vh"
 
-module dcache
+module dcache_real
   #(`CONFIG,
     parameter int size_bits = 12)
    (
@@ -102,10 +102,6 @@ module dcache
    wire [35:0]          lookup_data =
                          cache_write && cache_write_row == lookup_row ?
                          cache_write_data : data_read;
-   wire                 lookup_current = lookup_valid && dbus_valid &&
-                         lookup_a == dbus_a &&
-                         lookup_wrq == dbus_wrq &&
-                         lookup_cbo == dbus_cbo;
    wire                 lookup_cbo_valid = cbo_valid(lookup_cbo);
    wire                 lookup_write = lookup_wrq && !lookup_cbo_valid;
    wire                 lookup_match = lookup_car ||
@@ -134,7 +130,7 @@ module dcache
       start_writeback = 1'b0;
       start_fill = 1'b0;
 
-      if (lookup_current && state == S_IDLE) begin
+      if (lookup_valid && state == S_IDLE) begin
          if (lookup_cbo_valid) begin
             start_writeback = cbo_match && lookup_data[34] &&
                               (lookup_cbo == CBO_CLEAN ||
@@ -152,9 +148,9 @@ module dcache
       dbus_rdata = state == S_DONE ? done_rdata : lookup_data[31:0];
 
       if (state == S_DONE)
-        dbus_ready = dbus_valid;
+        dbus_ready = 1'b1;
       else if (state == S_IDLE)
-        dbus_ready = lookup_current && !start_writeback && !start_fill &&
+        dbus_ready = lookup_valid && !start_writeback && !start_fill &&
                      (!lookup_cbo_valid ? lookup_match : 1'b1);
       else
         dbus_ready = 1'b0;
@@ -216,7 +212,7 @@ module dcache
 
         case (state)
           S_IDLE:
-            if (lookup_current) begin
+            if (lookup_valid) begin
                if (lookup_cbo_valid) begin
                   if (start_writeback) begin
                      pending <= lookup_cbo == CBO_CLEAN ?
@@ -326,4 +322,49 @@ module dcache
               state <= S_IDLE;
         endcase
      end
+endmodule
+
+module dcache #(`CONFIG)
+   (
+   input		      rst_n,
+   input		      clk,
+   input		      clken,
+
+   input [31:0]		      dbus_a,
+   input [31:0]		      dbus_wdata,
+   input [3:0]		      dbus_wbe,
+   input		      cbo_t dbus_cbo,
+   input		      dbus_valid,
+   input		      dbus_wrq,
+   output [31:0]	      dbus_rdata,
+   output		      dbus_ready,
+   output		      dbus_busy, // Operation in progress, for fence
+
+   output [ram_size_bits-1:0] dmem_a,
+   output [31:0]	      dmem_wdata,
+   output		      dmem_valid,
+   output		      dmem_wrq,
+   output [3:0]		      dmem_wbe,
+   input [31:0]		      dmem_rdata,
+   input		      dmem_ready,
+   input		      dmem_busy
+);
+
+   generate
+      if (dcache_size_bits) begin : dc_real
+	 dcache_real #(`CFG) dc(.*);
+      end else begin : dc_stub
+	 // Null dcache stub (simply passes the dbus through to the dmem bus)
+	 // CBO operations are dropped simply ignored
+
+	 assign dmem_a     = dbus_a[ram_size_bits-1:0];
+	 assign dmem_wdata = dbus_wdata;
+	 assign dmem_valid = dbus_valid & ~cbo_valid(dbus_cbo);
+	 assign dmem_wrq   = dbus_wrq;
+	 assign dmem_wbe   = dbus_wbe;
+	 assign dbus_rdata = dmem_rdata;
+	 assign dbus_ready = dbus_valid & (dmem_ready | cbo_valid(dbus_cbo));
+	 assign dbus_busy  = dmem_busy;
+      end
+   endgenerate
 endmodule
