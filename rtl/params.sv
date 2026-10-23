@@ -138,6 +138,8 @@ parameter int	       tcm_size_bits	   = 14;
 parameter logic [31:0] ram_base		   = 32'h4000_0000;
 parameter int	       ram_size_bits	   = 25;
 parameter int          car_bit             = ram_size_bits;
+// Log2 of data-cache capacity in bytes. Cache lines are one 32-bit word.
+parameter int          dcache_size_bits    = 12;
 parameter logic [31:0] io_base		   = 32'h8000_0000;
 
 // What reading from a nonexistent memory spaces returns
