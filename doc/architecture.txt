@@ -100,8 +100,8 @@ Private instruction set extensions:
 		extrcsi rd,rs1,shimm5,wimm5
 
 		Extracts a sign- or zero-extended wimm5 bitfield from
-		position rs2/pimm5 of rs1 into rd. wimm5 = 0 is reserved
-		(currently implemented as ror(i) rd,rs1,rs2|shimm5)
+		position rs2/pimm5 of rs1 into rd. wimm5 = 0
+		represents 32 bits and is equivalent to a right shift.
 
 		instr[6:0]	= 0001011 (CUSTOM0) for EXTR[US]I
 				  0101011 (CUSTOM1) for EXTR[US]
@@ -130,6 +130,9 @@ Private instruction set extensions:
 		csext  rd,rs1,rs2
 		csexti rd,rs1,shimm5
 
+		A count of zero is treated as 32 bits and passes the
+		value through unmodified.
+
 		instr[6:0]	= 0101011 (CUSTOM1) for *EXT
 		instr[11:7]	= rd
 		instr[14:12]	= 111
@@ -141,7 +144,8 @@ Private instruction set extensions:
 				  10 for OEXT*
 				  11 for CSEXT*
 
-		The -i versions are encoded as extr*i rd,rs1,0,shimm5
+		The -i versions are not unique opcodes but assembly
+		aliases for extr*i rd,rs1,0,shimm5.
 
 	WITH_indcsr:
 		Indirect CSR access.
