@@ -137,10 +137,11 @@ module icache
    end
 
    reg [tag_bits-1:0] ibus_tag_q;
+   reg		      ibus_car_q;
    reg		      ibus_valid_q;
 
    // CAR addressing always matches
-   wire		      ibus_match = ibus_a[car_bit] |
+   wire		      ibus_match = ibus_car_q |
 		      (cvalid_ibus & (ibus_tag_q == ibus_tag_cmp));
    assign ibus_ready = ibus_valid_q & ibus_match;
 
@@ -148,11 +149,13 @@ module icache
      if (~rst_n) begin
 	ibus_valid_q <= 1'b0;
 	ibus_tag_q   <= 'bx;
+	ibus_car_q   <= 1'b0;
 	imem_valid   <= 1'b0;
 	imem_a	     <= 'bx;
      end else if (clken) begin
 	ibus_valid_q <= ibus_valid;
 	ibus_tag_q   <= ibus_tag;
+	ibus_car_q   <= ibus_a[car_bit];
 
 	if (imem_valid) begin
 	   imem_valid <= ~imem_ready;
