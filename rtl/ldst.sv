@@ -64,8 +64,8 @@ module ldst (
 
    assign dbus_a	= use_latched ? latched_a + {upper_word, 2'b00} : addr;
    assign dbus_valid	= rst_n & (valid | busy);
-   assign dbus_wrq      = dbus_valid & (use_latched ? memop_st_q : memop_st);
-   assign dbus_cbo      = dbus_valid & (use_latched ? memop_cbo_q : memop_cbo);
+   assign dbus_wrq      = use_latched ? memop_st_q : memop_st;
+   assign dbus_cbo      = use_latched ? memop_cbo_q : memop_cbo;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
