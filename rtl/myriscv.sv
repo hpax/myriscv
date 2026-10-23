@@ -374,6 +374,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	endcase
      end
 
+   assign dbus_busy_io = io_busy;
    assign dbus_busy = dmem_busy | dbus_busy_io;
 
    // Fetch unit (F stage)
