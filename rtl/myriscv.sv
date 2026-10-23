@@ -3,8 +3,8 @@
 module myriscv #(`CONFIG) (rst_n, clk, clken,
 	     ctr_time, ctr_cycle, ctr_instret,
   mem_addr, mem_wdata, mem_valid, mem_wrq, mem_wbe,
-  mem_ready, mem_rdata, mem_wr, mem_cpu, mem_addr_i,
-  io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready, io_rdata,
+  mem_ready, mem_rdata, mem_wr, mem_cpu, mem_addr_i, mem_busy,
+  io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready, io_rdata, io_busy,
   irq, irq_edge, irq_intable, irq_waitable, irq_intack, buserr,
   rng_data, rng_stb, rng_incr, rng_bist, rng_dead, rng_full
   );
@@ -24,6 +24,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    output reg [3:0]	     io_wbe;
    input		     io_ready;
    input [31:0]		     io_rdata;
+   input tri0		     io_busy;
 
    output reg [ram_size_bits-1:0]	     mem_addr;
    output reg [31:0]	     mem_wdata;
@@ -32,6 +33,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    output reg [3:0]	     mem_wbe;
    input		     mem_ready;
    input [31:0]		     mem_rdata;
+   input tri0		     mem_busy;
 
    // These signals are used for cache invalidation and to simplify
    // the cache design. If the memory controller does not support any
@@ -84,6 +86,8 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    logic		     dbus_ready_tcm;
    logic		     dbus_ready_mem;
    logic		     dbus_ready_io;
+   logic		     dbus_busy;
+   logic		     dbus_busy_io;
 
    logic		     dbus_err_sel;
    logic		     dbus_tcm_sel;
@@ -168,21 +172,24 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 
    // External memory and caches
 
-   wire [31:0] ibus_rdata_mem;
+   logic [31:0] ibus_rdata_mem;
+   logic [31:0]	dbus_rdata_mem;
+   logic	dmem_busy;
 
    generate
       if (!ram_size_bits) begin
 	 assign ibus_rdata_mem = 32'bx;
 	 assign ibus_ready_mem = 1'b0;
+	 assign dbus_rdata_mem = 32'bx;
 	 assign dbus_ready_mem = 1'b0;
+	 assign dmem_busy      = 1'b0;
       end else begin
 	 // Instruction cache
 
-	 wire [ram_size_bits-1:0] imem_a;
-	 wire			  imem_valid;
-	 logic			  imem_ready;
-	 icache #(.ram_bits(ram_size_bits))
-	 icache (
+	 logic [ram_size_bits-1:0] imem_a;
+	 logic			   imem_valid;
+	 logic			   imem_ready;
+	 icache #(`CFG) icache (
 	   .rst_n (rst_n),
 	   .clk   (clk),
 	   .clken (clken),
@@ -201,16 +208,44 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	   .imem_inval (mem_wr)
 	   );
 
+	 logic [ram_size_bits-1:0] dmem_a;
+	 logic			   dmem_valid;
+	 logic			   dmem_ready;
+	 logic [31:0]		   dmem_wdata;
+	 logic			   dmem_wrq;
+
+	 // Data cache
+	 dcache #(`CFG) dcache (
+	    .rst_n (rst_n),
+	    .clk   (clk),
+	    .clken (clken),
+
+	    .dbus_a     (dbus_a),
+	    .dbus_wdata (dbus_wdata),
+	    .dbus_wbe   (dbus_wbe),
+	    .dbus_rdata (dbus_rdata_mem),
+	    .dbus_cbo   (dbus_cbo),
+	    .dbus_valid (dbus_valid),
+	    .dbus_wrq   (dbus_wrq),
+	    .dbus_ready (dbus_ready_mem),
+	    .dbus_busy  (dbus_busy_mem),
+
+	    .dmem_a     (dmem_a),
+	    .dmem_valid (dmem_valid),
+	    .dmem_wdata (dmem_wdata),
+	    .dmem_wrq   (dmem_wrq),
+	    .dmem_wbe   (dmem_wbe),
+	    .dmem_rdata (mem_rdata),
+	    .dmem_ready (dmem_ready),
+	    .dmem_busy  (dmem_busy)
+	 );
+
 	 // Memory bus
 	 reg			  mem_is_dbus;
-	 reg			  dbus_ready_cbo;
 	 always @(*) begin
-	    dbus_ready_mem = dbus_ready_cbo;
-	    imem_ready	   = 1'b0;
-	    if (mem_valid & mem_ready) begin
-	       dbus_ready_mem =  mem_is_dbus;
-	       imem_ready     = ~mem_is_dbus;
-	    end
+	    dmem_ready = mem_ready &  mem_is_dbus;
+	    imem_ready = mem_ready & ~mem_is_dbus;
+	    dmem_busy  = mem_busy  &  mem_is_dbus;
 	 end
 
 	 always @(negedge rst_n or posedge clk)
@@ -221,35 +256,29 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	      mem_is_dbus    <= 1'bx;
 	      mem_addr	     <= 'bx;
 	      mem_wdata      <= 32'bx;
-	      dbus_ready_cbo <= 1'b0;
 	   end else if (clken) begin
-	      // The data bus gets priority!
-
-	      dbus_ready_cbo <= 1'b0;
-
-	      if (~mem_valid & dbus_mem_sel & ~cbo_valid(dbus_cbo)) begin
-		 // Note: CBO requests don't go to actual memory; they
-		 // will go to the dcache when implemented.
-		 mem_addr    <= dbus_a[ram_size_bits-1:0];
+	      // This adds a dead cycle between each transaction for
+	      // no really good reason; fix that later.
+	      if (~mem_valid & dmem_valid) begin
+		 mem_addr    <= dmem_a;
 		 mem_is_dbus <= 1'b1;
-		 mem_valid   <= ~cbo_valid(dbus_cbo);
-		 dbus_ready_cbo <= cbo_valid(dbus_cbo);
-		 mem_wrq     <= dbus_wrq;
-		 mem_wdata   <= dbus_wdata;
-		 mem_wbe     <= dbus_wbe;
+		 mem_valid   <= 1'b1;
+		 mem_wrq     <= dmem_wrq;
+		 mem_wdata   <= dmem_wdata;
+		 mem_wbe     <= dmem_wbe;
 	      end else if (~mem_valid & imem_valid) begin
-		 mem_addr	<= imem_a;
-		 mem_is_dbus	<= 1'b0;
-		 mem_valid	<= 1'b1;
-		 mem_wrq	<= 1'b0;
-		 mem_wdata	<= 32'bx;
-		 mem_wbe	<= 4'bx;
+		 mem_addr    <= imem_a;
+		 mem_is_dbus <= 1'b0;
+		 mem_valid   <= 1'b1;
+		 mem_wrq     <= 1'b0;
+		 mem_wdata   <= 32'bx;
+		 mem_wbe     <= 4'bx;
 	      end else if (mem_valid & mem_ready) begin
-		 mem_addr	<= 'bx;
-		 mem_is_dbus	<= 1'bx;
-		 mem_valid	<= 1'b0;
-		 mem_wrq	<= 1'bx;
-		 mem_wbe	<= 4'bx;
+		 mem_addr    <= 'bx;
+		 mem_is_dbus <= 1'bx;
+		 mem_valid   <= 1'b0;
+		 mem_wrq     <= 1'bx;
+		 mem_wbe     <= 4'bx;
 	      end
 	   end
       end
@@ -316,7 +345,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	unique case ({dbus_io_sel_q, dbus_mem_sel_q, dbus_tcm_sel_q})
 	  3'b000:  dbus_rdata = INVALID_DATA;
 	  3'b001:  dbus_rdata = dbus_rdata_tcm;
-	  3'b010:  dbus_rdata = mem_rdata;
+	  3'b010:  dbus_rdata = dbus_rdata_mem;
 	  3'b100:  dbus_rdata = dbus_rdata_io;
 	  default: dbus_rdata = 32'bx;
 	endcase
@@ -343,6 +372,8 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	  default: ibus_ready = 1'bx;
 	endcase
      end
+
+   assign dbus_busy = dmem_busy | dbus_busy_io;
 
    // Fetch unit (F stage)
    wire	       f_restart;
@@ -527,7 +558,8 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .dbus_wbe		(dbus_wbe),
      .dbus_wdata	(dbus_wdata),
      .dbus_rdata	(dbus_rdata),
-     .dbus_ready	(dbus_ready)
+     .dbus_ready	(dbus_ready),
+     .dbus_busy         (dbus_busy)
      );
 
    assign f_restartpc        = m_restartpc;

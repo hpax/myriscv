@@ -11,12 +11,13 @@
 // This may be useful on FPGAs, where the cache data array can be
 // preloaded with boot code.
 //
+`include "myriscv.vh"
+
 module icache
   #(
-   parameter ram_bits = 25, // RAM address size
-   parameter car_bit = ram_bits,
-   parameter line_bits = 2,  // Only one supported right now
-   parameter row_bits = 10   // = 2^12 bytes = 4K
+   `CONFIG,
+   parameter line_bits = 2, // Only one supported right now
+   parameter row_bits = 10  // = 2^12 bytes = 4K
 )
    (
    input		     rst_n,
@@ -54,16 +55,16 @@ module icache
    // the actual RAM interface and strobe imem_rdata or imem_inval
    // accordingly. (XXX: Is this actually necessary?)
    //
-   input [ram_bits-1:0]	     imem_a_i,
+   input [ram_size_bits-1:0]	     imem_a_i,
    input		     imem_inval,
    input		     imem_inval_geo,
 
-   output reg [ram_bits-1:0] imem_a,
+   output reg [ram_size_bits-1:0] imem_a,
    output reg		     imem_valid,
    input		     imem_ready,
    input [31:0]		     imem_rdata);
 
-   localparam		  tag_bits = ram_bits - row_bits - line_bits;
+   localparam		  tag_bits = ram_size_bits - row_bits - line_bits;
    localparam		  rows = 1 << row_bits;
    localparam		  linesize = 8 << line_bits;
 
@@ -72,11 +73,11 @@ module icache
    reg			  valid_mem[0:rows-1];
 
    wire [row_bits-1:0]	  ibus_row = ibus_a[row_bits+line_bits-1:line_bits];
-   wire [tag_bits-1:0]	  ibus_tag = ibus_a[ram_bits-1:ram_bits-tag_bits];
+   wire [tag_bits-1:0]	  ibus_tag = ibus_a[ram_size_bits-1:ram_size_bits-tag_bits];
    logic [tag_bits-1:0]	  ibus_tag_cmp;
 
    wire [row_bits-1:0]	  imem_row = imem_a_i[row_bits+line_bits-1:line_bits];
-   wire [tag_bits-1:0]	  imem_tag = imem_a_i[ram_bits-1:ram_bits-tag_bits];
+   wire [tag_bits-1:0]	  imem_tag = imem_a_i[ram_size_bits-1:ram_size_bits-tag_bits];
    logic [tag_bits-1:0]	  imem_tag_cmp;
 
    wire			  have_data = imem_valid & imem_ready;

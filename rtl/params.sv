@@ -109,7 +109,7 @@ parameter bit	     PREDICT_JALR	   = 1'b1;
 // can be increased without any area penalty.
 //
 // This depends on PREDICT_JALR.
-parameter int        PREDICT_RET	   = 8; // 8 kbit (M8K/M9K)
+parameter int        PREDICT_RET	   = 8;	   // 8 kbit (M8K/M9K)
 
 // Allow cached multiply forwarding for latency
 parameter bit	     FORWARD_MUL	   = 1'b1;
@@ -134,9 +134,10 @@ parameter bit	     FUSE_CNOP		   = 1'b0;
 // negatively affect fMAX.
 //
 parameter logic [31:0] tcm_base		   = 32'h0000_0000;
-parameter int	     tcm_size_bits	   = 14;
+parameter int	       tcm_size_bits	   = 14;
 parameter logic [31:0] ram_base		   = 32'h4000_0000;
-parameter int	     ram_size_bits	   = 25;
+parameter int	       ram_size_bits	   = 25;
+parameter int          car_bit             = ram_size_bits;
 parameter logic [31:0] io_base		   = 32'h8000_0000;
 
 // What reading from a nonexistent memory spaces returns
@@ -159,7 +160,7 @@ parameter bit WITH_Zaamo        	   = 1'b0; // AMO instructions
 // Valid PC values - should really be computed from tcm_base, tcm_size_bits
 // ram_base and ram_base_bits... need to figure out how to do that correctly
 // in all cases...
-parameter logic [31:0] PC_MASK		   = (addr_mask(tcm_base,tcm_size_bits)|addr_mask(ram_base,ram_size_bits)) & ~(WITH_RVC ? 2'b01 : 2'b11);
+parameter logic [31:0] PC_MASK		   = (addr_mask(tcm_base,tcm_size_bits)|addr_mask(ram_base,ram_size_bits+1)) & ~(WITH_RVC ? 2'b01 : 2'b11);
 
 // Set this bit if and only if the register file implementation guarantees
 // that a read of register x0 (for all contexts) will return zero from reset.

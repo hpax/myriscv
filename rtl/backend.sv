@@ -82,7 +82,8 @@ module backend #(`CONFIG)
  output [3:0]		   dbus_wbe,
  output [31:0]		   dbus_wdata,
  input [31:0]		   dbus_rdata,
- input			   dbus_ready
+ input			   dbus_ready,
+ input			   dbus_busy
  );
 
    function logic [4:0] tocontext(logic [31:0] ctx);
@@ -742,7 +743,7 @@ module backend #(`CONFIG)
 	m_restart_retstack   <= 'bx;
 	m_mepc		     <= 32'bx;
 	m_mcause	     <= 32'bx;
-     end else if (clken & ~(m_fencei & (m_busy | m_valid_o))) begin
+     end else if (clken & ~(m_fencei & (dbus_busy | m_busy | m_valid_o))) begin
 	// For FENCE.I, keep asserting kill until the pipeline
 	// is fully drained (the result of the last active instruction
 	// has been accepted into the W stage.)

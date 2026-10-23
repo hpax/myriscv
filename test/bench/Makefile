@@ -16,7 +16,7 @@ IP_SRCS := $(addprefix $(QUARTUS_DIR)/, \
 RTL_SRCS := $(addprefix $(RTL_DIR)/, \
 	riscv.sv types.sv functions.sv counter.sv tcm.sv shifter.sv rv32c.sv \
 	regfile.sv pipeline.sv myriscv.sv mult.sv ldst.sv fetch.sv \
-	backend.sv decode.sv alu.sv rng.sv icache.sv)
+	backend.sv decode.sv alu.sv rng.sv icache.sv dcache-dummy.sv)
 BENCH_SRCS := test.sv extmem.sv
 WORK      := work
 STAMP     := $(WORK)/.build-stamp

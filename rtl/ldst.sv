@@ -15,17 +15,17 @@ module ldst (
 		input		  rst_n,
 		input		  clk,
 		input		  clken,
-		input		  valid, // It is a memop
+		input		  valid,	   // It is a memop
 
-		input cbo_t	  memop_cbo, // Cache block op
-		input		  memop_st,  // It is a store
-		input		  memop_ldu, // Load is unsigned
-		input [1:0]	  size, // Data size == 2^x bytes
+		input		  cbo_t memop_cbo, // Cache block op
+		input		  memop_st,	   // It is a store
+		input		  memop_ldu,	   // Load is unsigned
+		input [1:0]	  size,		   // Data size == 2^x bytes
 
-		input [31:0]	  addr, // address
-		input [31:0]	  src2, // store data
+		input [31:0]	  addr,		   // address
+		input [31:0]	  src2,		   // store data
 
-		output reg [31:0] dout, // Load data output
+		output reg [31:0] dout,		   // Load data output
 		output reg [3:0]  dout_wbe,
 		output reg	  dout_valid,
 
@@ -35,7 +35,7 @@ module ldst (
 
 		output [31:0]	  dbus_a,
 		output		  dbus_valid,
-		output cbo_t	  dbus_cbo, // Cache block operation
+		output		  cbo_t dbus_cbo,  // Cache block operation
 		output		  dbus_wrq,
 		output reg [3:0]  dbus_wbe,
 		output reg [31:0] dbus_wdata,
