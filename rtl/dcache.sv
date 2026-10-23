@@ -25,6 +25,15 @@ module dcache_real
     output logic                  dbus_ready,
     output logic                  dbus_busy,
 
+    // D-to-M cache lookup bypass. This is issued by the D stage for an
+    // operation advancing to E; its result is consumed when that operation
+    // reaches the dbus in E.
+    input [31:0]                  lookup_a_i,
+    input                         lookup_valid_i,
+    input                         lookup_hold_i,
+    input cbo_t                   lookup_cbo_i,
+    input                         lookup_wrq_i,
+
     output logic [ram_size_bits-1:0] dmem_a,
     output logic [31:0]           dmem_wdata,
     output logic                  dmem_valid,
@@ -58,20 +67,19 @@ module dcache_real
    logic [tag_bits-1:0] tag_mem [0:rows-1];
    logic [35:0]         data_mem[0:rows-1];
 
-   // The falling-edge array lookup lets the dbus complete a cache hit on
-   // the following rising edge, including a stream of one hit per cycle.
+   // The D-stage lookup is available while its operation is in E.
    logic [31:0]         lookup_a;
-   logic [31:0]         lookup_wdata;
-   logic [3:0]          lookup_wbe;
-   cbo_t                lookup_cbo;
    logic                lookup_valid;
+   cbo_t                lookup_cbo;
    logic                lookup_wrq;
    logic [tag_bits-1:0] tag_read;
    logic [35:0]         data_read;
+   logic                read_bypass;
+   logic [tag_bits-1:0] read_bypass_tag;
+   logic [35:0]         read_bypass_data;
 
-   // Writes are scheduled at the rising edge which accepts the dbus
-   // transaction and applied at the following falling edge. This gives both
-   // cache arrays a synchronous read port and a synchronous write port.
+   // Writes are scheduled after accepting a dbus transaction and applied by
+   // the cache arrays' write port on the following rising edge.
    logic                cache_write;
    logic [row_bits-1:0] cache_write_row;
    logic [tag_bits-1:0] cache_write_tag;
@@ -91,16 +99,20 @@ module dcache_real
    wire [row_bits-1:0]  dbus_row = dbus_a[size_bits-1:2];
    wire [tag_bits-1:0]  dbus_tag =
                          dbus_a[ram_size_bits-1:size_bits];
-   wire                 lookup_car = lookup_a[car_bit];
+   wire                 dbus_cacheable = dbus_a >= ram_base &&
+                         dbus_a < io_base;
    wire [row_bits-1:0]  lookup_row =
                          lookup_a[size_bits-1:2];
+   wire                 lookup_car = lookup_a[car_bit];
    wire [tag_bits-1:0]  lookup_addr_tag =
                          lookup_a[ram_size_bits-1:size_bits];
    wire [tag_bits-1:0]  lookup_tag =
-                         cache_write && cache_write_row == lookup_row ?
+                         (read_bypass ||
+                          (cache_write && cache_write_row == lookup_row)) ?
                          cache_write_tag : tag_read;
    wire [35:0]          lookup_data =
-                         cache_write && cache_write_row == lookup_row ?
+                         (read_bypass ||
+                          (cache_write && cache_write_row == lookup_row)) ?
                          cache_write_data : data_read;
    wire                 lookup_cbo_valid = cbo_valid(lookup_cbo);
    wire                 lookup_write = lookup_wrq && !lookup_cbo_valid;
@@ -173,17 +185,41 @@ module dcache_real
         data_mem[i] = '0;
    end
 
-   // The cache arrays are true synchronous memories. The registered write
-   // path is a second port; it also bypasses a simultaneous lookup.
-   always @(negedge clk) begin
-      lookup_a <= dbus_a;
-      lookup_wdata <= dbus_wdata;
-      lookup_wbe <= dbus_wbe;
-      lookup_cbo <= dbus_cbo;
-      lookup_valid <= rst_n && dbus_valid;
-      lookup_wrq <= dbus_wrq;
-      tag_read <= tag_mem[dbus_row];
-      data_read <= data_mem[dbus_row];
+   // The cache arrays are true synchronous memories. The D-stage lookup
+   // avoids a half-cycle path from the RAM outputs to dbus_ready.
+   always @(posedge clk) begin
+      if (lookup_hold_i) begin
+         lookup_valid <= lookup_valid;
+         lookup_cbo <= lookup_cbo;
+         lookup_wrq <= lookup_wrq;
+         tag_read <= tag_read;
+         data_read <= data_read;
+         read_bypass <= read_bypass;
+      end else if (lookup_valid_i) begin
+         lookup_a <= lookup_a_i;
+         lookup_valid <= rst_n;
+         lookup_cbo <= lookup_cbo_i;
+         lookup_wrq <= lookup_wrq_i;
+         tag_read <= tag_mem[lookup_a_i[size_bits-1:2]];
+         data_read <= data_mem[lookup_a_i[size_bits-1:2]];
+         read_bypass <= cache_write &&
+                        cache_write_row == lookup_a_i[size_bits-1:2];
+      end else if (dbus_valid && dbus_cacheable && state == S_IDLE) begin
+         lookup_a <= dbus_a;
+         lookup_valid <= rst_n;
+         lookup_cbo <= dbus_cbo;
+         lookup_wrq <= dbus_wrq;
+         tag_read <= tag_mem[dbus_row];
+         data_read <= data_mem[dbus_row];
+         read_bypass <= cache_write && cache_write_row == dbus_row;
+      end else begin
+         lookup_valid <= 1'b0;
+         lookup_cbo <= CBO_NONE;
+         lookup_wrq <= 1'b0;
+         read_bypass <= 1'b0;
+      end
+      read_bypass_tag <= cache_write_tag;
+      read_bypass_data <= cache_write_data;
 
       if (cache_write) begin
          tag_mem[cache_write_row] <= cache_write_tag;
@@ -217,7 +253,7 @@ module dcache_real
                   if (start_writeback) begin
                      pending <= lookup_cbo == CBO_CLEAN ?
                                 P_CBO_CLEAN : P_CBO_FLUSH;
-                     pending_row <= lookup_row;
+                     pending_row <= dbus_row;
                      pending_evict_tag <= lookup_tag;
                      pending_evict_data <= lookup_data[31:0];
                      state <= S_WRITEBACK;
@@ -225,7 +261,7 @@ module dcache_real
                                (lookup_cbo == CBO_INVAL ||
                                 lookup_cbo == CBO_FLUSH)) begin
                      cache_write <= 1'b1;
-                     cache_write_row <= lookup_row;
+                     cache_write_row <= dbus_row;
                      cache_write_tag <= lookup_tag;
                      cache_write_data <= { 2'b00, 2'b00,
                                            lookup_data[31:0] };
@@ -233,39 +269,39 @@ module dcache_real
                end else if (lookup_car && lookup_write) begin
                   if (start_writeback) begin
                      pending <= P_CAR_WRITE;
-                     pending_row <= lookup_row;
-                     pending_wdata <= lookup_wdata;
-                     pending_wbe <= lookup_wbe;
+                     pending_row <= dbus_row;
+                     pending_wdata <= dbus_wdata;
+                     pending_wbe <= dbus_wbe;
                      pending_evict_tag <= lookup_tag;
                      pending_evict_data <= lookup_data[31:0];
                      state <= S_WRITEBACK;
                   end else begin
                      cache_write <= 1'b1;
-                     cache_write_row <= lookup_row;
+                     cache_write_row <= dbus_row;
                      cache_write_tag <= lookup_tag;
                      cache_write_data <=
                        { 2'b00, 2'b00,
-                         merge_bytes(lookup_data[31:0], lookup_wdata,
-                                     lookup_wbe) };
+                         merge_bytes(lookup_data[31:0], dbus_wdata,
+                                     dbus_wbe) };
                   end
                end else if (!lookup_match) begin
                   pending <= P_MISS;
-                  pending_row <= lookup_row;
-                  pending_tag <= lookup_addr_tag;
-                  pending_wdata <= lookup_wdata;
-                  pending_wbe <= lookup_wbe;
+                  pending_row <= dbus_row;
+                  pending_tag <= dbus_tag;
+                  pending_wdata <= dbus_wdata;
+                  pending_wbe <= dbus_wbe;
                   pending_wrq <= lookup_write;
                   pending_evict_tag <= lookup_tag;
                   pending_evict_data <= lookup_data[31:0];
                   state <= start_writeback ? S_WRITEBACK : S_FILL;
                end else if (lookup_write) begin
                   cache_write <= 1'b1;
-                  cache_write_row <= lookup_row;
+                  cache_write_row <= dbus_row;
                   cache_write_tag <= lookup_tag;
                   cache_write_data <=
                     { 2'b11, 2'b00,
-                      merge_bytes(lookup_data[31:0], lookup_wdata,
-                                  lookup_wbe) };
+                      merge_bytes(lookup_data[31:0], dbus_wdata,
+                                  dbus_wbe) };
                end
             end
 
@@ -339,6 +375,12 @@ module dcache #(`CONFIG)
    output [31:0]	      dbus_rdata,
    output		      dbus_ready,
    output		      dbus_busy, // Operation in progress, for fence
+
+   input [31:0]		      lookup_a_i,
+   input		      lookup_valid_i,
+   input		      lookup_hold_i,
+   input cbo_t		      lookup_cbo_i,
+   input		      lookup_wrq_i,
 
    output [ram_size_bits-1:0] dmem_a,
    output [31:0]	      dmem_wdata,

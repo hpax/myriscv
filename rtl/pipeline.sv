@@ -1,3 +1,4 @@
+// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 //
 // Pipeline control/hazard avoidance
 //
@@ -12,6 +13,7 @@ module pipe_ctl #(`CONFIG)
 
   input	     d_valid_i,		// Actually output from the fetch unit
   input	     d_valid_o,
+  output	     d_advance,
   input	     e_valid_o,
   input	     m_valid_o,
 
@@ -78,6 +80,7 @@ module pipe_ctl #(`CONFIG)
    assign f_stall	= (d_valid_o & d_stall) | d_busy;
 
    assign f_restart	= m_kill;
+   assign d_advance	= d_valid_o & ~d_stall & ~m_kill;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n)

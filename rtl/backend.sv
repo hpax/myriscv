@@ -1,3 +1,4 @@
+// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 //
 // This handles the backend of the pipe; the E, M and W pipeline stages.
 //
@@ -54,6 +55,15 @@ module backend #(`CONFIG)
  input			   d_rs2_e,
  input			   d_rs2_m,
  input			   d_rs2_w,
+
+ // D-stage cache lookup bypass
+ input			   d_valid_o,
+ input			   d_advance,
+ output logic [31:0]	   dcache_lookup_a,
+ output logic		   dcache_lookup_valid,
+ output logic		   dcache_lookup_hold,
+ output cbo_t		   dcache_lookup_cbo,
+ output logic		   dcache_lookup_wrq,
 
  input			   m_valid_i,
  input			   m_stall,
@@ -236,8 +246,11 @@ module backend #(`CONFIG)
    // GPR bypass network/operand selection
    wire		      d_src_hold = (e_valid_i & e_stall) | e_busy;
 
+   assign dcache_lookup_hold = d_src_hold;
+
    logic [31:0] e_src1;
    logic [31:0] e_src2;
+   logic [31:0] dcache_lookup_src1;
 
    generate
       if (EARLY_BYPASS_MUX) begin : bypass_early
@@ -343,6 +356,36 @@ module backend #(`CONFIG)
 	 end
       end
    endgenerate
+
+   always @(*) begin
+      if (!d_op.rs1_valid)
+        dcache_lookup_src1 = d_op.rs1.r;
+      else if (d_rs1_e)
+        dcache_lookup_src1 = e_dout;
+      else if (d_rs1_m)
+        dcache_lookup_src1 = m_dout;
+      else if (d_rs1_w)
+        dcache_lookup_src1 = w_dout;
+      else
+        dcache_lookup_src1 = d_rs1_data;
+
+      dcache_lookup_a = $signed(dcache_lookup_src1) +
+                         $signed(d_op.imm);
+      dcache_lookup_valid = d_advance & insn_mem(d_op.itype);
+      dcache_lookup_cbo = CBO_NONE;
+      dcache_lookup_wrq = d_op.itype[0];
+
+      if (d_op.itype == INSN_CBO) begin
+         unique casez (d_op.rs2.r)
+           5'b00000: dcache_lookup_cbo = CBO_INVAL;
+           5'b00001: dcache_lookup_cbo = CBO_CLEAN;
+           5'b00010: dcache_lookup_cbo = CBO_FLUSH;
+           default: dcache_lookup_cbo = CBO_X;
+         endcase
+         dcache_lookup_valid = dcache_lookup_valid &
+                               cbo_valid(dcache_lookup_cbo);
+      end
+   end
 
    //
    // AGU adder; separate adder for performance reasons.

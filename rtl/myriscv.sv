@@ -44,6 +44,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    input		     mem_cpu;	 // Transaction on behalf of CPU
 
    // irq is the expected IRQ input.
+   // Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
    //
    // irq_intable and irq_waitable are intended to be used to
    // compile-time disables.
@@ -88,6 +89,12 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    logic		     dbus_ready_io;
    logic		     dbus_busy;
    logic		     dbus_busy_io;
+   wire [31:0]		     dcache_lookup_a;
+   wire			     dcache_lookup_valid;
+   wire			     dcache_lookup_hold;
+   wire			     d_advance;
+   cbo_t		     dcache_lookup_cbo;
+   wire			     dcache_lookup_wrq;
 
    logic		     dbus_err_sel;
    logic		     dbus_tcm_sel;
@@ -230,6 +237,12 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	    .dbus_wrq   (dbus_wrq),
 	    .dbus_ready (dbus_ready_mem),
 	    .dbus_busy  (dbus_busy_mem),
+
+	    .lookup_a_i     (dcache_lookup_a),
+	    .lookup_valid_i (dcache_lookup_valid),
+	    .lookup_hold_i  (dcache_lookup_hold),
+	    .lookup_cbo_i   (dcache_lookup_cbo),
+	    .lookup_wrq_i   (dcache_lookup_wrq),
 
 	    .dmem_a     (dmem_a),
 	    .dmem_valid (dmem_valid),
@@ -532,6 +545,13 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .d_rs2_m		(d_rs2_m),
      .d_rs2_w		(d_rs2_w),
 
+     .d_valid_o		(d_valid_o),
+     .dcache_lookup_a	(dcache_lookup_a),
+     .dcache_lookup_valid (dcache_lookup_valid),
+     .dcache_lookup_hold (dcache_lookup_hold),
+     .dcache_lookup_cbo (dcache_lookup_cbo),
+     .dcache_lookup_wrq (dcache_lookup_wrq),
+
      .m_valid_i		(m_valid_i),
      .m_stall		(m_stall),
      .m_op		(m_op),
@@ -579,6 +599,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 
      .d_valid_i	(d_valid_i),
      .d_valid_o	(d_valid_o),
+     .d_advance		(d_advance),
      .e_valid_o	(e_valid_o),
      .m_valid_o	(m_valid_o),
 
