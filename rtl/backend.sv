@@ -496,7 +496,7 @@ module backend #(`CONFIG)
         csrw_waitfor      = 1'b0;
         csrw_mscratch     = 1'b0;
 
-	if (e_accept & e_op.csrw) begin
+	if (e_valid_i & e_op.undead & e_op.csrw) begin
 	   unique case (ncsr)
 	     CSR_MTVEC:		csrw_mtvec	  = |MTVEC_WMASK;
 	     CSR_MEPC:          csrw_mepc	  = 1'b1;
@@ -536,28 +536,27 @@ module backend #(`CONFIG)
    // Note that e_irq_vector must be zero if !e_irq
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	e_irq	      <= 1'b0;
-	e_wakeup      <= 1'b0;
-	e_irq_vector  <= 'b0;
+	e_irq		<= 1'b0;
+	e_wakeup	<= 1'b0;
+	e_irq_vector	<= 'b0;
      end else if (clken) begin
 	// IRQs that generates interrupts
 	logic [NUM_IRQS:0] irq_int;
 	// IRQs that generate wait wakeups
 	logic [NUM_IRQS:0] irq_wakeup;
 
-	irq_int    = d_irqs & irq_intable & mie;
-	irq_wakeup = d_irqs & irq_waitable & e_csr_wval[NUM_IRQS:0];
+	irq_int		= d_irqs & irq_intable & mie;
+	irq_wakeup	 = d_irqs & irq_waitable & e_csr_wval[NUM_IRQS:0];
 
 	// Waiting for an event? Check for wakeup. Because this adds a
 	// cycle of latency, we must already have waited for one cycle;
 	// thus, writing waitfor takes 2 cycles if the event is
 	// already pending. This is needed so e_csr_wval can stabilize.
-	e_wakeup <= e_waiting & |irq_wakeup;
-
-	e_irq     <= |irq_int;
+	e_wakeup	<= e_waiting & |irq_wakeup;
+	e_irq		<= |irq_int;
 
 	// Priority vector encoder
-	e_irq_vector <= 'b0;
+	e_irq_vector	<= 'b0;
 	for (int i = NUM_IRQS; i > 0; i--)
 	  if (irq_int[i]) e_irq_vector <= i;
      end
