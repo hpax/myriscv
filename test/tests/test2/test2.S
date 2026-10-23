@@ -140,6 +140,7 @@ extmem_test:
 	li a0,0x80824531		// li a0,12; ret
 	la s0,0x40000000
 	sw a0,(s0)
+	cbo.clean (s0)			// Required!
 	fence.i
 	li a0,0
 	jalr (s0)			// Should be uncached
@@ -172,10 +173,12 @@ icache_test:
 	add a2,a1,256*4
 1:
 	sw a0,(a1)
+	cbo.clean (a1)
 	add a1,a1,4
 	bne a1,a2,1b
 
 	sw s3,(a1)		// ret
+	cbo.clean (a1)
 
 	/*
 	 * This set of instructions are add a0,a0,2; the addresses are
@@ -189,10 +192,12 @@ icache_test:
 	add a2,s2,256*4
 1:
 	sw a0,(a1)
+	cbo.clean (a1)
 	add a1,a1,4
 	bne a1,a2,1b
 
 	sw s3,(a1)		// ret
+	cbo.clean (a1)
 
 	fence.i
 
@@ -229,6 +234,7 @@ icache3:
 	add a2,a1,256*4
 1:
 	sw a0,(a1)
+	cbo.clean (a1)
 	add a1,a1,4
 	bne a1,a2,1b
 
@@ -255,11 +261,15 @@ icache4:
 	add a2,s2,a2
 1:
 	sw a0,(a1)
-	sw t1,4(a1)
+	cbo.clean (a1)
+	add a5,a1,4
+	sw t1,(a5)
+	cbo.clean (a5)
 	add a1,a1,s8
 	bne a1,a2,1b
 
 	sw s3,(a1)		// ret
+	cbo.clean (a1)
 
 	fence.i
 
