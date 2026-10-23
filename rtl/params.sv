@@ -20,6 +20,7 @@ parameter bit WITH_Zmmul		   = 1'b1;
 parameter bit WITH_Zicond		   = 1'b1;
 parameter bit WITH_minmax		   = 1'b1;
 parameter bit WITH_cmpand       	   = 1'b1; // baeqz, banez
+parameter bit WITH_cneg                    = 1'b1; // cneg, cnegi, cnegn
 parameter bit WITH_setext		   = 1'b0; // addtional SET operations
 parameter bit WITH_Zbasub		   = 1'b1; // shXsub
 parameter bit WITH_Zkr			   = 1'b1; // seed CSR (needs external bit source)

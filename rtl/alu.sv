@@ -24,15 +24,17 @@ module alu_decode #(`CONFIG)
 	logic [2:0] funct3;
 	insn_type_t itype;
 
-	itype	  = op.itype;
-	funct7	  = op.funct7;
-	funct3    = op.funct3;
+	itype 	  = op.itype;
+	funct7 	  = op.funct7;
+	funct3 	  = op.funct3;
 
-	ctl	  = 'bx;
+	ctl 	  = 'bx;
 	ctl.unit  = ALUSRC_ERR;
-	ctl.shadd = 2'b00;		// No preshift
+	ctl.shadd = 2'b00; // No preshift
 	ctl.cond  = cond_t'(op.funct3);
 	ctl.bcop  = {op.rs2.r[4], op.rs2.r[1:0]};
+	ctl.cinv  = 1'b0;
+	ctl.zsrc1 = 1'b0;
 
 	unique case (itype)
 	  INSN_BR: begin
@@ -178,12 +180,12 @@ module alu_decode #(`CONFIG)
 		  if (!STRICT_UNDEFINED ||
 		      (funct3[1:0] != 2'b10 &&
 		       (!op.rs2_valid || funct7[6] || !funct7[4:0]))) begin
-		     ctl.unit 	= ALUSRC_ADD;
+		     ctl.unit	= ALUSRC_ADD;
 		     ctl.invert = op.rs2_valid & funct7[5];
 		  end
 	       end
 
-	       3'b101: begin		// extr*
+	       3'b101: begin		// EXTR*
 		  if (WITH_extr) begin
 		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_EXTRS;
@@ -192,10 +194,21 @@ module alu_decode #(`CONFIG)
 		     ctl.shiftop.sxor = funct7[6] & WITH_shiftone;
 		  end
 	       end
+
+	       3'b110: begin		// CNEG
+		  if (WITH_cneg &&
+		      (!STRICT_UNDEFINED || !op.rs2_valid ||
+			 !(funct7 & 7'b1011111))) begin
+		     ctl.unit	 = ALUSRC_ADD;
+		     ctl.invert = funct7[5] & op.rs2_valid;
+		     ctl.cinv	 = 1'b1;
+		     ctl.zsrc1   = 1'b1;
+		  end
+	       end
 	       3'b111: begin		// arbitrary extend
 		  if (WITH_extn &&
 		      (!STRICT_UNDEFINED || !funct7[4:0])) begin
-		     ctl.unit 	      = ALUSRC_SHIFT;
+		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_SEXTN;
 		     ctl.shiftop.sand = funct7[5];
 		     ctl.shiftop.sxor = funct7[6] & WITH_shiftone;
@@ -543,12 +556,14 @@ module alu #(`CONFIG)
 
   input		    aluctl_t ctl);
 
-   wire [31:0]		  invsrc2 = src2 ^ {32{ctl.invert}};
-   wire [31:0]		  add_out;
-   wire			  add_ucarry;
-   wire			  add_scarry;
+   wire        invert  = ctl.invert ^ (ctl.cinv & src1[31]);
+   wire [31:0] isrc2   = src2 ^ {32{invert}};
+   wire [31:0] msrc1   = src1 & {32{~ctl.zsrc1}};
+   wire [31:0] add_out;
+   wire	       add_ucarry;
+   wire	       add_scarry;
 
-   adder add (.src1(src1), .src2(invsrc2), .sub(ctl.invert),
+   adder add (.src1(msrc1), .src2(isrc2), .sub(invert),
      .src1shift(WITH_Zba ? ctl.shadd : 2'b00),
      .q (add_out), .ucout(add_ucarry), .scout(add_scarry));
 
@@ -601,7 +616,7 @@ module alu #(`CONFIG)
    // Bitwise logic (AND, OR, XOR...)
    //
    wire [31:0]		  bit_out;
-   bitwise bitwise (.src1(src1), .src2(invsrc2), .op(ctl.bitop), .q(bit_out));
+   bitwise bitwise (.src1(src1), .src2(isrc2), .op(ctl.bitop), .q(bit_out));
 
    //
    // Fancy shift unit

@@ -147,6 +147,23 @@ Private instruction set extensions:
 		The -i versions are not unique opcodes but assembly
 		aliases for extr*i rd,rs1,0,shimm5.
 
+	WITH_cneg:
+		Conditional negate
+
+		cneg  rd,rs1,rs2	rd = rs1 < 0 ? -rs2 : rs2
+		cnegi rd,rs1,imm12	rd = rs1 < 0 ? -imm12 : imm12
+		cnegn rd,rs1,rs2	rd = rs1 >= 0 ? rs2 : -rs2
+
+		instr[6:0]	= 0001011 (CUSTOM0) for CNEGI
+				  0101011 (CUSTOM1) for CNEG, CNEGN
+		instr[11:7]	= rd
+		instr[14:12]	= 110
+		instr[19:15]	= rs1
+		instr[31:20]	= imm12 for CNEGI
+		instr[24:20]	= rs2
+		instr[29:25]	= 0000000 for CNEG
+				  0100000 for CNEGN
+
 	WITH_indcsr:
 		Indirect CSR access.
 

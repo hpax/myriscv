@@ -221,6 +221,8 @@ typedef enum logic [4:0] {
 typedef struct packed {
    alusrc_t    unit;
    logic       invert;
+   logic       cinv;		// conditional invert based on src1[31]
+   logic       zsrc1;		// set if src1 should be forced to 0
    logic [1:0] shadd;
    logic [1:0] bitop;
    logic [2:0] bcop;		// bitcnt operation
