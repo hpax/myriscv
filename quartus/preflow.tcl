@@ -3,4 +3,4 @@
 #
 set cmd "make -C ../rtl"
 post_message -type info "Command: $cmd"
-qexec "PATH=\"/usr/bin:/bin:\${PATH}\" $cmd"
+qexec "$cmd"
