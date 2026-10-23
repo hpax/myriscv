@@ -213,9 +213,10 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	 logic			   dmem_ready;
 	 logic [31:0]		   dmem_wdata;
 	 logic			   dmem_wrq;
+	 logic [3:0]		   dmem_wbe;
 
 	 // Data cache
-	 dcache #(`CFG) dcache (
+	 dcache #(`CFG, .size_bits(dcache_size_bits)) dcache (
 	    .rst_n (rst_n),
 	    .clk   (clk),
 	    .clken (clken),
