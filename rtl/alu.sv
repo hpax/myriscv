@@ -53,14 +53,14 @@ module alu_decode #(`CONFIG)
 		  ctl.invert = funct7[5];
 	       end
 	       { 7'b0?1_0000, 3'b??0 }: begin // shXadd, shXsub
-		  if (WITH_Zba && (WITH_Zbasub || !funct7[5])) begin
+		  if (WITH_Zba && (WITH_Xpabshsub || !funct7[5])) begin
 		     ctl.unit	= ALUSRC_ADD;
 		     ctl.shadd	= funct3[2:1];
 		     ctl.invert = funct7[5];
 		  end
 	       end
 	       { 7'b?00_0000, ALU_SLL }: begin
-		  if (WITH_shiftone || !funct7[6]) begin
+		  if (WITH_Xpabshone || !funct7[6]) begin
 		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_SLL;
 		     ctl.shiftop.sxor = funct7[6];
@@ -77,7 +77,7 @@ module alu_decode #(`CONFIG)
 		  unique casez ({!op.rs2_valid, op.rs2.r})
 		    6'b1_?00??: begin // CTZ, CLZ, CPOP (+inverses)
 		       if (!STRICT_UNDEFINED || op.rs2.r[1:0] != 2'b11)
-			 if (WITH_bitcntinv || !op.rs2.r[4])
+			 if (WITH_Xpabcinv || !op.rs2.r[4])
 			   ctl.unit = ALUSRC_BITCNT;
 		    end
 		    6'b1_0010?: begin	// SEXT.B/H
@@ -95,7 +95,7 @@ module alu_decode #(`CONFIG)
 	       end // case: { 7'b011_0000, ALU_SLL }
 
 	       { 7'b??0_0000, ALU_SRL }: begin
-		  if (WITH_shiftone || !funct7[6]) begin
+		  if (WITH_Xpabshone || !funct7[6]) begin
 		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_SRA;
 		     ctl.shiftop.sand = funct7[5];
@@ -136,7 +136,7 @@ module alu_decode #(`CONFIG)
 	       end
 	       { 7'b000_00??, ALU_SLT },
 	       { 7'b000_00??, ALU_SLTU }: begin
-		  if (WITH_setext || !funct7[1:0]) begin
+		  if (WITH_Xpaisetext || !funct7[1:0]) begin
 		     // bits 1:0 in funct7 can be used to obtain the
 		     // other possible condition codes
 		     ctl.cond = riscv::cond_t'({~funct7[1],
@@ -186,17 +186,17 @@ module alu_decode #(`CONFIG)
 	       end
 
 	       3'b101: begin		// EXTR*
-		  if (WITH_extr) begin
+		  if (WITH_Xpabextr) begin
 		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_EXTRS;
 		     ctl.shiftop.wimm = funct7[4:0];
 		     ctl.shiftop.sand = funct7[5];
-		     ctl.shiftop.sxor = funct7[6] & WITH_shiftone;
+		     ctl.shiftop.sxor = funct7[6] & WITH_Xpabshone;
 		  end
 	       end
 
 	       3'b110: begin		// CNEG
-		  if (WITH_cneg &&
+		  if (WITH_Xpaicneg &&
 		      (!STRICT_UNDEFINED || !op.rs2_valid ||
 			 !(funct7 & 7'b1011111))) begin
 		     ctl.unit	 = ALUSRC_ADD;
@@ -206,12 +206,12 @@ module alu_decode #(`CONFIG)
 		  end
 	       end
 	       3'b111: begin		// arbitrary extend
-		  if (WITH_extn &&
+		  if (WITH_Xpabextn &&
 		      (!STRICT_UNDEFINED || !funct7[4:0])) begin
 		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_SEXTN;
 		     ctl.shiftop.sand = funct7[5];
-		     ctl.shiftop.sxor = funct7[6] & WITH_shiftone;
+		     ctl.shiftop.sxor = funct7[6] & WITH_Xpabshone;
 		  end
 	       end
 	       default: begin
@@ -592,7 +592,7 @@ module alu #(`CONFIG)
 
       if (ctl.cond[2])
 	cmpcond = cmp_ltx;
-      else if (WITH_cmpand & ctl.cond[1])
+      else if (WITH_Xpaicmpand & ctl.cond[1])
 	cmpcond = cmp_and;
       else
 	cmpcond = cmp_eq;
@@ -640,7 +640,7 @@ module alu #(`CONFIG)
 
    // Separate units implementation
    wire [31:0]		  bcsrc =
-			  src1 ^ {32{WITH_bitcntinv & ctl.bcop[2]}};
+			  src1 ^ {32{WITH_Xpabcinv & ctl.bcop[2]}};
    wire [5:0]		  clz_out;
    wire [5:0]		  ctz_out;
    wire [5:0]		  cpop_out;

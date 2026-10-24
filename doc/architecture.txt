@@ -5,7 +5,7 @@ some are hard coded in the design).
 See rtl/params.sv for the parameters available and their default
 values. They are set as normal Verilog instance parameters.
 
-Standard options:
+Standard architecture extensions:
 
 	I	- Base RV32I architecture
 	B	- Bit operations (= Zba Zbb Zbs)
@@ -26,7 +26,6 @@ Standard options:
 	* = see below for non-standard, implementation-specific,
 	    or configurable behavior
 
-
 Private instruction set extensions:
 
 	CUSTOM0 opcodes are used for custom I-type ALU instructions.
@@ -40,40 +39,40 @@ Private instruction set extensions:
 	brownfield space.
 
 
-	The Zicbom instructions (cbo.*):
+	Xpacbomo:
 		The cbo.* instructions allow a memory offset to be
 		specified, using the S instruction format. The
 		standard form of these instructions always have all
 		the bits of the S immediate set to zero, so the
 		standard form is still valid.
 
-	WITH_Zbasub: (req. Zba)
+	WITH_Xpabshsub: (req. Zba)
 		shXsub	- shXadd funct7[5] = 1
 
-	WITH_setext:
+	WITH_Xpaisetext:
 		New SET instructions (no immediate forms):
 			sge	- slt  funct7[1:0] = 10
 			sgeu	- sltu funct7[1:0] = 10
 			seq	- slt  funct7[1:0] = 01
 			sne	- slt  funct7[1:0] = 11
 
-	WITH_cmpand:
+	WITH_Xpaicmpand:
 		Condition "AND and equal zero" ("testz"):
 			baeqz	- funct3 = 010
 			banez	- funct3 = 011
 
-	WITH_cmpand + WITH_setext:
+	WITH_Xpaicmpand + WITH_Xpaisetext:
 		Condition "AND and equal zero":
 			saeqz	- sltu funct7[1:0] = 01
 			sanez	- sltu funct7[1:0] = 11
 
-	WITH_bitcntinv (requires Zbb):
+	WITH_Xpabcinv (requires Zbb):
 		Count the opposite polarity of bits:
 			clo	- clz   rs2[4] = 1
 			cto	- ctz   rs2[4] = 1
 			cpopz	- cpop  rs2[4] = 1
 
-	WITH_shiftone:
+	WITH_Xpabshone:
 		Shift left/right insert ones -
 			slo(i), sro(i)
 			Same encodings as sll(i), srl(i) with
@@ -84,7 +83,7 @@ Private instruction set extensions:
 			Same encoding as sra(i) with
 			funct7[6]/instr[31] = 1
 
-	WITH_extr:
+	WITH_Xpabextr:
 		Bitfield extraction custom opcode:
 
 		extru   rd,rs1,rs2,wimm5
@@ -92,7 +91,7 @@ Private instruction set extensions:
 		extrui  rd,rs1,shimm5,wimm5
 		extrsi  rd,rs1,shimm5,wimm5
 
-		With WITH_shiftone additionally ones or complement sign:
+		With WITH_Xpabshone additionally ones or complement sign:
 
 		extro   rd,rs1,rs2,wimm5
 		extrcs  rd,rs1,rs2,wimm5
@@ -115,7 +114,7 @@ Private instruction set extensions:
 				  10 for EXTRO*
 				  11 for EXTRCS*
 
-	WITH_extn:
+	WITH_Xpabextn:
 		Arbitrary width zero- or sign-extension:
 
 		zext   rd,rs1,rs2
@@ -123,7 +122,7 @@ Private instruction set extensions:
 		sext   rd,rs1,rs2
 		sexti  rd,rs1,shimm5
 
-		With WITH_shiftone additionally ones or complement sign:
+		With WITH_Xpabshone additionally ones or complement sign:
 
 		oext   rd,rs1,rs2
 		oexti  rd,rs1,shimm5
@@ -147,7 +146,7 @@ Private instruction set extensions:
 		The -i versions are not unique opcodes but assembly
 		aliases for extr*i rd,rs1,0,shimm5.
 
-	WITH_cneg:
+	WITH_Xpaicneg:
 		Conditional negate
 
 		cneg  rd,rs1,rs2	rd = rs1 < 0 ? -rs2 : rs2
