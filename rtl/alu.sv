@@ -24,11 +24,11 @@ module alu_decode #(`CONFIG)
 	logic [2:0] funct3;
 	insn_type_t itype;
 
-	itype 	  = op.itype;
-	funct7 	  = op.funct7;
-	funct3 	  = op.funct3;
+	itype	  = op.itype;
+	funct7	  = op.funct7;
+	funct3	  = op.funct3;
 
-	ctl 	  = 'bx;
+	ctl	  = 'bx;
 	ctl.unit  = ALUSRC_ERR;
 	ctl.shadd = 2'b00; // No preshift
 	ctl.cond  = cond_t'(op.funct3);
@@ -136,7 +136,8 @@ module alu_decode #(`CONFIG)
 	       end
 	       { 7'b000_00??, ALU_SLT },
 	       { 7'b000_00??, ALU_SLTU }: begin
-		  if (WITH_Xpaisetext || !funct7[1:0]) begin
+		  logic slt_ok;
+		  if (WITH_Xpaisetx || !funct7[1:0]) begin
 		     // bits 1:0 in funct7 can be used to obtain the
 		     // other possible condition codes
 		     ctl.cond = riscv::cond_t'({~funct7[1],
@@ -590,9 +591,11 @@ module alu #(`CONFIG)
    always @(*) begin
       logic cmpcond;
 
+      cmpcond = 1'bx;
+
       if (ctl.cond[2])
 	cmpcond = cmp_ltx;
-      else if (WITH_Xpaicmpand & ctl.cond[1])
+      else if (ctl.cond[1] & (WITH_Xpaisetx | WITH_Xpaicmpand))
 	cmpcond = cmp_and;
       else
 	cmpcond = cmp_eq;

@@ -38,8 +38,10 @@ Private instruction set extensions:
 	In addition to these, many extended instructions are in
 	brownfield space.
 
+	Some extensions may be unconditionally enabled when
+	STRICT_UNDEFINED = 0.
 
-	Xpacbomo:
+	WITH_Xpaicbom:
 		The cbo.* instructions allow a memory offset to be
 		specified, using the S instruction format. The
 		standard form of these instructions always have all
@@ -49,22 +51,20 @@ Private instruction set extensions:
 	WITH_Xpabshsub: (req. Zba)
 		shXsub	- shXadd funct7[5] = 1
 
-	WITH_Xpaisetext:
+	WITH_Xpaisetx:
 		New SET instructions (no immediate forms):
 			sge	- slt  funct7[1:0] = 10
 			sgeu	- sltu funct7[1:0] = 10
 			seq	- slt  funct7[1:0] = 01
 			sne	- slt  funct7[1:0] = 11
+		Condition "AND and equal zero":
+			saeqz	- sltu funct7[1:0] = 01
+			sanez	- sltu funct7[1:0] = 11
 
 	WITH_Xpaicmpand:
 		Condition "AND and equal zero" ("testz"):
 			baeqz	- funct3 = 010
 			banez	- funct3 = 011
-
-	WITH_Xpaicmpand + WITH_Xpaisetext:
-		Condition "AND and equal zero":
-			saeqz	- sltu funct7[1:0] = 01
-			sanez	- sltu funct7[1:0] = 11
 
 	WITH_Xpabcinv (requires Zbb):
 		Count the opposite polarity of bits:
@@ -176,7 +176,7 @@ Private instruction set extensions:
 		XXX: this support may be discontinued if a CSR
 		register file is motivated.
 
-	Without STRICT_UNDEFINED:
+	WITH_Xpacecall:
 		Additional RVC encoding:
 			c.ecall	- opcode 0x8002
 
@@ -194,6 +194,9 @@ Non-standard or system-specific behaviors:
 		A number of instruction encodings alias others or
 		perform undefined operations rather than trap. This
 		reduces the decoding logic.
+
+		The Xpaicbom and Xpacecall instructions end up
+		automatically being supported, de facto.
 
 		The following guarantees will always be maintained,
 		now and in the future, unless enabled by explicit

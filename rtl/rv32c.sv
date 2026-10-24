@@ -268,7 +268,7 @@ module rv32c_comb #(`CONFIG,
 		      if (!r1)	// C.ECALL, C.EBREAK
 			begin
 			   // C.ECALL is not officially defined
-			   if (!STRICT_UNDEFINED || i[12])
+			   if (WITH_Xpacecall || !STRICT_UNDEFINED || i[12])
 			     o = insn_i(R_ZERO, R_ZERO, i[12], 3'b000, SYSTEM);
 			end
 		      else		// C.JR, C.JALR

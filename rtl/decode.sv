@@ -149,10 +149,12 @@ module decode_comb #(`CONFIG)
 		  // Treat this as a store-format instruction (which means
 		  // permitting an address offset as an extension.)
 		  // rs2.r contains the actual cache operation.
-		  op.itype	= INSN_CBO;
-		  op.imm	= s_imm;
-		  op.rs1_valid	= 1'b1;
-	       end default: begin
+		  if (!STRICT_UNDEFINED || WITH_Xpaicbom || !s_imm)
+		     op.itype	  = INSN_CBO;
+		  op.imm	  = s_imm;
+		  op.rs1_valid = 1'b1;
+	       end
+	       default: begin
 		  op.itype = INSN_ERR;
 	       end
 	     endcase
@@ -233,20 +235,20 @@ module decode_comb #(`CONFIG)
 	  // CUSTOM0 is CUSTOM1 as OP_IMM is to OP
 	  CUSTOM0, CUSTOM1: begin
 	     logic [4:0] altcontext;
-	     
-	     op.itype 	  = INSN_XALU;
+
+	     op.itype	  = INSN_XALU;
 	     op.rs1_valid = 1'b1;
 	     op.rs2_valid = i[5];
-	     op.rd_e 	  = 1'b1;
-	     op.imm 	  = i_imm;
+	     op.rd_e	  = 1'b1;
+	     op.imm	  = i_imm;
 
 	     altcontext   = op.mcontext.u;
 	     if (op.rs2_valid & i[31])
 	       altcontext = i[29:25] & CTX_MASK;
-	     
+
 	     unique casez (op.funct3)
 	       3'b0?0: begin	// .xu, .xc
-		  		// funct3 == 010 not currently used
+				// funct3 == 010 not currently used
 		  op.rs1.c  = altcontext;
 	       end
 	       3'b0?1: begin	// .ux, .cx, .su, .sc
