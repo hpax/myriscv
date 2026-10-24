@@ -328,8 +328,8 @@ Nonstandard CSR numbers: (Xpasmy)
 	0x7f1		(reserved)
 	0x7f2		CIE
 	0x7f3		WAITFOR
-	0x7f4		SYS_CONTEXT
 	0xbe1-0xbff	Used for indirect CSR access (x1-x31)
+	0xff4		SYS_CONTEXT
 
 Register contexts:
 
