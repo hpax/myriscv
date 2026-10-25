@@ -41,6 +41,21 @@ Private instruction set extensions:
 	Some extensions may be unconditionally enabled when
 	STRICT_UNDEFINED = 0.
 
+	The private instruction set is broken into fine-grained
+	enables, but the toolchain uses the "Xpaimy" feature flag for
+	the union of these features:
+
+	Xpaicbom	- Memory offsets in cbo instruction
+	Xpabshsub	- shXsub instructions
+	Xpaisetx	- New SET instructions
+	Xpaicmpand	- Conditional "AND and equal zero"
+	Xpabcinv	- Count opposite bit polarity
+	Xpabshone	- Shift insert one
+	Xpabextr	- Bitfield extraction
+	Xpabextn	- Arbitrary width sign and zero extensions
+	Xpaicneg	- Conditional negate
+	Xpacecall	- c.ecall opcode
+
 	WITH_Xpaicbom:
 		The cbo.* instructions allow a memory offset to be
 		specified, using the S instruction format. The
@@ -53,13 +68,13 @@ Private instruction set extensions:
 
 	WITH_Xpaisetx:
 		New SET instructions (no immediate forms):
-			sge	- slt  funct7[1:0] = 10
-			sgeu	- sltu funct7[1:0] = 10
-			seq	- slt  funct7[1:0] = 01
-			sne	- slt  funct7[1:0] = 11
+			sge	- slt  funct7[6:5] = 10
+			sgeu	- sltu funct7[6:5] = 10
+			seq	- slt  funct7[6:5] = 01
+			sne	- slt  funct7[6:5] = 11
 		Condition "AND and equal zero":
-			saeqz	- sltu funct7[1:0] = 01
-			sanez	- sltu funct7[1:0] = 11
+			saeqz	- sltu funct7[6:5] = 01
+			sanez	- sltu funct7[6:5] = 11
 
 	WITH_Xpaicmpand:
 		Condition "AND and equal zero" ("testz"):
@@ -320,7 +335,7 @@ System architecture:
 	privilege level exists.
 
 	All system architectural extensions are consolidated under the
-	"Xpasmcu" extension label.
+	"Xpasmy" extension label.
 
 Nonstandard CSR numbers: (Xpasmy)
 
@@ -330,6 +345,7 @@ Nonstandard CSR numbers: (Xpasmy)
 	0x7f3		WAITFOR
 	0xbe1-0xbff	Used for indirect CSR access (x1-x31)
 	0xff4		SYS_CONTEXT
+	0xff5		NCONTEXTS
 
 Register contexts:
 

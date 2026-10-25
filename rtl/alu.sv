@@ -134,14 +134,14 @@ module alu_decode #(`CONFIG)
 		    end
 		  endcase
 	       end
-	       { 7'b000_00??, ALU_SLT },
-	       { 7'b000_00??, ALU_SLTU }: begin
+	       { 7'b??0_0000, ALU_SLT },
+	       { 7'b??0_0000, ALU_SLTU }: begin
 		  logic slt_ok;
-		  if (WITH_Xpaisetx || !funct7[1:0]) begin
-		     // bits 1:0 in funct7 can be used to obtain the
+		  if (WITH_Xpaisetx || !funct7[6:5]) begin
+		     // bits 6:5 in funct7 can be used to obtain the
 		     // other possible condition codes
-		     ctl.cond = riscv::cond_t'({~funct7[1],
-						 funct3[0], funct7[0]});
+		     ctl.cond = riscv::cond_t'({~funct7[6],
+						 funct3[0], funct7[5]});
 		     ctl.unit	 = ALUSRC_SET;
 		  end
 	       end
