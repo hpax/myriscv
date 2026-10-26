@@ -178,7 +178,30 @@ Private instruction set extensions:
 		instr[29:25]	= 0000000 for CNEG
 				  0100000 for CNEGN
 
-		"abs rd,rs1" is an alias for "cneg rd,rs1,rs1".
+	WITH_Xpabshaddpc:
+		Shift and add pc
+
+		shaddpc  rd,rs1,shimm2	rd = (rs1 << shimm2) + pc
+
+		instr[6:0]	= 0001011 (CUSTOM0)
+		instr[11:7]	= rd
+		instr[14:12]	= 001
+		instr[19:15]	= rs1
+		instr[21:20]	= shimm2
+		instr[24:22]	= 000
+		instr[29:25]	= 0010000
+
+	WITH_Xpabshaddpc and WITH_Xpabsshub:
+
+		shsubpc  rd,rs1,shimm2	rd = (rs1 << shimm2) - pc
+
+		instr[6:0]	= 0001011 (CUSTOM0)
+		instr[11:7]	= rd
+		instr[14:12]	= 001
+		instr[19:15]	= rs1
+		instr[21:20]	= shimm2
+		instr[24:22]	= 000
+		instr[29:25]	= 0110000
 
 	WITH_indcsr:
 		Indirect CSR access.
@@ -386,17 +409,17 @@ Register contexts:
 		sub.xu	- funct3 == 000, funct7 == 0100000
 			  rs1 is forced to the user context.
 
-		add.ux	- funct3 == 001, funct7 == 0000000
-		sub.ux	- funct3 == 001, funct7 == 0100000
+		add.ux	- funct3 == 010, funct7 == 0000000
+		sub.ux	- funct3 == 010, funct7 == 0100000
 			  rd is forced to the user context.
 
-		add.xc	- funct3 == 000, funct7 == 10ccccc 
-		sub.xc	- funct3 == 000, funct7 == 11ccccc 
-		  	  rs1 is forced to the context in insn[29:25].
+		add.xc	- funct3 == 000, funct7 == 10ccccc
+		sub.xc	- funct3 == 000, funct7 == 11ccccc
+			  rs1 is forced to the context in insn[29:25].
 
-		add.cx	- funct3 == 001, funct7 == 10ccccc 
-		sub.cx	- funct3 == 001, funct7 == 11ccccc
-		  	  rd is forced to the context in insn[29:25].
+		add.cx	- funct3 == 010, funct7 == 10ccccc
+		sub.cx	- funct3 == 010, funct7 == 11ccccc
+			  rd is forced to the context in insn[29:25].
 
 		add.su	- funct3 == 011, funct7 == 0000000
 		sub.su	- funct3 == 011, funct7 == 0100000

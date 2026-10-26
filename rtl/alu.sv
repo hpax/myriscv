@@ -21,12 +21,18 @@ module alu_decode #(`CONFIG)
    always @(*)
      begin
 	logic [6:0] funct7;
+	logic [6:0] funca7;
 	logic [2:0] funct3;
 	insn_type_t itype;
 
 	itype	  = op.itype;
-	funct7	  = op.funct7;
 	funct3	  = op.funct3;
+
+	funct7	  = op.funct7;
+	if (!op.rs2_valid && funct3[1:0] != 2'b01) begin
+	   // Immediate forms of ALU and XALU instructions
+	   funct7 = 7'b0;	// Immediate form
+	end
 
 	ctl	  = 'bx;
 	ctl.unit  = ALUSRC_ERR;
@@ -44,10 +50,10 @@ module alu_decode #(`CONFIG)
 	  end
 
 	  INSN_ALU: begin
-	     if (!op.rs2_valid && funct3[1:0] != 2'b01)
-	       funct7 = 7'b0;	// Immediate form
-
 	     unique casez ({funct7, funct3})
+	       { 7'b000_0001, 3'b??? }: begin
+		  // MUL/DIV instructions (to guard against collisions)
+	       end
 	       { 7'b0?0_0000, ALU_ADD }: begin
 		  ctl.unit = ALUSRC_ADD;
 		  ctl.invert = funct7[5];
@@ -70,8 +76,8 @@ module alu_decode #(`CONFIG)
 		 { 7'b01?_0100, ALU_SLL }: begin // BSET, BCLR, BINV
 		    ctl.unit	     = ALUSRC_SHIFT;
 		    ctl.shiftop      = SHIFTOP_BINV;
-		    ctl.shiftop.sand = funct7[5:4] == 2'b11; // BINV
-		    ctl.shiftop.sxor = funct7[4];	     // Not BCLR
+		    ctl.shiftop.sand = op.funct7[5:4] == 2'b11; // BINV
+		    ctl.shiftop.sxor = op.funct7[4];	     // Not BCLR
 		 end
 	       { 7'b011_0000, ALU_SLL }: begin
 		  unique casez ({!op.rs2_valid, op.rs2.r})
@@ -89,7 +95,7 @@ module alu_decode #(`CONFIG)
 		       ctl.shiftop = SHIFTOP_ROL;
 		    end
 		    default: begin
-		       // Do nothing
+		       // Invalid
 		    end
 		  endcase // unique casez ({!op.rs2_valid, op.rs2.r})
 	       end // case: { 7'b011_0000, ALU_SLL }
@@ -99,7 +105,7 @@ module alu_decode #(`CONFIG)
 		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_SRA;
 		     ctl.shiftop.sand = funct7[5];
-		     ctl.shiftop.sxor = funct7[6];
+		     ctl.shiftop.sxor = funct7[6] & WITH_Xpabshone;
 		  end
 	       end
 	       { 7'b001_0100, ALU_SRL }: begin
@@ -110,7 +116,7 @@ module alu_decode #(`CONFIG)
 		       ctl.unit = ALUSRC_ORC;
 		    end
 		    default: begin
-		       // Do nothing
+		       // Invalid
 		    end
 		  endcase
 	       end
@@ -130,7 +136,7 @@ module alu_decode #(`CONFIG)
 		       ctl.unit = ALUSRC_REV;
 		    end
 		    default: begin
-		       // Do nothing
+		       // Invalid
 		    end
 		  endcase
 	       end
@@ -159,7 +165,7 @@ module alu_decode #(`CONFIG)
 		       ctl.shiftop = SHIFTOP_ZEXTH;
 		    end
 		    default: begin
-		       // Do nothing
+		       // Invalid
 		    end
 		  endcase // unique casez (op.rs2.r)
 	       end
@@ -170,44 +176,61 @@ module alu_decode #(`CONFIG)
 		  ctl.unit = ALUSRC_ZICOND;
 	       end
 	       default: begin
-		  // Do nothing
+		  // Invalid
 	       end
 	     endcase // unique casez ({funct7, funct3})
 	  end
 
 	  INSN_XALU: begin
 	     unique casez (funct3)
-	       3'b0??: begin
-		  if (!STRICT_UNDEFINED ||
-		      (funct3[1:0] != 2'b10 &&
-		       (!op.rs2_valid || funct7[6] || !funct7[4:0]))) begin
+	       3'b00?, 3'b011: begin
+		  if (!STRICT_UNDEFINED || funct7[6] || !funct7[4:0]) begin
 		     ctl.unit	= ALUSRC_ADD;
-		     ctl.invert = op.rs2_valid & funct7[5];
+		     ctl.invert = funct7[5];
 		  end
 	       end
-
+	       // For this encoding, op.imm == pc, so if !op.rs2_valid then
+	       // src2 == pc.
+	       3'b001: begin
+		  unique casez (op.funct7)
+		    7'b0?1_0000: begin
+		       if (WITH_Xpabshaddpc && !op.rs2_valid) begin
+			  ctl.unit   = ALUSRC_ADD;
+			  ctl.shadd  = op.rs2.r[1:0];
+			  ctl.invert = op.funct7[5] & WITH_Xpabshsub;
+		       end
+		    end
+		    default: begin
+		       // Invalid
+		    end
+		  endcase
+	       end
 	       3'b101: begin		// EXTR*
 		  if (WITH_Xpabextr) begin
 		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_EXTRS;
-		     ctl.shiftop.wimm = funct7[4:0];
-		     ctl.shiftop.sand = funct7[5];
-		     ctl.shiftop.sxor = funct7[6] & WITH_Xpabshone;
+		     ctl.shiftop.wimm = op.funct7[4:0];
+		     ctl.shiftop.sand = op.funct7[5];
+		     ctl.shiftop.sxor = op.funct7[6] & WITH_Xpabshone;
 		  end
 	       end
-
 	       3'b110: begin		// CNEG
-		  if (WITH_Xpaicneg &&
-		      (!STRICT_UNDEFINED || !op.rs2_valid ||
-			 !(funct7 & 7'b1011111))) begin
-		     ctl.unit	 = ALUSRC_ADD;
-		     ctl.invert = funct7[5] & op.rs2_valid;
-		     ctl.cinv	 = 1'b1;
-		     ctl.zsrc1   = 1'b1;
-		  end
+		  unique casez (funct7)
+		    6'b0?00000: begin
+		       if (WITH_Xpaicneg) begin
+			  ctl.unit   = ALUSRC_ADD;
+			  ctl.invert = funct7[5];
+			  ctl.cinv   = 1'b1;
+			  ctl.zsrc1  = 1'b1;
+		       end
+		    end
+		    default: begin
+		       // Invalid
+		    end
+		  endcase
 	       end
 	       3'b111: begin		// arbitrary extend
-		  if (WITH_Xpabextn &&
+		  if (WITH_Xpabextn && op.rs2_valid &&
 		      (!STRICT_UNDEFINED || !funct7[4:0])) begin
 		     ctl.unit	      = ALUSRC_SHIFT;
 		     ctl.shiftop      = SHIFTOP_SEXTN;
@@ -216,7 +239,7 @@ module alu_decode #(`CONFIG)
 		  end
 	       end
 	       default: begin
-		  // Do nothing
+		  // Invalid
 	       end
 	     endcase
 	  end

@@ -247,11 +247,14 @@ module decode_comb #(`CONFIG)
 	       altcontext = i[29:25] & CTX_MASK;
 
 	     unique casez (op.funct3)
-	       3'b0?0: begin	// .xu, .xc
-				// funct3 == 010 not currently used
+	       3'b000: begin	// .xu, .xc
 		  op.rs1.c  = altcontext;
 	       end
-	       3'b0?1: begin	// .ux, .cx, .su, .sc
+	       3'b001: begin
+		  if (WITH_Xpabshaddpc)
+		    op.imm    = op.pc;
+	       end
+	       3'b01?: begin	// .ux, .cx, .su, .sc
 		  op.rd.c   = altcontext;
 	       end
 	       default: begin
