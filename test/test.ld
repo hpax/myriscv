@@ -6,7 +6,7 @@
 OUTPUT_FORMAT("elf32-littleriscv", "elf32-littleriscv",
               "elf32-littleriscv")
 OUTPUT_ARCH(riscv)
-ENTRY(___reset)
+ENTRY(_reset)
 EXTERN(_NULL)
 EXTERN(_reset)
 EXTERN(_mtvec)
@@ -102,32 +102,32 @@ SECTIONS
 	.null 0 : {
 		PROVIDE(___NULL = .);
 		KEEP (*(SORT_NONE(.null)))
-	}
+	} >SRAM
 
 	.init.reset 0x10 : ALIGN(4) {
 		PROVIDE (___reset = .);
 		KEEP (*(SORT_NONE(.init.reset)))
-	}
+	} >SRAM
 
 	.init.irq 0x80 : ALIGN(4) {
 		PROVIDE (___mtvec = .);
 		KEEP (*(SORT_NONE(.init.irq)))
-	}
+	} >SRAM
 
 	.init : ALIGN(4) {
 		KEEP (*(SORT_NONE(.init .init.*)))
-	}
+	} >SRAM
 
 	.text.zeropage : ALIGN(4) {
 		*(.text.zeropage *.text.zeropage.*)
-	}
+	} >SRAM
 
 	/* .rwtext is in the zero page */
 	.rwtext : ALIGN(4) {
 		PROVIDE (__rwtext_start = .);
 		*(.rwtext*)
 		PROVIDE (__rwtext_end = .);
-	}
+	} >SRAM
 
 	/*
 	 * Put the short data sections in the zero page.
@@ -138,13 +138,13 @@ SECTIONS
 	__SDATA_BEGIN__ = .;
 	.srodata : {
 		*(.srodata*)
-	}
+	} >SRAM
 	.sdata : {
 		*(.sdata .sdata.* .gnu.linkonce.s.*)
-	}
+	} >SRAM
 	.sdata2 : {
 		*(.sdata2 .sdata2.* .gnu.linkonce.s2.*)
-	}
+	} >SRAM
 
 	. = ALIGN(32);
 	__BSS_START__ = .;
@@ -153,10 +153,10 @@ SECTIONS
 		*(.dynsbss)
 		*(.sbss .sbss.* .gnu.linkonce.sb.*)
 		*(.scommon)
-	}
+	} >SRAM
 	.sbss2 (NOLOAD) : {
 	       *(.sbss2 .sbss2.* .gnu.linkonce.sb2.*)
-	}
+	} >SRAM
 
 	HIDDEN($assert_zero_page = ASSERT((. <= 2048), "zero page overflow"));
 
@@ -164,7 +164,7 @@ SECTIONS
 		*(.dynbss)
 		*(.bss.*hot* .gnu.linkonce.b.*)
 		*(COMMON)
-	}
+	} >SRAM
 	. = ALIGN(32);
 	__BSS_END__ = .;
 	__BSS_LEN__ = __BSS_END__ - __BSS_START__;
@@ -175,54 +175,54 @@ SECTIONS
 
 	.init : ALIGN(4) {
 		KEEP (*(SORT_NONE(.init)))
-	}
+	} >SRAM
 
 	.text.hot : ALIGN(4) {
 		*(.text.startup .text.startup.*)
 		*(.text.hot .text.hot.*)
 		*(.gnu.linkonce.t.*)
-	}
+	} >SRAM
 	PROVIDE (__etext = .);
 	PROVIDE (_etext = .);
 
 	. = ALIGN(4);
 	.str.hot : ALIGN(4) {
 		*(.rodata*.hot.str*)
-	}
+	} >SRAM
 	.rodata.hot         : {
 		*(.rodata*.hot* .gnu.linkonce.r.*)
-	}
+	} >SRAM
 
 	/* Thread Local Storage sections  */
 	.tdata          : {
 		PROVIDE_HIDDEN (__tdata_start = .);
 		*(.tdata .tdata.* .gnu.linkonce.td.*)
-	}
-	.tbss       : { *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon) }
+	} >SRAM
+	.tbss       : { *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon) } >SRAM
 	.preinit_array    : {
 		PROVIDE_HIDDEN (__preinit_array_start = .);
 		KEEP (*(.preinit_array))
 		PROVIDE_HIDDEN (__preinit_array_end = .);
-	}
+	} >SRAM
 	/* Are these necessary/supportable? */
-	  .jcr          : { KEEP (*(.jcr)) }
+	  .jcr          : { KEEP (*(.jcr)) } >SRAM
 	.data.rel.ro	: {
 			*(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*)
 			*(.data.rel.ro .data.rel.ro.* .gnu.linkonce.d.rel.ro.*)
-	}
+	} >SRAM
 
-.data           : {
+	.data           : {
 		__DATA_BEGIN__ = .;
 		*(.data .data.* .gnu.linkonce.d.*)
 		SORT(CONSTRUCTORS)
-	}
+	} >SRAM
 	.data1          : { *(.data1) }
 	_edata = .;
 	_end = .;
 
 	.stack (NOLOAD) : ALIGN(16) {
 		KEEP (*(.stack))
-	}
+	} >SRAM
 
 	/* Sections in SDRAM */
 	. = 0x40000000;
@@ -288,14 +288,6 @@ SECTIONS
 	} >DRAM
 
 	__dram_end = .;
-
-	/* Catch missing sections */
-	. = __dram_end;
-	__junk_start = .;
-	.junk : {
-		*(*)
-	}
-	__junk_end = .;
 
 /*	HIDDEN($assert_no_junk = ASSERT(__junk_end == __junk_start, "unknown sections present")); */
 }

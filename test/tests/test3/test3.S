@@ -64,7 +64,7 @@ unalign_test:
 	sw a1,1(s0)
 	lw a0,4(s0)
 	jal _print_hex
-	li a0,':
+	li a0,':'
 	sb a0,%lo(TTY)(zero)
 	lw a0,(s0)
 	jal _print_hex
@@ -77,7 +77,7 @@ unalign_test:
 	lw s1,(s0)
 	lw a0,4(s0)
 	jal _print_hex
-	li a0,':
+	li a0,':'
 	sb a0,%lo(TTY)(zero)
 	mv a0,s1
 	jal _print_hex

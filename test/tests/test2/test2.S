@@ -64,7 +64,7 @@ unalign_test:
 	sw a1,1(s0)
 	lw a0,4(s0)
 	jal _print_hex
-	li a0,':
+	li a0,':'
 	sb a0,%lo(TTY)(zero)
 	lw a0,(s0)
 	jal _print_hex
@@ -134,11 +134,13 @@ mult_test:
 	crlf
 
 	/* Test writing to and running from external memory */
+	dram_addr = 0x40000000
+
 extmem_test:
 	la a0,extmem1_str
 	jal _print_str
 	li a0,0x80824531		// li a0,12; ret
-	la s0,0x40000000
+	la s0,dram_addr
 	sw a0,(s0)
 	cbo.clean (s0)			// Required!
 	fence.i
@@ -148,9 +150,9 @@ extmem_test:
 	jalr (s0)			// Should be cached w/o overrun?
 
 	// Test LUI/AUIPC -> JALR forwarding
-	la ra,0x40000000		// Uses LUI
+	li ra,dram_addr			// Uses LUI
 	jalr (ra)
-	call 0x40000000			// Uses AUIPC
+	call dram_addr			// Uses AUIPC
 
 	call _print_hex
 	crlf

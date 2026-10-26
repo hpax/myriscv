@@ -3,7 +3,6 @@
 	.section ".text.hot.__start","ax"
 	.balign 4
 	.weak __start
-	.globl __start
 __start:
 	la a0,__BSS_START__
 	la a1,__BSS_END__

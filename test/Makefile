@@ -1,22 +1,23 @@
 # Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 #!/usr/bin/make -R -r
 
-CROSS	= $(realpath ../tools/gnu/bin)/riscv32-hpa-elf-
+WHERE  := /opt/riscv/my/
+CROSS  := $(WHERE)bin/
 
 AS	= $(CROSS)as
-LD	= $(CROSS)ld
-CC	= $(CROSS)gcc
-AR	= $(CROSS)ar
-OBJCOPY	= $(CROSS)objcopy
+LD	= $(CROSS)ld.lld
+CC	= $(CROSS)clang
+AR	= $(CROSS)llvm-ar
+OBJCOPY	= $(CROSS)llvm-objcopy
 PERL    = perl
 HEXDUMP	= hexdump
 
 include ../tools/riscv-opts.mk
 
-CFLAGS  = $(riscv_flags) -nostdlib -ffunction-sections -fdata-sections \
-	  -I./include
-SFLAGS  = $(CFLAGS) -D__ASSEMBLY__ -Wa,-ahlsm=$*.lst
-LDFLAGS	= $(CFLAGS) -Wl,-T,test.ld -Wl,-Map=$*.map -Wl,--gc-sections
+CFLAGS  = $(riscv_flags) -static -nostdlib -I./include -I../include
+SFLAGS  = $(CFLAGS)
+LDFLAGS	= $(CFLAGS) -fuse-ld='$(LD)' -Wl,-T,test.ld -Wl,-Map=$*.map \
+	-Wl,--gc-sections -Wl,--relax -Wl,--relax-gp
 
 TESTDIRS = $(wildcard tests/*)
 TESTS    = $(foreach d,$(TESTDIRS),$(d)/$(notdir $(d)).elf)
@@ -75,23 +76,23 @@ $(LIB): $(LIBOBJS)
 %.elf: test.ld $(LIB)
 	$(CC) $(LDFLAGS) $(LDFLAGS_$@) -o $@ $(OBJS_$@) $(LIB)
 
-GENINCLUDE = ../rtl/params.h
-../rtl/params.h: ../rtl/params.sv
-	$(MAKE) -C ../rtl
+.PHONY: geninclude
+geninclude:
+	$(MAKE) -C ../include
 
-%.o: %.S $(GENINCLUDE)
+%.o: %.S | geninclude
 	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -c -o $@ $<
 
-%.s: %.S $(GENINCLUDE)
+%.s: %.S | geninclude
 	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -E -o $@ $<
 
-%.o: %.c $(GENINCLUDE)
+%.o: %.c | geninclude
 	$(CC) $(CFLAGS) $(CFLAGS_$<) $(gendeps) -c -o $@ $<
 
-%.s: %.c $(GENINCLUDE)
+%.s: %.c | geninclude
 	$(CC) $(CFLAGS) $(CFLAGS_$<) $(gendeps) -S -o $@ $<
 
-%.i: %.c $(GENINCLUDE)
+%.i: %.c | geninclude
 	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -E -o $@ $<
 
 clean:
