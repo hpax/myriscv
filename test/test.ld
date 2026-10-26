@@ -114,6 +114,14 @@ SECTIONS
 		KEEP (*(SORT_NONE(.init.irq)))
 	}
 
+	.init : ALIGN(4) {
+		KEEP (*(SORT_NONE(.init .init.*)))
+	}
+
+	.text.zeropage : ALIGN(4) {
+		*(.text.zeropage *.text.zeropage.*)
+	}
+
 	/* .rwtext is in the zero page */
 	.rwtext : ALIGN(4) {
 		PROVIDE (__rwtext_start = .);

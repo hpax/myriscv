@@ -54,6 +54,7 @@ Private instruction set extensions:
 	Xpabextr	- Bitfield extraction
 	Xpabextn	- Arbitrary width sign and zero extensions
 	Xpaicneg	- Conditional negate
+	Xpabshaddpc	- Shift and add pc
 	Xpacecall	- c.ecall opcode
 
 	WITH_Xpaicbom:

@@ -16,9 +16,21 @@
 
 #ifdef __ASSEMBLER__
 
+#include "asm.h"
 #include "testasm.h"
 
 #else
+
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+#define noreturn	__attribute__((__noreturn__))
+#define unreachable()	__builtin_unreachable()
+#define likely(x)	__builtin_expect(!!(x), 1)
+#define unlikely(x)	__builtin_expect(!!(x), 0)
+#define __hot		__attribute__((__hot__))
+#define __cold		__attribute__((__cold__))
 
 extern volatile char		TTY;
 extern volatile char		TTYCHR[256];
@@ -38,17 +50,15 @@ static inline void tty_puts(const char *s)
 	TTY = *s++;
 }
 
-static inline __attribute__((noreturn)) void stop(unsigned int status)
+static inline noreturn void stop(unsigned int status)
 {
     while (1)
 	STOP = status;
     __builtin_unreachable();
 }
 
-
-__attribute__((noreturn)) void
-__assert_fail(const void *what, const void *file,
-	      const void *func, unsigned long line);
+noreturn void __assert_fail(const void *what, const void *file,
+			    const void *func, unsigned long line);
 
 #define assert(x)					     \
     do {						     \
