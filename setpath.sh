@@ -1,2 +1,2 @@
-PATH=$(realpath tools/gnu/bin):"$PATH"
+PATH=$(realpath tools/llvm/bin):"$PATH"
 export PATH
