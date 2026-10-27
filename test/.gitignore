@@ -2,6 +2,8 @@
 *.elf
 *.hex
 *.o
+*.s
+*.i
 *.map
 *.lst
 *.a
