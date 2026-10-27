@@ -144,3 +144,16 @@ __udivmodsi4(unsigned int num, unsigned den, unsigned int *rem)
     *rem = ures.r;
     return ures.q;
 }
+
+__attribute__((hot)) int
+__divmodsi4(int num_in, int den_in, int *rem)
+{
+    uint32_t abs_num = (num_in < 0) ? -num_in : num_in;
+    uint32_t abs_den  = (den_in < 0)  ? -den_in  : den_in;
+    int q_sign = num_in ^ den_in;
+
+    struct udiv_t ures = udivsi(abs_num, abs_den);
+
+    *rem = num_in < 0 ? -ures.r : ures.r;
+    return q_sign < 0 ? -ures.q : ures.q;
+}
