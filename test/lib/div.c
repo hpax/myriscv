@@ -14,25 +14,11 @@ static inline __attribute__((const)) unsigned int clz(uint32_t x)
     return __builtin_clz(x);
 }
 
+/* Entry conditions: num >= den, den != 0 */
 static inline udiv_t __attribute__((always_inline,const))
 udivsi(unsigned int num, unsigned den)
 {
     struct udiv_t res;
-
-    // -------------------------------------------------------------
-    // 1. Edge Case & Custom Sign Extraction
-    // -------------------------------------------------------------
-    if (unlikely(!den)) {
-	res.q = -1;
-	res.r = num;
-	return res;
-    }
-
-    if (unlikely(num < den)) {
-	res.q = 0;
-	res.r = num;
-	return res;
-    }
 
     // -------------------------------------------------------------
     // 2. Fast Normalization (Zbb) & Reciprocal Estimate
@@ -105,9 +91,15 @@ udivsi(unsigned int num, unsigned den)
 __attribute__((hot)) int
 __divsi3(int num_in, int den_in)
 {
+    if (unlikely(!den_in))
+	return -1;
+
     uint32_t abs_num = (num_in < 0) ? -num_in : num_in;
     uint32_t abs_den  = (den_in < 0)  ? -den_in  : den_in;
     int q_sign = num_in ^ den_in;
+
+    if (unlikely(abs_num < abs_den))
+	return 0;
 
     struct udiv_t ures = udivsi(abs_num, abs_den);
 
@@ -120,6 +112,9 @@ __remsi3(int num_in, int den_in)
     uint32_t abs_num = (num_in < 0) ? -num_in : num_in;
     uint32_t abs_den  = (den_in < 0)  ? -den_in  : den_in;
 
+    if (unlikely(!den_in) || unlikely(abs_num < abs_den))
+	return num_in;
+
     struct udiv_t ures = udivsi(abs_num, abs_den);
 
     return num_in < 0 ? -ures.r : ures.r;
@@ -128,19 +123,37 @@ __remsi3(int num_in, int den_in)
 __attribute__((hot)) unsigned int
 __udivsi3(unsigned int num, unsigned int den)
 {
+    if (unlikely(!den))
+	return -1;
+    if (unlikely(num < den))
+	return 0;
+
     return udivsi(num, den).q;
 }
 
 __attribute__((hot)) unsigned int
 __uremsi3(unsigned int num, unsigned int den)
 {
+    if (unlikely(!den) || unlikely(num < den))
+	return num;
+
     return udivsi(num, den).r;
 }
 
 __attribute__((hot)) unsigned int
 __udivmodsi4(unsigned int num, unsigned den, unsigned int *rem)
 {
+    if (unlikely(!den)) {
+	*rem = num;
+	return -1;
+    }
+    if (unlikely(num < den)) {
+	*rem = num;
+	return 0;
+    }
+
     struct udiv_t ures = udivsi(num, den);
+
     *rem = ures.r;
     return ures.q;
 }
@@ -148,9 +161,19 @@ __udivmodsi4(unsigned int num, unsigned den, unsigned int *rem)
 __attribute__((hot)) int
 __divmodsi4(int num_in, int den_in, int *rem)
 {
+    if (unlikely(!den_in)) {
+	*rem = num_in;
+	return -1;
+    }
+
     uint32_t abs_num = (num_in < 0) ? -num_in : num_in;
     uint32_t abs_den  = (den_in < 0)  ? -den_in  : den_in;
     int q_sign = num_in ^ den_in;
+
+    if (unlikely(abs_num < abs_den)) {
+	*rem = num_in;
+	return 0;
+    }
 
     struct udiv_t ures = udivsi(abs_num, abs_den);
 
