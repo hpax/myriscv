@@ -1,15 +1,4 @@
-[submodule "tools/gnusrc/newlib"]
-	path = tools/gnusrc/newlib
-	url = git://git.abc80.org/riscv/tools/newlib-cygwin.git
-	branch = main
-	shallow = true
-[submodule "tools/gnusrc/binutils"]
-	path = tools/gnusrc/binutils
-	url = git://git.abc80.org/riscv/tools/binutils-gdb.git
-	branch = binutils-2.44-myriscv
-	shallow = true
-[submodule "tools/gnusrc/gcc"]
-	path = tools/gnusrc/gcc
-	url = git://git.abc80.org/riscv/tools/gcc.git
-	branch = hpa/gcc-15-myriscv
-	shallow = true
+[submodule "tools/llvm.src"]
+	path = tools/llvm.src
+	url = https://github.com/hpax/llvm-myriscv.git
+	branch = users/hpa/myriscv-23.1.4
