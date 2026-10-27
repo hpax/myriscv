@@ -1,8 +1,8 @@
 # Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 #!/usr/bin/make -R -r
 
-WHERE  := /opt/riscv/my/
-CROSS  := $(WHERE)bin/
+WHERE  := $(abspath ../tools/llvm)
+CROSS  := $(WHERE)/bin/
 
 AS	= $(CROSS)as
 LD	= $(CROSS)ld.lld
@@ -14,7 +14,8 @@ HEXDUMP	= hexdump
 
 include ../tools/riscv-opts.mk
 
-CFLAGS  = $(riscv_flags) -static -nostdlib -I./include -I../include
+CFLAGS  = $(riscv_flags) -B '$(WHERE)' \
+	-static -nostdlib -I./include -I../include
 SFLAGS  = $(CFLAGS)
 LDFLAGS	= $(CFLAGS) -fuse-ld='$(LD)' -Wl,-T,test.ld -Wl,-Map=$*.map \
 	-Wl,--gc-sections -Wl,--relax -Wl,--relax-gp
