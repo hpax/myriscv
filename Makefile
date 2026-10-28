@@ -7,10 +7,12 @@ TARGETS := all tidy clean spotless
 
 subtargets := $(foreach d,$(SUBDIRS),$(foreach t,$(TARGETS),$(d)/$(t)))
 
-.PHONY: $(subtargets)
-$(subtargets):
-	$(MAKE) -C $(@D) $(@F)
+.DEFAULT_GOAL = all
 
 .PHONY: $(TARGETS)
 $(TARGETS):
 	for d in $(SUBDIRS); do $(MAKE) $$d/$@; done
+
+.PHONY: $(subtargets)
+$(subtargets):
+	$(MAKE) -C $(@D) $(@F)
