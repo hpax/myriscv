@@ -226,6 +226,11 @@ Private instruction set extensions:
 		Bit 0 of the address is taken from bit 2 of the
 		instruction.
 
+		The LLVM toolchain uses relocation 192
+		(R_RISCV_CUSTOM192) for "lai" if specified explicitly,
+		and can also relax the standard "la" macro pattern
+		(auipc + addi) to "lai."
+
 	WITH_indcsr:
 		Indirect CSR access.
 
