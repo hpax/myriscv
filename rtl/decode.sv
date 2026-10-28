@@ -232,6 +232,14 @@ module decode_comb #(`CONFIG)
 	     can_pred  = 1'b1;
 	  end
 
+	  CUSTOM3: begin	// LAI
+	     op.itype  = INSN_ALU;
+	     op.funct3 = ALU_ADD;
+	     op.rs1.r  = 5'b0; // rs1 = immediate 0
+	     op.rd_e   = 1'b1;
+	     op.imm    = op.pc + j_imm;
+	  end
+
 	  // CUSTOM0 is CUSTOM1 as OP_IMM is to OP
 	  CUSTOM0, CUSTOM1: begin
 	     logic [4:0] altcontext;
