@@ -14,11 +14,7 @@ _NULL:
 	.section ".init.reset","ax"
 	.globl _reset
 _reset:
-	.option push
-	.option norelax
 	la sp, ___stack_top
 	la gp, __global_pointer$
 	la tp, __tdata_start
-	.option pop
-	.option push
 	j __start
