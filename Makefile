@@ -2,10 +2,15 @@
 
 MAKEFLAGS += Rr
 
-SUBDIRS = rtl include tools test
+SUBDIRS := rtl include tools test
+TARGETS := all tidy clean spotless
 
-%.all %.tidy %.clean %.spotless:
-	$(MAKE) -C $* $(suffix $@)
+subtargets := $(foreach d,$(SUBDIRS),$(foreach t,$(TARGETS),$(d)/$(t)))
 
-all tidy clean spotless:
-	for $$d in $(SUBDIRS); do $(MAKE) $$d.$@; done
+.PHONY: $(subtargets)
+$(subtargets):
+	$(MAKE) -C $(@D) $(@F)
+
+.PHONY: $(TARGETS)
+$(TARGETS):
+	for d in $(SUBDIRS); do $(MAKE) $$d/$@; done
