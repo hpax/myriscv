@@ -169,7 +169,8 @@ SECTIONS
 	__BSS_END__ = .;
 	__BSS_LEN__ = __BSS_END__ - __BSS_START__;
 
-	__global_pointer$ = 0;
+	/* For the stuff immediately outside the zero page */
+	__global_pointer$ = 0x800;
 
 	PROVIDE(___text = .);
 
