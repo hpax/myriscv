@@ -210,9 +210,10 @@ Private instruction set extensions:
 
 	WITH_Xpailai:
 		Load Address Immediate
-		lai rd,j_imm		rd = j_imm + pc
+		lai rd,j_imm		rd = j_imm + pc + x
 
-		instr[6:0]	= 1111011 (CUSTOM3)
+		instr[6:0]	= 1001x11 (NMSUB/NMADD)
+		instr[2]        = imm[0]
 		instr[11:7]	= rd
 		instr[31:12]	= j_imm
 
@@ -221,6 +222,9 @@ Private instruction set extensions:
 		a register.
 
 		Used to load address immediates within ±1 MiB of pc.
+
+		Bit 0 of the address is taken from bit 2 of the
+		instruction.
 
 	WITH_indcsr:
 		Indirect CSR access.

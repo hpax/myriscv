@@ -161,10 +161,10 @@ module decode_comb #(`CONFIG)
 	  end
 
 	  JAL: begin
-	     op.itype = INSN_JAL;
-	     op.rd_e  = 1'b1;
-	     op.rs1.r = 5'd0;	// To prevent rs1 from being a constant
-	     op.imm   = op.pc + j_imm;
+	     op.itype  = INSN_JAL;
+	     op.rd_e   = 1'b1;
+	     op.rs1.r  = 5'b0; // rs1 = immediate 0
+	     op.imm    = op.pc + j_imm;
 	  end
 
 	  OP, OP_IMM: begin
@@ -232,10 +232,10 @@ module decode_comb #(`CONFIG)
 	     can_pred  = 1'b1;
 	  end
 
-	  CUSTOM3: begin	// LAI
+	  NMSUB, NMADD: begin	// LAI
 	     op.itype  = INSN_ALU;
 	     op.funct3 = ALU_ADD;
-	     op.rs1.r  = 5'b0; // rs1 = immediate 0
+	     op.rs1.r  = { 4'b0, i[2] }; // rs1 = immediate 0 or 1
 	     op.rd_e   = 1'b1;
 	     op.imm    = op.pc + j_imm;
 	  end
