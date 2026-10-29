@@ -103,7 +103,7 @@ module decode_comb #(`CONFIG)
 	     if (WITH_Zalrsc) begin
 		if (!STRICT_UNDEFINED ||
 		  (op.funct7[6:3] == 4'b0001 & op.funct7[1:0] == 2'b11 &
-		   op.funct3 == 3'b010 & (op.funct7[2] | !op.rd.r))) begin
+		   op.funct3[2] == 1'b0 & (op.funct7[2] | !op.rd.r))) begin
 		   op.imm          = 'b0;
 		   op.rs1_valid    = 1'b1;
 		   op.lrsc         = 1'b1;

@@ -7,21 +7,22 @@ values. They are set as normal Verilog instance parameters.
 
 Standard architecture extensions:
 
-	I	- Base RV32I architecture
-	B	- Bit operations (= Zba Zbb Zbs)
-	C	- Compression operations (= Zca Zcb)
-	Zkr	- Entropy source (*)
-	Zkt	- Data-independent execution latency
-	Zalrsc	- LR/SC instructions for atomicity (*)
-	Zicbom	- Cache block management operations
-	Ziccif	- Aligned instruction fetches are atomic
-	Zicclsm	- Unaligned memory accesses
-	Ziccrse	- LR/SC forward progress guarantee (*)
-	Zicond	- Conditional integer operations
-	Zicsr	- Control registers (*)
-	Zictr	- Standard counter registers (*)
-	Zmmul	- Integer multiplication
-	Ztso	- Total store ordering (implicit in a uniprocessor)
+	I	 - Base RV32I architecture
+	B	 - Bit operations (= Zba Zbb Zbs)
+	C	 - Compression operations (= Zca Zcb)
+	Zkr	 - Entropy source (*)
+	Zkt	 - Data-independent execution latency
+	Zabhlrsc - Halfword and byte LR/SC instructions (*)
+	Zalrsc	 - LR/SC instructions for atomicity (*)
+	Zicbom	 - Cache block management operations
+	Ziccif	 - Aligned instruction fetches are atomic
+	Zicclsm	 - Unaligned memory accesses
+	Ziccrse	 - LR/SC forward progress guarantee (*)
+	Zicond	 - Conditional integer operations
+	Zicsr	 - Control registers (*)
+	Zictr	 - Standard counter registers (*)
+	Zmmul	 - Integer multiplication
+	Ztso	 - Total store ordering (implicit in a uniprocessor)
 
 	* = see below for non-standard, implementation-specific,
 	    or configurable behavior
@@ -301,15 +302,21 @@ Non-standard or system-specific behaviors:
 		It is claimed by LR and released by SC, exceptions,
 		and interrupts.
 
+		-> How does this compare to the Zalasr load
+                   acquire/store release instructions?
+
 		If WITH_Ziccrse is specified, interrupts are inhibited
 		until up to 2^Ziccrse_bits instructions (default 2^4)
 		have been retired, or if Ziccrse_bits == 0,
 		indefinitely until the reservation has been cleared.
 
-		Unless STRICT_UNDEFINED is set, halfword and byte
-		LR/SC instructions (lr.b, lr.h, lr.bu, lr.hu, sc.b,
-		sc.h) are supported by setting funct3 to the same
-		value as the equivalent load or store instruction.
+		Note: this is a considerably stronger guarantee than
+		is required by the Zalasr extension.
+
+		Unless STRICT_UNDEFINED is set, unsigned halfword and
+		byte LR instructions (lr.bu and lr.hu) are supported
+		by setting bit funct3[2], as in the equivalent load
+		instructions.
 
 		There is currently no support for LR/SC to I/O or to
 		prevent DMA to external memory.
