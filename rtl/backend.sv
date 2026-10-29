@@ -262,7 +262,7 @@ module backend #(`CONFIG)
 	  end else begin
 	     if (d_src_hold)
 	       e_src1 <= e_src1;	// Do not update
-	     if (!d_op.rs1_valid)
+	     else if (!d_op.rs1_valid)
 	       e_src1 <= d_op.rs1.r;	// rs1 is uimm5 or void
 	     else if (d_rs1_e)
 	       e_src1 <= e_dout;	// Data comes from the E stage
@@ -275,7 +275,7 @@ module backend #(`CONFIG)
 
 	     if (d_src_hold)
 	       e_src2 <= e_src2;	// Do not update
-	     if (!d_op.rs2_valid)
+	     else if (!d_op.rs2_valid)
 	       e_src2 <= d_op.imm;	// rs2 is uimm5 or void
 	     else if (d_rs2_e)
 	       e_src2 <= e_dout;	// Data comes from the E stage
