@@ -1,4 +1,5 @@
-// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
+//
+// Copyright (C) 2024-2026 H. Peter Anvin <hpa@zytor.com>
 //
 // This handles the backend of the pipe; the E, M and W pipeline stages.
 //
@@ -707,7 +708,7 @@ module backend #(`CONFIG)
 		  e_next_pc          = e_op.imm;
 	     end
 	     INSN_MRET: begin
-		// Could test if the context changes
+		// XXX: MRET should be fully predictable now
 		e_restart            = 1'b1;
 		e_next_pc            = mepc;
 		e_restart_mcontext.m = e_restart_mcontext.u;
