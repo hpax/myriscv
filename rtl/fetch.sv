@@ -514,9 +514,11 @@ module fetch #(`CONFIG)
 	       ibus_a_q         <= ibus_a;
 
 	       if (f2_have_data) begin
-		  pref_16      <= iword[31:16];
-		  pref_valid   <= f1_advance & ~br_take;
+		  pref_16    <= iword[31:16];
+		  pref_valid <= f1_advance;
 	       end
+	       if (br_take)
+		 pref_valid  <= 1'b0;
 
 	       if (~f_stalled)
 		 begin
