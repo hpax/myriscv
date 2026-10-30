@@ -12,6 +12,7 @@ Standard architecture extensions:
 	C	 - Compression operations (= Zca Zcb)
 	Zkr	 - Entropy source (*)
 	Zkt	 - Data-independent execution latency
+	Zilx	 - Indexed load instructions
 	Zabhlrsc - Halfword and byte LR/SC instructions (*)
 	Zalrsc	 - LR/SC instructions for atomicity (*)
 	Zicbom	 - Cache block management operations
