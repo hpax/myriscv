@@ -311,12 +311,15 @@ Non-standard or system-specific behaviors:
 		indefinitely until the reservation has been cleared.
 
 		Note: this is a considerably stronger guarantee than
-		is required by the Zalasr extension.
+		is required by the formal Ziccrse extension.
+
+		The Zabhlrsc (byte/halfword LR/SC) extension is
+		unconditionally supported.
 
 		Unless STRICT_UNDEFINED is set, unsigned halfword and
-		byte LR instructions (lr.bu and lr.hu) are supported
-		by setting bit funct3[2], as in the equivalent load
-		instructions.
+		byte LR instructions (lr.bu and lr.hu) are also
+		supported by setting bit funct3[2], as in the
+		equivalent load instructions.
 
 		There is currently no support for LR/SC to I/O or to
 		prevent DMA to external memory.

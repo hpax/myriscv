@@ -29,6 +29,7 @@ parameter bit WITH_Xpacecall               = 1'b1; // c.ecall
 parameter bit WITH_Zkr			   = 1'b1; // seed CSR (needs external bit source)
 parameter bit WITH_Zalrsc		   = 1'b1; // LR/SC instructions
 parameter bit WITH_Ziccrse		   = 1'b1; // LR/SC guarantee forward progress
+parameter bit WITH_Zilx                    = 1'b1; // indexed loads
 parameter bit WITH_indcsr		   = 1'b0; // Indirect CSR access
 parameter bit WITH_regcsr       	   = 1'b1; // Register file CSR access
 parameter bit WITH_waitfor      	   = 1'b1; // waitfor CSR

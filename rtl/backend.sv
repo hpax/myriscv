@@ -247,46 +247,51 @@ module backend #(`CONFIG)
    // GPR bypass network/operand selection
    wire		      d_src_hold = (e_valid_i & e_stall) | e_busy;
 
-   assign dcache_lookup_hold = d_src_hold;
+   // D stage bypass (combinatorial)
+   logic [31:0]	      d_srs1;	// rs1 value reg-only mux
+   logic [31:0]	      d_srs2;	// rs2 value reg-only mux
+   logic [31:0]	      d_src1;
+   logic [31:0]	      d_src2;
+
+   always_comb begin
+      if (d_rs1_e)
+	d_srs1 = e_dout;	// Data comes from the E stage
+      else if (d_rs1_m)
+	d_srs1 = m_dout;	// Data comes from the M stage
+      else if (d_rs1_w)
+	d_srs1 = w_dout;	// Data comes from the W stage
+      else
+	d_srs1 = d_rs1_data;	// Data comes from the register file
+
+      // rs1.r can be used an immediate
+      d_src1 = d_op.rs1_valid ? d_srs1 : d_op.rs1.r;
+
+      if (d_rs2_e)
+	d_srs2 = e_dout;	// Data comes from the E stage
+      else if (d_rs2_m)
+	d_srs2 = m_dout;	// Data comes from the M stage
+      else if (d_rs2_w)
+	d_srs2 = w_dout;	// Data comes from the W stage
+      else if (!REGFILE_ZERO_INIT && !d_op.rs2.r)
+	d_srs2 = 32'b0;		// Data comes from register x0
+      else
+	d_srs2 = d_rs2_data;	// Data comes from the register file
+
+      // src2 can be an arbitrary immediate, independent of d_op.rs2.r
+      d_src2 = d_op.rs2_valid ? d_srs2 : d_op.imm;
+   end
 
    logic [31:0] e_src1;
    logic [31:0] e_src2;
-   logic [31:0] dcache_lookup_src1;
-
    generate
       if (EARLY_BYPASS_MUX) begin : bypass_early
 	always @(negedge rst_n or posedge clk)
 	  if (~rst_n) begin
 	     e_src1 <= 32'bx;
 	     e_src2 <= 32'bx;
-	  end else begin
-	     if (d_src_hold)
-	       e_src1 <= e_src1;	// Do not update
-	     else if (!d_op.rs1_valid)
-	       e_src1 <= d_op.rs1.r;	// rs1 is uimm5 or void
-	     else if (d_rs1_e)
-	       e_src1 <= e_dout;	// Data comes from the E stage
-	     else if (d_rs1_m)
-	       e_src1 <= m_dout;	// Data comes from the M stage
-	     else if (d_rs1_w)
-	       e_src1 <= w_dout;	// Data comes from the W stage
-	     else
-	       e_src1 <= d_rs1_data;	// Data comes from the register file
-
-	     if (d_src_hold)
-	       e_src2 <= e_src2;	// Do not update
-	     else if (!d_op.rs2_valid)
-	       e_src2 <= d_op.imm;	// rs2 is uimm5 or void
-	     else if (d_rs2_e)
-	       e_src2 <= e_dout;	// Data comes from the E stage
-	     else if (d_rs2_m)
-	       e_src2 <= m_dout;	// Data comes from the M stage
-	     else if (d_rs2_w)
-	       e_src2 <= w_dout;	// Data comes from the W stage
-	     else if (!REGFILE_ZERO_INIT && !d_op.rs2.r)
-	       e_src2 <= 32'b0;		// Data comes from register x0
-	     else
-	       e_src2 <= d_rs2_data;	// Data comes from the register file
+	  end else if (!d_src_hold) begin
+	     e_src1 <= d_src1;
+	     e_src2 <= d_src2;
 	  end
       end else begin : bypass_late
 	 // Late MUX
@@ -340,7 +345,7 @@ module backend #(`CONFIG)
 	     end
 	  end
 
-	 always @(*) begin
+	 always_comb begin
 	    if (e_rs1_m)
 	      e_src1 = m_din;
 	    else if (e_rs1_w)
@@ -358,42 +363,60 @@ module backend #(`CONFIG)
       end
    endgenerate
 
-   always @(*) begin
-      if (!d_op.rs1_valid)
-        dcache_lookup_src1 = d_op.rs1.r;
-      else if (d_rs1_e)
-        dcache_lookup_src1 = e_dout;
-      else if (d_rs1_m)
-        dcache_lookup_src1 = m_dout;
-      else if (d_rs1_w)
-        dcache_lookup_src1 = w_dout;
+   // Early address computation for dcache
+   assign dcache_lookup_hold = d_src_hold;
+
+   always_comb begin
+      logic [1:0]  a_scale;
+      logic [31:0] a_addend;
+      a_scale		     = 2'd0;
+      a_addend               = d_op.imm;
+      dcache_lookup_valid    = d_advance & insn_mem(d_op.itype);
+      dcache_lookup_cbo      = CBO_NONE;
+      dcache_lookup_wrq      = d_op.itype[0];
+
+      unique case (d_op.itype)
+	 INSN_LD: begin
+	    if (WITH_Zilx && d_op.rs2_valid) begin
+	       a_scale	= d_op.funct3[1:0];
+	       a_addend = d_srs2;
+	    end
+	 end
+	 INSN_CBO: begin
+            unique casez (d_op.rs2.r)
+              5'b00000: dcache_lookup_cbo = CBO_INVAL;
+              5'b00001: dcache_lookup_cbo = CBO_CLEAN;
+              5'b00010: dcache_lookup_cbo = CBO_FLUSH;
+              default:  dcache_lookup_cbo = CBO_X;
+            endcase
+            dcache_lookup_valid = dcache_lookup_valid &
+				  cbo_valid(dcache_lookup_cbo);
+	 end
+	default: begin
+	   // No changes
+	end
+      endcase
+
+      // Using d_src1 rather than d_srs1 here is necessary because
+      // the JAL logic uses e_addr which is produced from this value
+      if (a_scale < 2'd2)
+	dcache_lookup_a = (d_src1 << a_scale) + a_addend;
       else
-        dcache_lookup_src1 = d_rs1_data;
-
-      dcache_lookup_a = $signed(dcache_lookup_src1) +
-                         $signed(d_op.imm);
-      dcache_lookup_valid = d_advance & insn_mem(d_op.itype);
-      dcache_lookup_cbo = CBO_NONE;
-      dcache_lookup_wrq = d_op.itype[0];
-
-      if (d_op.itype == INSN_CBO) begin
-         unique casez (d_op.rs2.r)
-           5'b00000: dcache_lookup_cbo = CBO_INVAL;
-           5'b00001: dcache_lookup_cbo = CBO_CLEAN;
-           5'b00010: dcache_lookup_cbo = CBO_FLUSH;
-           default: dcache_lookup_cbo = CBO_X;
-         endcase
-         dcache_lookup_valid = dcache_lookup_valid &
-                               cbo_valid(dcache_lookup_cbo);
-      end
+	dcache_lookup_a = 'bx;
    end
 
    //
-   // AGU adder; separate adder for performance reasons.
+   // AGU adder; reuse the value already calculated for dcache_lookup_a
+   // XXX: does this make sense for WITH_Zilx?
    //
    logic [31:0]	e_addr;
-   always @(*)
-     e_addr = $signed(e_src1) + $signed(e_op.imm);
+   always @(negedge rst_n or posedge clk)
+     if (~rst_n) begin
+	e_addr <= 'bx;
+     end else if (clken) begin
+	if (!d_src_hold)
+	  e_addr <= dcache_lookup_a;
+     end
 
    // ALU
    aluctl_t e_aluctl;
