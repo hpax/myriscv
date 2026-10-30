@@ -16,6 +16,7 @@ typedef enum logic [3:0] {
 	INSN_CBO    = 4'b0110,	// Cache block operation
 	// 4'b0111 is exclusively RESERVED for another memory operation!
         INSN_CSR    = 4'b1000,	// CSRR, CSRW et al
+        INSN_WAIT   = 4'b1001,  // WAITFOR
 	INSN_JAL    = 4'b1010,	// JAL, JALR
 	INSN_BR     = 4'b1011,  // Conditional branch
 	INSN_MRET   = 4'b1100,	// MRET, SRET

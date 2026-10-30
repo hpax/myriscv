@@ -128,6 +128,9 @@ module decode_comb #(`CONFIG)
 		     op.rd_m        = 1'b1;
 		  end
 	       end
+	       default: begin
+		 // Error
+	       end
 	     endcase
 	  end
 
@@ -219,6 +222,13 @@ module decode_comb #(`CONFIG)
 		      (!op.rs2.r == 5'b00010 && !op.rs1.r && !op.rd.r))
 		    op.itype = INSN_MRET;
 	       end
+	       10'b0001000_000: if (WITH_waitfor) begin	// WFI
+		  if (!STRICT_UNDEFINED || op.rs2.r == 5'b00101) begin
+		     op.itype	  = INSN_WAIT;
+		     op.rs1_valid = 1'b1;
+		     op.rd_e      = 1'b1;
+		  end
+	       end
 	       default: begin
 		  // Error
 	       end
@@ -271,7 +281,7 @@ module decode_comb #(`CONFIG)
 	       end
 	       3'b001: begin
 		  if (WITH_Xpabshaddpc)
-		    op.imm    = op.pc;
+		    op.imm  = op.pc;
 	       end
 	       3'b01?: begin	// .ux, .cx, .su, .sc
 		  op.rd.c   = altcontext;

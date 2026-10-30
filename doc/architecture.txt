@@ -404,7 +404,7 @@ Nonstandard CSR numbers: (Xpasmy)
 	0x7f0		USER_CONTEXT
 	0x7f1		(reserved)
 	0x7f2		CIE
-	0x7f3		WAITFOR
+	0x7f3		(reserved)
 	0xbe1-0xbff	Used for indirect CSR access (x1-x31)
 	0xff4		SYS_CONTEXT
 	0xff5		NCONTEXTS
@@ -567,7 +567,7 @@ Interrupts:
 	input tri0 [NUM_IRQS:0] irq;		// IRQ signal mask
 	input tri0 [NUM_IRQS:0] irq_edge;	// IRQ edge triggered
 	input tri1 [NUM_IRQS:0] irq_intable;	// IRQ can generate interrupt
-	input tri1 [NUM_IRQS:0] irq_waitable;	// IRQ can be a waitfor source
+	input tri1 [NUM_IRQS:0] irq_waitable;	// IRQ can wake up wfi
 
 	output [IRQ_BITS-1:0]   intack;	// Interrupt acknowledgement if nonzero
 
@@ -576,7 +576,7 @@ Interrupts:
 
 	irq_intable and irq_waitable are provided to reduce
 	unnecessary logic if not all IRQs need to support being
-	enabled as interrupts alternatively waitfor triggers (see
+	enabled as interrupts alternatively wfi wakeup triggers (see
 	below) and should be fed with constants in a real system;
 	feeding them with variable parameters will increase the logic
 	burden over simply setting them to all 1. They are ports
@@ -600,19 +600,24 @@ CSRs:
 	No traps are implemented for any CSR operations.
 
 WITH_waitfor:
+	Wait for External Event
 
-	Writing a mask to the "waitfor" CSR will wait until any
-	of the interrupt sources in the mask become pending in the mip
-	register, whether or not they are enabled in either mie or
-	cie. If an interrupt arrives that *is* enabled in mie and cie,
-	it will be taken; mepc will point to the successor to the csrw
-	waitfor if this interrupt is in the wait mask, otherwise it
-	will point back to the csrw waitfor instruction itself. Thus,
-	this can be used with interrupts enabled to enforce that a
-	certain interrupt has been received and its handler executed,
-	*or* to wait for an interrupt line that in fact never needs to
-	be enabled and is simply used as a ready signal from external
-	hardware.
+	wfi rd, rs1
 
-	waitfor is a write-only CSR and always reads 0.
-	XXX: could return mip, or mip masked...
+	This is an extended variant of the standard WFI instruction;
+	the standard WFI instruction decodes to "wfi zero, zero".
+
+	Bits set in rs1 mark events blocked from waking up the CPU.
+	If they are enabled interrupts, they will be issued, with
+	mepc pointing to the WFI instruction (the WFI instruction does
+	not complete.)
+
+	After completion, rd (if not zero) is written with the
+	contents of the mip CSR (all pending events, including
+	interrupts that will be immediately taken.)
+
+	instr[6:0]	= 1110011 (SYSTEM)
+	instr[11:7]	= rd
+	instr[14:12]	= 000 (PRIV)
+	instr[19:15]	= rs1
+	instr[31:20]	= 0001000 00101 (WFI)
