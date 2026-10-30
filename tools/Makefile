@@ -34,7 +34,7 @@ sources:
 	if [ -f ../.gitmodules ] && \
 	   git submodule status --recursive | grep -q '^[+-]'; then \
 		git submodule update --init --recursive ; \
-		$(MAKE) spotless ; \
+		rm -f *.stamp ; \
 	fi
 
 %.src: sources
