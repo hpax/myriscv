@@ -35,10 +35,26 @@ module test #(
    logic		    mem_wr;
    logic		    mem_cpu;
 
-   logic [NUM_IRQS:1] irq;
+   logic [NUM_IRQS:1]	irq;
+   logic [NUM_IRQS:1]	irq_edge;
    wire [IRQ_BITS-1:0]	intack;
+   logic [15:0] irq_pend_timer [1:NUM_IRQS];
+   logic [15:0]	irq_clr_timer  [1:NUM_IRQS];
+
 
    wire			buserr;
+
+   //
+   // Initialization
+   //
+   initial begin
+      irq      = 'b0;
+      irq_edge = 'b0;
+      for (int i = 1; i < NUM_IRQS; i++) begin
+	 irq_pend_timer[i] = 'b0;
+	 irq_clr_timer[i]  = 'b0;
+      end
+   end
 
    //
    // Clock and reset
@@ -87,6 +103,7 @@ module test #(
      .mem_cpu	( mem_cpu ),
 
      .irq	   ( { irq, 1'b0 } ),
+     .irq_edge     ( { irq_edge, 1'b0 } ),
      .irq_intack   ( intack ),
      .irq_intable  ( {{NUM_IRQS{1'b1}}, 1'b0} ),
      .irq_waitable ( {{NUM_IRQS{1'b1}}, 1'b0} ),
@@ -116,8 +133,6 @@ module test #(
 
    // I/O
 
-   assign irq = 'b0;
-
    reg io_sleeping = 1'b0;
    reg [7:0] io_sleep_ctr;
 
@@ -140,34 +155,73 @@ module test #(
 	   logic [3:0][7:0] dstr;
 	   logic [7:0]	    chr;
 	   logic	    putc;
+	   logic	    quit;
 
-	   putc = 1'b0;
+	   putc		 = 1'b0;
+	   quit          = 1'b0;
 
 	   io_sleep_ctr <= io_sleep - 1'b1;
-	   io_sleeping  <= |io_sleep;
+	   io_sleeping	<= |io_sleep;
 
-	   data = io_wrq ? io_wdata : io_rdata;
+	   data		 = io_wrq ? io_wdata : io_rdata;
 	   for (int i = 0; i < 4; i++) begin
 	      dstr[i] = data[3-i];
 	      if (dstr[i] < 8'h20 || dstr[i] > 8'h7e)
 		dstr[i] = 8'h2e; // Non-ASCII character; print as .
 	   end
 
-	   if (io_wrq && io_wbe[3] && busaddr == 32'hffff_fffc) begin
-	      // Byte address -1 is console output; it prints bytes
-	      // directly to the console without ASCIIfying the output,
-	      // and so can print newline, tab, unicode, etc.
-	      chr = io_wdata[31:24];
-	      putc = 1'b1;
-	   end else if (io_wrq && |io_wbe && busaddr[31:8] == 24'hffff_fe) begin
-	      // Byte address -512 + char:
-	      // Hack to print a single fixed character using only the
-	      // bus address, allowing it to be executed without clobbering
-	      // any registers at all.
-	      chr[7:2] = busaddr[7:2];
-	      chr[1]   = |io_wbe[3:2];
-	      chr[0]   = io_wbe[3] | io_wbe[1];
-	      putc     = 1'b1;
+	   if (io_wrq && |io_wbe && busaddr[31:16] == 16'hffff) begin
+	      priority casez ({busaddr[15:0], io_wbe})
+		20'b1111_1111_1111_11??_1???: begin
+		   // Byte address -1 is console output; it prints bytes
+		   // directly to the console without ASCIIfying the output,
+		   // and so can print newline, tab, unicode, etc.
+		   chr	= io_wdata[31:24];
+		   putc = 1'b1;
+		end
+		20'b1111_1111_1111_1000_1111: begin
+		   // Address -8 is test termination; should be a 4-byte
+		   // write with a status string:
+		   // "PASS" - test passed
+		   // "FAIL" - test failed
+		   // "STOP" - test is not self-checking, no error detected
+		   // "TRAP" - test failed with an unexpected trap
+		   quit = 1'b1;
+		end
+		20'b1111_1110_????_????_????: begin
+		   // Byte address -512 + char:
+		   // Hack to print a single fixed character using only the
+		   // bus address, allowing it to be executed without clobbering
+		   // any registers at all.
+		   chr[7:2] = busaddr[7:2];
+		   chr[1]   = |io_wbe[3:2];
+		   chr[0]   = io_wbe[3] | io_wbe[1];
+		   putc     = 1'b1;
+		end
+		20'b1111_1100_0000_00??_????: begin
+		   // Byte address -1024
+		   // Bitmask of IRQs that are edge triggered
+		   // (sticky asserted, cleared on intack)
+		   if (io_wbe[0]) irq_edge[7:1]   = io_wdata[7:1];
+		   if (io_wbe[1]) irq_edge[15:8]  = io_wdata[15:8];
+		   if (io_wbe[2]) irq_edge[23:16] = io_wdata[23:16];
+		   if (io_wbe[3]) irq_edge[31:24] = io_wdata[31:24];
+		end
+		20'b1111_1100_0???_????_????: begin
+		   // Byte address -1024 + (irq << 2):
+		   //  [15:0] -> cycles before asserting the interrupt
+		   // [31:16] -> cycles before deasserting the interrupt
+		   automatic logic [4:0] irq_num = busaddr[7:2];
+		   if (irq_num <= NUM_IRQS) begin
+		      if (io_wbe[0]) irq_pend_timer[irq_num][7:0]  = io_wdata[7:0];
+		      if (io_wbe[1]) irq_pend_timer[irq_num][15:8] = io_wdata[15:8];
+		      if (io_wbe[2]) irq_clr_timer[irq_num][7:0]   = io_wdata[23:16];
+		      if (io_wbe[3]) irq_clr_timer[irq_num][15:8]  = io_wdata[31:24];
+		   end
+		end
+		default: begin
+		end
+	      endcase
 	   end
 
 	   if (putc) begin
@@ -183,13 +237,7 @@ module test #(
 		 need_nl = 1'b0;
 	      end
 
-	      if (io_wrq && &io_wbe && busaddr == 32'hffff_fff8) begin
-		 // Address -8 is test termination; should be a 4-byte
-		 // write with a status string:
-		 // "PASS" - test passed
-		 // "FAIL" - test failed
-		 // "STOP" - test is not self-checking, no error detected
-		 // "TRAP" - test failed with an unexpected trap
+	      if (quit) begin
 		 $display("(%d) %s: test terminating", $time/CLOCK, dstr);
 		 $finish;
 	      end else begin
@@ -197,6 +245,22 @@ module test #(
 			  $time/CLOCK, io_addr, io_wrq ? "w" : "r",
 			  io_wbe, data, dstr);
 	      end
+	   end
+	end
+
+	// IRQ assertion and deassertion
+	for (int i = 1; i < NUM_IRQS; i++) begin
+	   if (irq_pend_timer[i]) begin
+	      automatic logic new_timer	 = irq_pend_timer[i] - 1'b1;
+	      irq_pend_timer[i] <= new_timer;
+	      if (!new_timer)
+		irq[i]		<= 1'b1;
+	   end
+	   if (irq_clr_timer[i]) begin
+	      automatic logic new_timer	 = irq_clr_timer[i] - 1'b1;
+	      irq_clr_timer[i]  <= new_timer;
+	      if (!new_timer)
+		irq[i]		<= 1'b0;
 	   end
 	end
      end
