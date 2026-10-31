@@ -198,7 +198,7 @@ module test #(
 		   chr[0]   = io_wbe[3] | io_wbe[1];
 		   putc     = 1'b1;
 		end
-		20'b1111_1100_0000_00??_????: begin
+		20'b1111_1100_0000_0000_????: begin
 		   // Byte address -1024
 		   // Bitmask of IRQs that are edge triggered
 		   // (sticky asserted, cleared on intack)
@@ -251,13 +251,13 @@ module test #(
 	// IRQ assertion and deassertion
 	for (int i = 1; i < NUM_IRQS; i++) begin
 	   if (irq_pend_timer[i]) begin
-	      automatic logic new_timer	 = irq_pend_timer[i] - 1'b1;
+	      automatic logic [15:0] new_timer = irq_pend_timer[i] - 1'b1;
 	      irq_pend_timer[i] <= new_timer;
 	      if (!new_timer)
 		irq[i]		<= 1'b1;
 	   end
 	   if (irq_clr_timer[i]) begin
-	      automatic logic new_timer	 = irq_clr_timer[i] - 1'b1;
+	      automatic logic [15:0] new_timer = irq_clr_timer[i] - 1'b1;
 	      irq_clr_timer[i]  <= new_timer;
 	      if (!new_timer)
 		irq[i]		<= 1'b0;
