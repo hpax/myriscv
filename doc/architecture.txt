@@ -58,6 +58,7 @@ Private instruction set extensions:
 	Xpaicneg	- Conditional negate
 	Xpabshaddpc	- Shift and add pc
 	Xpailai		- Load address immediate
+	Xpaitrap	- Conditional traps
 	Xpacecall	- c.ecall opcode
 
 	WITH_Xpaicbom:
@@ -179,7 +180,7 @@ Private instruction set extensions:
 		instr[19:15]	= rs1
 		instr[31:20]	= imm12 for CNEGI
 		instr[24:20]	= rs2 for CNEG[N]
-		instr[29:25]	= 0000000 for CNEG
+		instr[31:25]	= 0000000 for CNEG
 				  0100000 for CNEGN
 
 	WITH_Xpabshaddpc:
@@ -193,7 +194,7 @@ Private instruction set extensions:
 		instr[19:15]	= rs1
 		instr[21:20]	= shimm2
 		instr[24:22]	= 000
-		instr[29:25]	= 0010000
+		instr[31:25]	= 0010000
 
 	WITH_Xpabshaddpc and WITH_Xpabsshub:
 		Shift and subtract pc
@@ -206,7 +207,7 @@ Private instruction set extensions:
 		instr[19:15]	= rs1
 		instr[21:20]	= shimm2
 		instr[24:22]	= 000
-		instr[29:25]	= 0110000
+		instr[31:25]	= 0110000
 
 		Probably not useful, but basically free.
 
@@ -232,6 +233,30 @@ Private instruction set extensions:
 		(R_RISCV_CUSTOM192) for "lai" if specified explicitly,
 		and can also relax the standard "la" macro pattern
 		(auipc + addi) to "lai."
+
+	WITH_Xpaitrap:
+		Conditional traps
+		trap{cond}  imm5, rs1, rs2
+		trap{cond}i imm5, rs1, imm12
+
+		Traps if {cond} is met; the same encodings are used as
+		for branches (including baeqz/banez). imm5 encodes a
+		trap condition reported in MCAUSE as 32+imm5.
+
+		XXX: this might change if the MTVAL CSR ends up
+		implemented; in such case e.g. MCAUSE = 18 might be
+		used instead.
+
+		Encoding:
+
+		instr[6:0]	= 1011011 (CUSTOM2) for TRAP*I
+				  1111011 (CUSTOM3) for TRAP*
+		instr[11:7]	= imm5 (trap number)
+		instr[14:12]	= condition code (same as BRANCH)
+		instr[19:15]	= rs1
+		instr[31:20]	= imm12 for CNEGI
+		instr[24:20]	= rs2 for CNEG[N]
+		instr[31:25]	= 0000000 for TRAP*
 
 	WITH_indcsr:
 		Indirect CSR access.

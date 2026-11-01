@@ -6,7 +6,7 @@
 package myriscv_types;
 
 typedef enum logic [3:0] {
-	INSN_NOP    = 4'b0000,	// No-op instruction (unless decoded as ALU)
+	INSN_TRAP   = 4'b0000,	// Conditional trap (CUSTOM2/3)
 	INSN_MUL    = 4'b0001,	// Multiply
 	INSN_ALU    = 4'b0010,	// ALU instruction
 	INSN_XALU   = 4'b0011,	// Custom ALU instruction (CUSTOM0/1)
@@ -16,13 +16,13 @@ typedef enum logic [3:0] {
 	INSN_CBO    = 4'b0110,	// Cache block operation
 	// 4'b0111 is exclusively RESERVED for another memory operation!
         INSN_CSR    = 4'b1000,	// CSRR, CSRW et al
-        INSN_WAIT   = 4'b1001,  // WAITFOR
+        INSN_WAIT   = 4'b1001,  // WFI
 	INSN_JAL    = 4'b1010,	// JAL, JALR
 	INSN_BR     = 4'b1011,  // Conditional branch
 	INSN_MRET   = 4'b1100,	// MRET, SRET
 	INSN_FENCEI = 4'b1101,	// Completion fence
 	INSN_ECALL  = 4'b1110,	// ECALL, EBREAK
-	INSN_ERR    = 4'b1111,	// Invalid instruction (trap)
+	INSN_ERR    = 4'b1111,	// Invalid instruction (unconditional trap)
 	INSN_X	    = 4'bxxxx
 } insn_type_t;
 

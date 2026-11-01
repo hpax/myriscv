@@ -25,6 +25,7 @@ parameter bit WITH_Xpaicneg                = 1'b1; // cneg, cnegi, cnegn
 parameter bit WITH_Xpaisetx		   = 1'b1; // addtional SET operations
 parameter bit WITH_Xpabshsub		   = 1'b1; // shXsub
 parameter bit WITH_Xpabshaddpc             = 1'b1; // shXaddpc
+parameter bit WITH_Xpaitrap                = 1'b1; // Conditional TRAP
 parameter bit WITH_Xpacecall               = 1'b1; // c.ecall
 parameter bit WITH_Zkr			   = 1'b1; // seed CSR (needs external bit source)
 parameter bit WITH_Zalrsc		   = 1'b1; // LR/SC instructions

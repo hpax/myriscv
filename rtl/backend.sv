@@ -699,6 +699,15 @@ module backend #(`CONFIG)
 		e_mcause              = e_op.imm[0]
 					? MCAUSE_BREAK : MCAUSE_ECALLM;
 	     end
+	     INSN_TRAP: begin
+		if (WITH_Xpaitrap) begin
+		   e_trap             = e_cmp_out;
+		   e_mcause           = MCAUSE_TRAP | e_op.rd.r;
+		end else begin
+		   e_trap             = 1'b1;
+		   e_mcause           = MCAUSE_BADINSN;
+		end
+	     end
 	     INSN_ALU: if (TRAP_BADALU) begin
 		e_trap                = e_aluctl.unit == ALUSRC_ERR;
 		e_mcause              = MCAUSE_BADINSN;

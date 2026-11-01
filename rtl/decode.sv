@@ -143,6 +143,14 @@ module decode_comb #(`CONFIG)
 	     op.imm	  = op.pc + b_imm;
 	  end
 
+	  CUSTOM2, CUSTOM3: if (WITH_Xpaitrap) begin
+	     op.itype	  = INSN_ECALL;
+	     op.rs1_valid = 1'b1;
+	     op.rs2_valid = i[5];
+	     op.rd_e	  = 1'b1;
+	     op.imm	  = i_imm;
+	  end
+
 	  JALR: begin
 	     op.itype     = INSN_JAL;
 	     op.rs1_valid = 1'b1;
@@ -154,7 +162,8 @@ module decode_comb #(`CONFIG)
 	     op.imm = 32'bx;
 	     unique casez (op.funct3)
 	       3'b000: begin	// FENCE/PAUSE
-		  op.itype = INSN_NOP;	// Treat as NOP
+		  // Treat a NOP (addi)
+		  op.itype  = INSN_ALU;
 	       end
 	       3'b001: begin	// FENCE.I (Zifencei)
 		  op.itype = INSN_FENCEI;

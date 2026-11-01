@@ -43,8 +43,8 @@ module alu_decode #(`CONFIG)
 	ctl.zsrc1 = 1'b0;
 
 	unique case (itype)
-	  INSN_BR: begin
-	     // A branch is an SET as far as the ALU is
+	  INSN_BR, INSN_TRAP: begin
+	     // A branch or conditional trap is an SET as far as the ALU is
 	     // concerned...
 	     ctl.unit   = ALUSRC_SET;
 	  end

@@ -168,11 +168,15 @@ typedef enum logic [31:0] {
 	     MCAUSE_LPAGE   = 32'd13,
 	     // 14 reserved
 	     MCAUSE_SPAGE   = 32'd15,
-
-	     // 16-23 reserved
+	     MCAUSE_DOUBLE  = 32'd16,
+	     // 17 reserved
+	     MCAUSE_SWCHK   = 32'd18,
+	     MCAUSE_HWERR   = 32'd19,
+	     // 20-23 reserved
 	     // 24-31 custom
 	     // 32-47 reserved
 	     // 48-63 custom
+             MCAUSE_TRAP    = 32'd32, // 32-63 (yes, stomps on 32-47)
 
 	     MCAUSE_IRQ     = 32'h8000_0000,
 
