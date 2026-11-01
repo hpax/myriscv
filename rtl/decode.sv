@@ -144,10 +144,9 @@ module decode_comb #(`CONFIG)
 	  end
 
 	  CUSTOM2, CUSTOM3: if (WITH_Xpaitrap) begin
-	     op.itype	  = INSN_ECALL;
+	     op.itype	  = INSN_TRAP;
 	     op.rs1_valid = 1'b1;
 	     op.rs2_valid = i[5];
-	     op.rd_e	  = 1'b1;
 	     op.imm	  = i_imm;
 	  end
 

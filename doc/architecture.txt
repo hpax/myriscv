@@ -239,6 +239,8 @@ Private instruction set extensions:
 		trap{cond}  imm5, rs1, rs2
 		trap{cond}i imm5, rs1, imm12
 
+		{cond} is one of eq, ne, aeqz, anez, lt, ge, ltu, geu.
+
 		Traps if {cond} is met; the same encodings are used as
 		for branches (including baeqz/banez). imm5 encodes a
 		trap condition reported in MCAUSE as 32+imm5.
@@ -254,8 +256,8 @@ Private instruction set extensions:
 		instr[11:7]	= imm5 (trap number)
 		instr[14:12]	= condition code (same as BRANCH)
 		instr[19:15]	= rs1
-		instr[31:20]	= imm12 for CNEGI
-		instr[24:20]	= rs2 for CNEG[N]
+		instr[31:20]	= imm12 for TRAP*I
+		instr[24:20]	= rs2 for TRAP*
 		instr[31:25]	= 0000000 for TRAP*
 
 	WITH_indcsr:
