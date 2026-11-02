@@ -1,4 +1,4 @@
 [submodule "tools/llvm.src"]
 	path = tools/llvm.src
 	url = https://github.com/hpax/llvm-myriscv.git
-	branch = users/hpa/myriscv-23.1.4
+	branch = users/hpa/myriscv-24

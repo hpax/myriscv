@@ -59,4 +59,11 @@
     _begin \sym, \class, secpfx=\secpfx, secflags=a, sectype=nobits, section="\section", globl=\globl, align=\align, type=\type
 .endm
 
+.macro weakalias sym:req, aliases:vararg
+	.irp alias, \aliases
+	.weak \alias
+	\alias = \sym
+	.endr
+.endmacro
+
 #endif /* _ASM_H */
