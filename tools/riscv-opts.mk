@@ -2,8 +2,10 @@
 riscv_tuple	:= riscv32-myriscv-none-elf
 
 # Extra flags during tools build
+# -menable-experimental-extensions needed for the Zilx extension
 riscv_target_flags :=	-target riscv32-myriscv-none-elf -mcpu=myriscv \
-			-O2 -glldb -mno-strict-align \
+			-menable-experimental-extensions \
+			-O2 -glldb \
 			-ftls-model=local-exec \
 			-fno-pic -fno-pie \
 			-fshort-enums -fshort-wchar \
