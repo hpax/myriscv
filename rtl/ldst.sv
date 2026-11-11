@@ -1,3 +1,4 @@
+// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 //
 // Load/store unit (data bus driver). Input is taken at the beginning
 // of the E stage; load output is taken at the end of the M stage.
@@ -11,7 +12,7 @@
 
 `include "myriscv.vh"
 
-module ldst (
+module ldst #(`CONFIG) (
 		input		  rst_n,
 		input		  clk,
 		input		  clken,
@@ -66,6 +67,15 @@ module ldst (
    assign dbus_valid	= rst_n & (valid | busy);
    assign dbus_wrq      = use_latched ? memop_st_q : memop_st;
    assign dbus_cbo      = use_latched ? memop_cbo_q : memop_cbo;
+
+   // Combine the upper fragment of a misaligned store with the lower
+   // fragment of the following store. The pipeline holds the following
+   // store in E while the first one completes, so its lower fragment is
+   // available here before the upper fragment is accepted.
+   wire write_combine = use_latched && upper_word && memop_st_q &&
+			valid && memop_st && !cbo_valid(memop_cbo) &&
+			(latched_a[31:2] + 1'b1 == addr[31:2]) &&
+			({ latched_a[31:2] + 1'b1, 2'b00 } < uc_base);
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
@@ -192,6 +202,12 @@ module ldst (
      if (use_latched) begin
 	dbus_wbe   = latched_wbe[upper_word];
 	dbus_wdata = latched_wdata;
+	if (write_combine) begin
+	   dbus_wbe |= bytemask[0];
+	   for (int i = 0; i < 4; i++)
+	     if (bytemask[0][i])
+	       dbus_wdata[i*8 +: 8] = wdata_comb[i*8 +: 8];
+	end
      end else begin
 	dbus_wbe   = bytemask[0];
 	dbus_wdata = wdata_comb;

@@ -145,6 +145,8 @@ parameter logic [31:0] ram_base		   = 32'h4000_0000;
 parameter int	       ram_size_bits	   = 25;
 parameter int          car_bit             = ram_size_bits;
 parameter logic [31:0] io_base		   = 32'h8000_0000;
+// Writes below this address may be combined on the dbus.
+parameter logic [31:0] uc_base		   = 32'hc000_0000;
 
 // Log2 of icache capacity in bytes. Cache lines are one 32-bit word.
 parameter int          icache_size_bits    = 12;

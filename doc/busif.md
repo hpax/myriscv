@@ -145,6 +145,15 @@ The following special cases apply to specific buses.
 
 #### `dbus` special cases
 
+- **Write combining:** the initiator may combine the pending upper
+  fragment of a misaligned store with the lower fragment of the
+  immediately following store when they target the same 32-bit word.
+  This is permitted only for addresses below `uc_base`; the resulting
+  transaction has the union of both stores' byte enables, and later
+  store data takes precedence for overlapping byte lanes. Targets must
+  accept any byte-enable combination and must not require misaligned
+  stores to appear as separate transactions.
+
 - **Additional signals from initiator**
 
   - `cbo`: cache block operation. If nonzero (not `CBO_NONE`), the

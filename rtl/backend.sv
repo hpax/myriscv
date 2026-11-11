@@ -934,7 +934,7 @@ module backend #(`CONFIG)
       end
    end
 
-   ldst ldst (
+   ldst #(`CFG) ldst (
      .rst_n		(rst_n),
      .clk		(clk),
      .clken		(clken),
