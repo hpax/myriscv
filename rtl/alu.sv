@@ -129,16 +129,17 @@ module alu_decode #(`CONFIG)
 		  ctl.shiftop = SHIFTOP_ROR;
 	       end
 	       { 7'b011_0100, ALU_SRL }: begin
-		  unique casez ({~op.rs2_valid, op.rs2.r})
-		    6'b1_11000: begin // REV8
-		       // In the future, rs2 might be a control mask for a more
-		       // advanced bitswap instruction
-		       ctl.unit = ALUSRC_REV;
-		    end
-		    default: begin
-		       // Invalid
-		    end
-		  endcase
+		  // rev8 and brev8 are really just special cases
+		  // of general swapping mechanism using the rs2
+		  // field as a control immediate to indicate which
+		  // bit levels should be swapped.
+		  // rev8  is equivalent to "rev rd, rs1, 0x18"
+		  // brev8 is equivalent to "rev rd, rs1, 0x07"
+		  if (~op.rs2_valid) begin
+		     if (!STRICT_UNDEFINED || WITH_Xpairev ||
+			 op.rs2.r == 5'b11000)
+		       ctl.unit   = ALUSRC_REV;
+		  end
 	       end
 	       { 7'b??0_0000, ALU_SLT },
 	       { 7'b??0_0000, ALU_SLTU }: begin
@@ -489,21 +490,24 @@ endmodule
 
 module rev
 #(
-  parameter width = 32,
-  parameter grain = 8
+   parameter width = 32,
+   parameter wbits = $clog2(width)
   )
   (
    input  [width-1:0] d,
+   input  [wbits-1:0] ctl,
    output [width-1:0] q
    );
 
-   genvar	      i;
-   generate
-      for (i = 0; i < width; i += grain)
-	begin : og
-	   assign q[i+grain-1:i] = d[width-i-1:width-i-grain];
-	end
-   endgenerate
+   // Each bit in ctl indicates if bits at that level should be
+   // reversed or not.
+   //
+   // It might be better to explicitly encode this as a MUX tree instead...
+   always_comb begin
+      for (int i = 0; i < width-1; i++) begin
+	 q[i] = d[i ^ ctl];
+      end
+   end
 endmodule
 
 // Comparator, parallelizing the logic by breaking it down into
@@ -706,9 +710,17 @@ module alu #(`CONFIG)
    // orc and reverse operations
    //
    wire [31:0]		  orc_out;
-   orc orc (.d(src1), .q(orc_out));
+   orc orc (
+      .d(src1),
+      .q(orc_out)
+   );
+
    wire [31:0]		  rev_out;
-   rev rev8 (.d(src1), .q(rev_out));
+   rev rev (
+      .d(src1),
+      .ctl (WITH_Xpairev ? src2[4:0] : 5'b11000),
+      .q(rev_out)
+   );
 
    //
    // Output MUX

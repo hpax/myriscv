@@ -23,6 +23,7 @@ parameter bit WITH_minmax		   = 1'b1;
 parameter bit WITH_Xpaicmpand       	   = 1'b1; // baeqz, banez
 parameter bit WITH_Xpaicneg                = 1'b1; // cneg, cnegi, cnegn
 parameter bit WITH_Xpaisetx		   = 1'b1; // addtional SET operations
+parameter bit WITH_Xpairev                 = 1'b0; // general REV
 parameter bit WITH_Xpabshsub		   = 1'b1; // shXsub
 parameter bit WITH_Xpabshaddpc             = 1'b1; // shXaddpc
 parameter bit WITH_Xpaitrap                = 1'b1; // Conditional TRAP
