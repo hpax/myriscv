@@ -216,8 +216,7 @@ typedef enum logic [4:0] {
         ALUSRC_ORC,
 	ALUSRC_REV,
 	ALUSRC_ZICOND,
-	// These units need to get MUXed in as late as possible
-	ALUSRC_SHIFT = 5'b10000
+	ALUSRC_SHIFT
 } alusrc_t;
 
 typedef struct packed {
