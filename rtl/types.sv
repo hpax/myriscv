@@ -64,6 +64,7 @@ typedef struct packed {
    regnum_t	 rs2;		// 5-bit register number or immediate
    logic	 rs2_valid;	// Register number (not immediate)
    logic signed [31:0] imm;	// Decoded immediate (almost always signed!)
+   logic	 imm_pc;	// pc has been added to imm
 
    logic  [31:0] pc;		// Address of this instruction
    logic	 pc_valid;	// This PC is meaningful, even if undead=0!

@@ -71,6 +71,7 @@ module decode_comb #(`CONFIG)
 	op.rs2.c     = op.mcontext.m;
 	op.rs2_valid = 1'b0;
 	op.imm	     = 'bx;
+	op.imm_pc    = 1'b0;	// Add PC to imm
 	op.lrsc      = 1'b0;
 	op.csrw      = 1'b0;
 	op.csrr      = 1'b0;
@@ -137,10 +138,11 @@ module decode_comb #(`CONFIG)
 	  BRANCH: begin
 	     if (!STRICT_UNDEFINED || WITH_Xpaicmpand ||
 		 op.funct3[2:1] != 2'b01)
-	       op.itype	  = INSN_BR;
-	     op.rs1_valid = 1'b1;
-	     op.rs2_valid = 1'b1;
-	     op.imm	  = op.pc + b_imm;
+	       op.itype 	= INSN_BR;
+	     op.rs1_valid 	= 1'b1;
+	     op.rs2_valid 	= 1'b1;
+	     op.imm 		= b_imm;
+	     op.imm_pc		= 1'b1;
 	  end
 
 	  CUSTOM2, CUSTOM3: if (WITH_Xpaitrap) begin
@@ -186,15 +188,16 @@ module decode_comb #(`CONFIG)
 	     op.itype  = INSN_JAL;
 	     op.rd_e   = 1'b1;
 	     op.rs1.r  = 5'b0; // rs1 = immediate 0
-	     op.imm    = op.pc + j_imm;
+	     op.imm    = j_imm;
+	     op.imm_pc = 1'b1;
 	  end
 
 	  OP, OP_IMM: begin
-	     op.itype			  = INSN_ALU;
-	     op.rs1_valid		  = 1'b1;
-	     op.rs2_valid		  = i[5];
-	     op.rd_e			  = 1'b1;
-	     op.imm			  = i_imm;
+	     op.itype 	  = INSN_ALU;
+	     op.rs1_valid = 1'b1;
+	     op.rs2_valid = i[5];
+	     op.rd_e 	  = 1'b1;
+	     op.imm 	  = i_imm;
 
 	     if (WITH_Zmmul &&
 	       op.rs2_valid && op.funct7 == 7'b000_0001 && ~op.funct3[2])
@@ -243,21 +246,13 @@ module decode_comb #(`CONFIG)
 	     endcase // unique casez ({op.funct7, op_funct3})
 	  end
 
-	  AUIPC: begin
+	  AUIPC, LUI: begin
 	     op.itype  = INSN_ALU;
 	     op.funct3 = ALU_ADD;
-	     op.rs1.r  = 5'b0; // rs1 = immediate 0
-	     op.rd_e   = 1'b1;
-	     op.imm    = op.pc + u_imm;
-	     can_pred  = 1'b1;
-	  end
-
-	  LUI: begin
-	     op.itype  = INSN_ALU;
-	     op.funct3 = ALU_ADD;
-	     op.rs1.r  = 5'b0; // rs1 = immediate 0
+	     op.rs1.r  = 5'b0;	// rs1 = immediate 0
 	     op.rd_e   = 1'b1;
 	     op.imm    = u_imm;
+	     op.imm_pc = ~i[5];	// i[5] = 0 for AUIPC, = 1 for LUI
 	     can_pred  = 1'b1;
 	  end
 
@@ -266,7 +261,8 @@ module decode_comb #(`CONFIG)
 	     op.funct3 = ALU_ADD;
 	     op.rs1.r  = { 4'b0, i[2] }; // rs1 = immediate 0 or 1
 	     op.rd_e   = 1'b1;
-	     op.imm    = op.pc + j_imm;
+	     op.imm    = j_imm;
+	     op.imm_pc = 1'b1;
 	  end
 
 	  // CUSTOM0 is CUSTOM1 as OP_IMM is to OP
@@ -287,9 +283,9 @@ module decode_comb #(`CONFIG)
 	       3'b000: begin	// .xu, .xc
 		  op.rs1.c  = altcontext;
 	       end
-	       3'b001: begin
-		  if (WITH_Xpabshaddpc)
-		    op.imm  = op.pc;
+	       3'b001: if (WITH_Xpabshaddpc) begin
+		  op.imm    = 'b0;
+		  op.imm_pc = 1'b1;
 	       end
 	       3'b01?: begin	// .ux, .cx, .su, .sc
 		  op.rd.c   = altcontext;
@@ -304,6 +300,9 @@ module decode_comb #(`CONFIG)
 	     // Undefined major opcode
 	  end
 	endcase // unique case (i[6:0])
+
+	if (op.imm_pc)
+	  op.imm += op.pc;
 
 	// x0 can never be written, and always is zero (effectively
 	// an immediate.) This enforces that constraint.
