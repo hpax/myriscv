@@ -7,6 +7,91 @@
 //
 `include "myriscv.vh"
 
+// Single-clock, one-read/one-write RAM. The caller supplies forwarding for
+// a simultaneous same-address read and write, so the M9K mixed-port mode is
+// deliberately don't-care.
+module dcache_ram
+  #(
+    parameter int width,
+    parameter int address_bits
+    )
+   (
+    input                         clk,
+    input [address_bits-1:0]      raddr,
+    output wire [width-1:0]       rdata,
+    input [address_bits-1:0]      waddr,
+    input [width-1:0]             wdata,
+    input                         wren
+    );
+
+`ifdef SYNTHESIS
+   altsyncram ram (
+      .address_a     (waddr),
+      .address_b     (raddr),
+      .byteena_a     (1'b1),
+      .clock0        (clk),
+      .clock1        (1'b1),
+      .data_a        (wdata),
+      .data_b        ('x),
+      .wren_a        (wren),
+      .wren_b        (1'b0),
+      .q_a           (),
+      .q_b           (rdata),
+      .aclr0         (1'b0),
+      .aclr1         (1'b0),
+      .addressstall_a(1'b0),
+      .addressstall_b(1'b0),
+      .byteena_b     (1'b1),
+      .clocken0      (1'b1),
+      .clocken1      (1'b1),
+      .clocken2      (1'b1),
+      .clocken3      (1'b1),
+      .eccstatus     (),
+      .rden_a        (1'b1),
+      .rden_b        (1'b1)
+      );
+   defparam
+     ram.address_reg_b                     = "CLOCK0",
+     ram.clock_enable_input_a              = "BYPASS",
+     ram.clock_enable_input_b              = "BYPASS",
+     ram.clock_enable_output_a             = "BYPASS",
+     ram.clock_enable_output_b             = "BYPASS",
+     ram.indata_reg_b                      = "CLOCK0",
+     ram.intended_device_family            = "Cyclone IV E",
+     ram.lpm_type                          = "altsyncram",
+     ram.numwords_a                        = 1 << address_bits,
+     ram.numwords_b                        = 1 << address_bits,
+     ram.operation_mode                    = "DUAL_PORT",
+     ram.outdata_aclr_b                    = "NONE",
+     ram.outdata_reg_b                     = "UNREGISTERED",
+     ram.power_up_uninitialized            = "FALSE",
+     ram.ram_block_type                    = "M9K",
+     ram.read_during_write_mode_mixed_ports = "DONT_CARE",
+     ram.width_a                           = width,
+     ram.width_b                           = width,
+     ram.widthad_a                         = address_bits,
+     ram.widthad_b                         = address_bits,
+     ram.width_byteena_a                   = 1,
+     ram.width_byteena_b                   = 1,
+     ram.wrcontrol_wraddress_reg_b         = "CLOCK0";
+`else
+   logic [width-1:0] mem[0:(1 << address_bits)-1];
+   logic [width-1:0] rdata_q;
+
+   initial
+     for (int i = 0; i < (1 << address_bits); i++)
+       mem[i] = '0;
+
+   always @(posedge clk) begin
+      rdata_q <= mem[raddr];
+      if (wren)
+        mem[waddr] <= wdata;
+   end
+
+   assign rdata = rdata_q;
+`endif
+endmodule
+
 module dcache_real
   #(`CONFIG,
     parameter int size_bits = 12)
@@ -64,16 +149,14 @@ module dcache_real
 
    // A 36-bit block maps directly to the maximum-width byte-enabled RAM
    // primitive. Bits [35:34] hold {valid, dirty}; [31:0] hold cache data.
-   logic [tag_bits-1:0] tag_mem [0:rows-1];
-   logic [35:0]         data_mem[0:rows-1];
-
    // The D-stage lookup is available while its operation is in E.
    logic [31:0]         lookup_a;
    logic                lookup_valid;
    cbo_t                lookup_cbo;
    logic                lookup_wrq;
-   logic [tag_bits-1:0] tag_read;
-   logic [35:0]         data_read;
+   logic [row_bits-1:0] ram_read_row;
+   wire [tag_bits-1:0]  tag_read;
+   wire [35:0]          data_read;
    logic                read_bypass;
    logic [tag_bits-1:0] read_bypass_tag;
    logic [35:0]         read_bypass_data;
@@ -181,27 +264,49 @@ module dcache_real
    initial begin
       if (size_bits < 2 || size_bits >= ram_size_bits)
         $error("dcache size_bits must be between 2 and ram_size_bits - 1");
-      for (int i = 0; i < rows; i++)
-        data_mem[i] = '0;
+   end
+
+   always @(*) begin
+      ram_read_row = lookup_row;
+      if (!lookup_hold_i) begin
+         if (lookup_valid_i)
+           ram_read_row = lookup_a_i[size_bits-1:2];
+         else if (dbus_valid && dbus_cacheable && state == S_IDLE)
+           ram_read_row = dbus_row;
+      end
    end
 
    // The cache arrays are true synchronous memories. The D-stage lookup
    // avoids a half-cycle path from the RAM outputs to dbus_ready.
+   dcache_ram #(.width(tag_bits), .address_bits(row_bits)) tag_mem (
+      .clk   (clk),
+      .raddr (ram_read_row),
+      .rdata (tag_read),
+      .waddr (cache_write_row),
+      .wdata (cache_write_tag),
+      .wren  (cache_write)
+      );
+
+   dcache_ram #(.width(36), .address_bits(row_bits)) data_mem (
+      .clk   (clk),
+      .raddr (ram_read_row),
+      .rdata (data_read),
+      .waddr (cache_write_row),
+      .wdata (cache_write_data),
+      .wren  (cache_write)
+      );
+
    always @(posedge clk) begin
       if (lookup_hold_i) begin
          lookup_valid <= lookup_valid;
          lookup_cbo <= lookup_cbo;
          lookup_wrq <= lookup_wrq;
-         tag_read <= tag_read;
-         data_read <= data_read;
          read_bypass <= read_bypass;
       end else if (lookup_valid_i) begin
          lookup_a <= lookup_a_i;
          lookup_valid <= rst_n;
          lookup_cbo <= lookup_cbo_i;
          lookup_wrq <= lookup_wrq_i;
-         tag_read <= tag_mem[lookup_a_i[size_bits-1:2]];
-         data_read <= data_mem[lookup_a_i[size_bits-1:2]];
          read_bypass <= cache_write &&
                         cache_write_row == lookup_a_i[size_bits-1:2];
       end else if (dbus_valid && dbus_cacheable && state == S_IDLE) begin
@@ -209,8 +314,6 @@ module dcache_real
          lookup_valid <= rst_n;
          lookup_cbo <= dbus_cbo;
          lookup_wrq <= dbus_wrq;
-         tag_read <= tag_mem[dbus_row];
-         data_read <= data_mem[dbus_row];
          read_bypass <= cache_write && cache_write_row == dbus_row;
       end else begin
          lookup_valid <= 1'b0;
@@ -220,11 +323,6 @@ module dcache_real
       end
       read_bypass_tag <= cache_write_tag;
       read_bypass_data <= cache_write_data;
-
-      if (cache_write) begin
-         tag_mem[cache_write_row] <= cache_write_tag;
-         data_mem[cache_write_row] <= cache_write_data;
-      end
    end
 
    always @(negedge rst_n or posedge clk)
