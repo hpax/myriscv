@@ -97,7 +97,7 @@ geninclude:
 	$(CC) $(SFLAGS) $(SFLAGS_$<) $(gendeps) -E -o $@ $<
 
 clean:
-	find . $(patsubst %,-name '*%' -o,.hex .bin .elf .o .s .d .a) -false \
+	find . $(patsubst %,-name '*%' -o,.hex .bin .elf .o .s .d .a .d) -false \
 		| xargs -rt rm -f
 	$(MAKE) -C $(BENCH) clean
 
