@@ -216,7 +216,8 @@ typedef enum logic [4:0] {
         ALUSRC_ORC,
 	ALUSRC_REV,
 	ALUSRC_ZICOND,
-	ALUSRC_SHIFT
+        ALUSRC_PACK,
+        ALUSRC_SHIFT
 } alusrc_t;
 
 typedef struct packed {

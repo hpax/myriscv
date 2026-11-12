@@ -55,6 +55,7 @@ Private instruction set extensions:
 	Xpabshone	- Shift insert one
 	Xpabextr	- Bitfield extraction
 	Xpabextn	- Arbitrary width sign and zero extensions
+	Xpabpack	- pack, packh, packb
 	Xpaicneg	- Conditional negate
 	Xpailai		- Load address immediate
 	Xpaitrap	- Conditional traps
@@ -258,6 +259,17 @@ Private instruction set extensions:
 		instr[31:20]	= imm12 for TRAP*I
 		instr[24:20]	= rs2 for TRAP*
 		instr[31:25]	= 0000000 for TRAP*
+
+	WITH_Xpabpack:
+		The pack and packh operations from the Zbkb extension,
+		plus a custom "packb" operation which performs the
+		equivalent of:
+
+			packh	rd, rs1, rs2
+			pack	rd, rd, rd
+
+		packb is encoded the same as the pack and packh
+		instructions, but with funct3 == 110.
 
 	WITH_indcsr:
 		Indirect CSR access.

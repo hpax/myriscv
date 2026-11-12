@@ -159,16 +159,18 @@ module alu_decode #(`CONFIG)
 		    ctl.invert = funct7[5];
 		    ctl.bitop  = funct3[1:0];
 		 end
-	       { 7'b000_0100, ALU_XOR }: begin
-		  unique casez (op.rs2.r)
-		    5'b00000: begin
-		       ctl.unit    = ALUSRC_SHIFT;
-		       ctl.shiftop = SHIFTOP_ZEXTH;
-		    end
-		    default: begin
-		       // Invalid
-		    end
-		  endcase // unique casez (op.rs2.r)
+	       { 7'b000_0100, ALU_XOR },
+	       { 7'b000_0100, ALU_OR },
+	       { 7'b000_0100, ALU_AND }: begin
+		  if (WITH_Xpabpack) begin
+		     ctl.unit  = ALUSRC_PACK;
+		     ctl.bitop = funct3[1:0];
+		  end else if (!STRICT_UNDEFINED ||
+			       (funct3 == ALU_XOR && !op.rs2.r)) begin
+		     // zext.h
+		     ctl.unit    = ALUSRC_SHIFT;
+		     ctl.shiftop = SHIFTOP_ZEXTH;
+		  end
 	       end
 	       { 7'b000_0101, 3'b1?? }: if (WITH_minmax) begin
 		  ctl.unit = ALUSRC_MINMAX;
@@ -562,6 +564,28 @@ module zicond
    assign dst = src1 & {32{pol ^ ~|src2}};
 endmodule // zicond
 
+// pack, packh, packb (the latter a custom extension)
+module pack
+  (
+   input  [31:0] src1,
+   input  [31:0] src2,
+   input   [1:0] ctl,
+   output [31:0] q
+);
+
+   always_comb
+     unique case (ctl)
+	2'b00:			// pack
+	  q = { src2[15:0], src1[15:0] };
+	2'b01:			// invalid
+	  q = 'bx;
+	2'b10:			// packb
+	  q = { src2[7:0], src1[7:0], src2[7:0], src1[7:0] };
+	2'b11:			// packh
+	  q = { 16'b0, src2[7:0], src1[7:0] };
+     endcase
+endmodule
+
 //
 // This merges multiple computational blocks.
 // This does not include the bypass logic.
@@ -711,15 +735,23 @@ module alu #(`CONFIG)
    //
    wire [31:0]		  orc_out;
    orc orc (
-      .d(src1),
-      .q(orc_out)
+      .d   (src1),
+      .q   (orc_out)
    );
 
    wire [31:0]		  rev_out;
    rev rev (
-      .d(src1),
+      .d   (src1),
       .ctl (WITH_Xpairev ? src2[4:0] : 5'b11000),
-      .q(rev_out)
+      .q   (rev_out)
+   );
+
+   wire [31:0] pack_out;
+   pack pack (
+      .src1 (src1),
+      .src2 (src2),
+      .ctl  (ctl.bitop),
+      .q    (pack_out)
    );
 
    //
@@ -729,16 +761,17 @@ module alu #(`CONFIG)
      begin
 	dst = 'bx;
 	unique case (ctl.unit)
-	  ALUSRC_ADD:    dst			   = add_out;
-	  ALUSRC_LOGIC:  dst			   = bit_out;
-	  ALUSRC_SET:    dst			   = cmp_out;
-	  ALUSRC_MINMAX: if (WITH_minmax) dst = minmax_out;
-	  ALUSRC_SHIFT:  dst			   = shift_out;
-	  ALUSRC_BITCNT: if (WITH_bitcnt) dst = bitcnt_out;
-	  ALUSRC_ORC:    dst			   = orc_out;
-	  ALUSRC_REV:    dst			   = rev_out;
-	  ALUSRC_ZICOND: if (WITH_Zicond) dst = zicond_out;
-	  default:       dst = 'bx;
+	  ALUSRC_ADD:                       dst = add_out;
+	  ALUSRC_LOGIC:                     dst = bit_out;
+	  ALUSRC_SET:                       dst = cmp_out;
+	  ALUSRC_MINMAX: if (WITH_minmax)   dst = minmax_out;
+	  ALUSRC_SHIFT:                     dst = shift_out;
+	  ALUSRC_BITCNT: if (WITH_bitcnt)   dst = bitcnt_out;
+	  ALUSRC_ORC:                       dst = orc_out;
+	  ALUSRC_REV:                       dst = rev_out;
+	  ALUSRC_ZICOND: if (WITH_Zicond)   dst = zicond_out;
+	  ALUSRC_PACK:   if (WITH_Xpabpack) dst = pack_out;
+	  default:                          dst = 'bx;
 	endcase // unique case (alusrc)
      end
 endmodule // alu
