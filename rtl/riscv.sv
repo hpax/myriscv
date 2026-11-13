@@ -40,21 +40,24 @@ typedef enum logic [6:0] {
 } op_t;
 
 // Nonstandard opcode space allocations
-const op_t LAI0      = NMADD;
-const op_t LAI1      = NMSUB;
-const op_t OPX_IMM   = CUSTOM0;
-const op_t OPX       = CUSTOM1;
-const op_t TRAPC_IMM = CUSTOM2;
-const op_t TRAPC     = CUSTOM3;
+const op_t LAI0		= NMADD;
+const op_t LAI1		= NMSUB;
+const op_t OPX_IMM	= CUSTOM0;
+const op_t OPX		= CUSTOM1;
+const op_t TRAPC_IMM	= CUSTOM2;
+const op_t TRAPC	= CUSTOM3;
+const op_t JT		= RESV32;
 
 // Condition selections
 typedef enum logic [2:0] {
-	COND_EQ	 = 3'b000,
-	COND_NE	 = 3'b001,
-	COND_LT	 = 3'b100,
-	COND_GE	 = 3'b101,
-	COND_LTU = 3'b110,
-	COND_GEU = 3'b111
+   COND_EQ   = 3'b000,
+   COND_NE   = 3'b001,
+   COND_AEQZ = 3'b010,
+   COND_ANEZ = 3'b011,
+   COND_LT   = 3'b100,
+   COND_GE   = 3'b101,
+   COND_LTU  = 3'b110,
+   COND_GEU  = 3'b111
 } cond_t;
 
 // ALU funct3 operations codes
