@@ -833,7 +833,7 @@ module backend #(`CONFIG)
 	 e_intack     = e_irq_vector;
 	 d_irqs_clear = 1'b1 << e_irq_vector;
       end else if (csrw_mip) begin
-	 d_irqs_clear = ~e_csr_wval[NUM_IRQS:1]; // Write 0 to clear(?!)
+	 d_irqs_clear = e_csr_wval[NUM_IRQS:1]; // Write 1 to clear
       end
    end
 
