@@ -506,7 +506,7 @@ module rev
    //
    // It might be better to explicitly encode this as a MUX tree instead...
    always_comb begin
-      for (int i = 0; i < width-1; i++) begin
+      for (int i = 0; i < width; i++) begin
 	 q[i] = d[i ^ ctl];
       end
    end
