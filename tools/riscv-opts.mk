@@ -14,8 +14,7 @@ riscv_target_flags :=	-target riscv32-myriscv-none-elf -mcpu=myriscv \
 			-ffunction-sections -fdata-sections \
 			-fno-exceptions \
 			-falign-functions=4 -fpreferred-function-alignment=4 \
-			-falign-loops=4 -falign-labels=4 \
-			-mpreferred-stack-boundary=2 -malign-data=natural \
+			-falign-loops=4 \
 			-fdirect-access-external-data
 
 # Additional flags during application build
