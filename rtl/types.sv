@@ -51,6 +51,13 @@ typedef struct packed {
 // Return stack position type
 typedef logic [`RET_STACK_MAX_LG2-1:0] retstack_t;
 
+// Address generation source settings
+typedef struct packed {
+   logic         rs1;		// Input 1 is rs1, otherwise zero
+   logic [1:0]   rs1_shift;	// rs1 shift amount
+   logic	 rs2;		// Input 2 is rs2, otherwise imm
+} addrsrc_t;
+
 typedef struct packed {
    logic         undead;	// It is an executable instruction
 
@@ -79,6 +86,9 @@ typedef struct packed {
    // CSR read and write flags (for scoreboarding)
    logic	 csrr;
    logic	 csrw;
+
+   // Address generation settings
+   addrsrc_t     addr;
 
    // Atomic (LR/SC) memory operation
    logic	 lrsc;
@@ -115,6 +125,7 @@ function automatic decoded_insn_t dummy_op(
    dummy_op.mcontext  = mcontext;
 
    dummy_op.retstack  = 'bx;
+   dummy_op.addr      = 'bx;
 endfunction
 
 function automatic decoded_insn_t killed_op;

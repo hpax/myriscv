@@ -367,21 +367,11 @@ module backend #(`CONFIG)
    assign dcache_lookup_hold = d_src_hold;
 
    always_comb begin
-      logic [1:0]  a_scale;
-      logic [31:0] a_addend;
-      a_scale		     = 2'd0;
-      a_addend               = d_op.imm;
       dcache_lookup_valid    = d_advance & insn_mem(d_op.itype);
       dcache_lookup_cbo      = CBO_NONE;
       dcache_lookup_wrq      = d_op.itype[0];
 
       unique case (d_op.itype)
-	 INSN_LD: begin
-	    if (WITH_Zilx && d_op.rs2_valid) begin
-	       a_scale	= d_op.funct3[1:0];
-	       a_addend = d_srs2;
-	    end
-	 end
 	 INSN_CBO: begin
             unique casez (d_op.rs2.r)
               5'b00000: dcache_lookup_cbo = CBO_INVAL;
@@ -397,12 +387,8 @@ module backend #(`CONFIG)
 	end
       endcase
 
-      // Using d_src1 rather than d_srs1 here is necessary because
-      // the JAL logic uses e_addr which is produced from this value
-      if (a_scale < 2'd2)
-	dcache_lookup_a = (d_src1 << a_scale) + a_addend;
-      else
-	dcache_lookup_a = 'bx;
+      dcache_lookup_a = (d_op.addr.rs1 ? d_srs1 << d_op.addr.rs1_shift : 'b0) +
+			(d_op.addr.rs2 ? d_srs2 : d_op.imm);
    end
 
    //

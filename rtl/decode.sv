@@ -84,12 +84,15 @@ module decode_comb #(`CONFIG)
 	unique case (i[6:0])
 	  LOAD: begin
 	     if (!STRICT_UNDEFINED
-	       || (op.funct3 != 3'b011 && op.funct3[2:1] != 2'b11))
-	       op.itype      = INSN_LD;
+		 || (op.funct3 != 3'b011 && op.funct3[2:1] != 2'b11))
+	       op.itype        = INSN_LD;
 
-	     op.rd_m	     = 1'b1;
-	     op.rs1_valid    = 1'b1;
-	     op.imm	     = i_imm;
+	     op.rd_m	       = 1'b1;
+	     op.rs1_valid      = 1'b1;
+	     op.imm	       = i_imm;
+	     op.addr.rs1       = 1'b1;
+	     op.addr.rs2       = 1'b0;
+	     op.addr.rs1_shift = 2'b0;
 	  end
 
 	  STORE: begin
@@ -98,6 +101,9 @@ module decode_comb #(`CONFIG)
 	     op.rs1_valid = 1'b1;
 	     op.rs2_valid = 1'b1;
 	     op.imm	  = s_imm;
+	     op.addr.rs1       = 1'b1;
+	     op.addr.rs2       = 1'b0;
+	     op.addr.rs1_shift = 2'b0;
 	  end
 
 	  AMO: begin
@@ -107,26 +113,35 @@ module decode_comb #(`CONFIG)
 		5'b00010: if (WITH_Zalrsc) begin // LR
 		   if (!STRICT_UNDEFINED
 		       || (op.funct3 <= 3'b010 && !op.rd.r)) begin
-		      op.lrsc	   = 1'b1;
-		      op.itype	   = INSN_LD;
-		      op.rs2_valid = 1'b0;
-		      op.rd_m	   = 1'b1;
+		      op.lrsc		= 1'b1;
+		      op.itype		= INSN_LD;
+		      op.rs2_valid	= 1'b0;
+		      op.rd_m		= 1'b1;
+		      op.addr.rs1       = 1'b1;
+		      op.addr.rs1_shift = 2'b0;
+		      op.addr.rs2       = 1'b0;
 		   end
 		end
 	       5'b00011: if (WITH_Zalrsc) begin // SC
 		  if (!STRICT_UNDEFINED || op.funct3 <= 3'b010) begin
-		     op.lrsc      = 1'b1;
-		     op.itype     = INSN_ST;
-		     op.rs2_valid = 1'b1;
-		     op.rd_e      = 1'b1;
+		     op.lrsc	       = 1'b1;
+		     op.itype	       = INSN_ST;
+		     op.rs2_valid      = 1'b1;
+		     op.rd_e	       = 1'b1;
+		     op.addr.rs1       = 1'b1;
+		     op.addr.rs1_shift = 2'b0;
+		     op.addr.rs2       = 1'b0;
 		  end
 	       end
 	       5'b1?010: if (WITH_Zilx) begin	// lx(s)
 		  if (!STRICT_UNDEFINED ||
-		    (op.funct3[1:0] != 2'b11 && op.funct3 != 3'b110)) begin
-		     op.itype	    = INSN_LD;
-		     op.rs2_valid   = 1'b1;
-		     op.rd_m        = 1'b1;
+		      (op.funct3[1:0] != 2'b11 && op.funct3 != 3'b110)) begin
+		     op.itype	       = INSN_LD;
+		     op.rs2_valid      = 1'b1;
+		     op.rd_m	       = 1'b1;
+		     op.addr.rs1       = 1'b1;
+		     op.addr.rs1_shift = op.funct3[1:0];
+		     op.addr.rs2       = 1'b1;
 		  end
 	       end
 	       default: begin
@@ -138,11 +153,13 @@ module decode_comb #(`CONFIG)
 	  BRANCH: begin
 	     if (!STRICT_UNDEFINED || WITH_Xpaicmpand ||
 		 op.funct3[2:1] != 2'b01)
-	       op.itype 	= INSN_BR;
-	     op.rs1_valid 	= 1'b1;
-	     op.rs2_valid 	= 1'b1;
-	     op.imm 		= b_imm;
+	       op.itype		= INSN_BR;
+	     op.rs1_valid	= 1'b1;
+	     op.rs2_valid	= 1'b1;
+	     op.imm		= b_imm;
 	     op.imm_pc		= 1'b1;
+	     op.addr.rs1	= 1'b0;
+	     op.addr.rs2        = 1'b0;
 	  end
 
 	  CUSTOM2, CUSTOM3: if (WITH_Xpaitrap) begin
@@ -153,10 +170,13 @@ module decode_comb #(`CONFIG)
 	  end
 
 	  JALR: begin
-	     op.itype     = INSN_JAL;
-	     op.rs1_valid = 1'b1;
-	     op.rd_e      = 1'b1;
-	     op.imm	  = i_imm;
+	     op.itype	       = INSN_JAL;
+	     op.rs1_valid      = 1'b1;
+	     op.rd_e	       = 1'b1;
+	     op.imm	       = i_imm;
+	     op.addr.rs1       = 1'b1;
+	     op.addr.rs1_shift = 1'b0;
+	     op.addr.rs2       = 1'b0;
 	  end
 
 	  MISC_MEM: begin
@@ -185,19 +205,20 @@ module decode_comb #(`CONFIG)
 	  end
 
 	  JAL: begin
-	     op.itype  = INSN_JAL;
-	     op.rd_e   = 1'b1;
-	     op.rs1.r  = 5'b0; // rs1 = immediate 0
-	     op.imm    = j_imm;
-	     op.imm_pc = 1'b1;
+	     op.itype	 = INSN_JAL;
+	     op.rd_e	 = 1'b1;
+	     op.imm	 = j_imm;
+	     op.imm_pc	 = 1'b1;
+	     op.addr.rs1 = 1'b0;
+	     op.addr.rs2 = 1'b0;
 	  end
 
 	  OP, OP_IMM: begin
-	     op.itype 	  = INSN_ALU;
+	     op.itype	  = INSN_ALU;
 	     op.rs1_valid = 1'b1;
 	     op.rs2_valid = i[5];
-	     op.rd_e 	  = 1'b1;
-	     op.imm 	  = i_imm;
+	     op.rd_e	  = 1'b1;
+	     op.imm	  = i_imm;
 
 	     if (WITH_Zmmul &&
 	       op.rs2_valid && op.funct7 == 7'b000_0001 && ~op.funct3[2])
