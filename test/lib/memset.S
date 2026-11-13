@@ -10,11 +10,7 @@
 
 begin_func memset, hot, global
 	mv	t0, a0
-	andi	a1, a1, 0xff
-	slli	t1, a1, 8
-	or	a1, a1, t1
-	slli	t1, a1, 16
-	or	a1, a1, t1
+	packb	a1, a1, a1
 
 	li	t1, 16
 	bltu	a2, t1, .L_tail
