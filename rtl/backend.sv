@@ -665,10 +665,14 @@ module backend #(`CONFIG)
    wire [31:0]	mtvec_addr = { mtvec[31:2], 2'b00 } & PC_MASK;
 
    always @(negedge rst_n or posedge clk)
-     if (~rst_n)
-       e_pc <= RESET_PC & PC_MASK;
-     else if (e_accept & (e_kill | ~e_stall)) // e_kill correct here?
-       e_pc <= e_restartpc;
+     if (~rst_n) begin
+	e_pc <= RESET_PC & PC_MASK;
+     end else if (e_kill | (e_accept & ~e_stall)) begin
+	// If e_kill is set, then the pipeline is being unconditionally
+	// killed. Otherwise, advance the PC when we can accept an
+	// instruction and we are not told to stall execution.
+	e_pc <= e_restartpc;
+     end
 
    assign e_pc_ok = e_op.pc == e_pc;
 
