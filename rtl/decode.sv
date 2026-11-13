@@ -213,6 +213,18 @@ module decode_comb #(`CONFIG)
 	     op.addr.rs2 = 1'b0;
 	  end
 
+	  JT: if (WITH_Xpaijt) begin
+	     if (!STRICT_UNDEFINED || (!op.rs2.r && !op.funct3[2])) begin
+		op.itype	  = INSN_JAL;
+		op.imm		  = b_imm;
+		op.imm_pc	  = 1'b1;
+		op.rs1_valid	  = 1'b1;
+		op.addr.rs1	  = 1'b1;
+		op.addr.rs1_shift = op.funct3[1:0];
+		op.addr.rs2	  = 1'b0;
+	     end
+	  end
+
 	  OP, OP_IMM: begin
 	     op.itype	  = INSN_ALU;
 	     op.rs1_valid = 1'b1;
