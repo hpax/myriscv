@@ -39,6 +39,14 @@ typedef enum logic [6:0] {
 	CUSTOM3	 = 7'b1111011
 } op_t;
 
+// Nonstandard opcode space allocations
+const op_t LAI0      = NMADD;
+const op_t LAI1      = NMSUB;
+const op_t OPX_IMM   = CUSTOM0;
+const op_t OPX       = CUSTOM1;
+const op_t TRAPC_IMM = CUSTOM2;
+const op_t TRAPC     = CUSTOM3;
+
 // Condition selections
 typedef enum logic [2:0] {
 	COND_EQ	 = 3'b000,

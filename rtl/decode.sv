@@ -162,7 +162,7 @@ module decode_comb #(`CONFIG)
 	     op.addr.rs2        = 1'b0;
 	  end
 
-	  CUSTOM2, CUSTOM3: if (WITH_Xpaitrap) begin
+	  TRAPC_IMM, TRAPC: if (WITH_Xpaitrap) begin
 	     op.itype	  = INSN_TRAP;
 	     op.rs1_valid = 1'b1;
 	     op.rs2_valid = i[5];
@@ -277,7 +277,7 @@ module decode_comb #(`CONFIG)
 	     can_pred  = 1'b1;
 	  end
 
-	  NMSUB, NMADD: begin	// LAI
+	  LAI0, LAI1: begin
 	     op.itype  = INSN_ALU;
 	     op.funct3 = ALU_ADD;
 	     op.rs1.r  = { 4'b0, i[2] }; // rs1 = immediate 0 or 1
@@ -286,8 +286,7 @@ module decode_comb #(`CONFIG)
 	     op.imm_pc = 1'b1;
 	  end
 
-	  // CUSTOM0 is CUSTOM1 as OP_IMM is to OP
-	  CUSTOM0, CUSTOM1: begin
+	  OPX_IMM, OPX: begin
 	     logic [4:0] altcontext;
 
 	     op.itype	  = INSN_XALU;
@@ -528,11 +527,11 @@ module decode_srcregs #(`CONFIG)
 	   rs1.r = insn[19:15];
 	   rs2.r = insn[24:20];
 	   unique casez ({insn[31], insn[14:12], insn[6:0]})
-	     { 1'b?, 3'b000, CUSTOM0 },
-	     { 1'b0, 3'b000, CUSTOM1 }: begin
+	     { 1'b?, 3'b000, OPX_IMM },
+	     { 1'b0, 3'b000, OPX }: begin
 		rs1.c = mc.u;			// .xu instruction
 	     end
-	     { 1'b1, 3'b000, CUSTOM1 }: begin
+	     { 1'b1, 3'b000, OPX }: begin
 		rs1.c = insn[29:25] & CTX_MASK; // .xc instruction
 	     end
 
