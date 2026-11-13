@@ -553,6 +553,8 @@ module comparator
 endmodule
 
 // Zicond module
+// pol == 1'b0 for eqz, pol == 1'b1 for nez
+// Note: the condition name is for when to zero the output, not pass it!
 module zicond
   (
    output [31:0] dst,
@@ -561,7 +563,7 @@ module zicond
    input pol
    );
 
-   assign dst = src1 & {32{pol ^ ~|src2}};
+   assign dst = src1 & {32{pol ^ |src2}};
 endmodule // zicond
 
 // pack, packh, packb (the latter a custom extension)
