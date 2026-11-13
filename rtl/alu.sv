@@ -496,9 +496,9 @@ module rev
    parameter wbits = $clog2(width)
   )
   (
-   input  [width-1:0] d,
-   input  [wbits-1:0] ctl,
-   output [width-1:0] q
+   input  logic [width-1:0] d,
+   input  logic [wbits-1:0] ctl,
+   output logic [width-1:0] q
    );
 
    // Each bit in ctl indicates if bits at that level should be
@@ -569,10 +569,10 @@ endmodule // zicond
 // pack, packh, packb (the latter a custom extension)
 module pack
   (
-   input  [31:0] src1,
-   input  [31:0] src2,
-   input   [1:0] ctl,
-   output [31:0] q
+   input  logic [31:0] src1,
+   input  logic [31:0] src2,
+   input  logic  [1:0] ctl,
+   output logic [31:0] q
 );
 
    always_comb
@@ -585,6 +585,8 @@ module pack
 	  q = { src2[7:0], src1[7:0], src2[7:0], src1[7:0] };
 	2'b11:			// packh
 	  q = { 16'b0, src2[7:0], src1[7:0] };
+       default:
+	  q = 'bx;
      endcase
 endmodule
 
