@@ -1,0 +1,7 @@
+# -*- tcl -*-
+#
+# This file contains no real content, so when Quartus messes it up it
+# can just be reset. The only real line is:
+#   set_global_assignment -name SOURCE_TCL_SCRIPT_FILE myriscv.qsf
+#
+set_global_assignment -name SOURCE_TCL_SCRIPT_FILE myriscv.qsf
