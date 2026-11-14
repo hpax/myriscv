@@ -547,7 +547,7 @@ module backend #(`CONFIG)
         csrw_cie          = 1'b0;
         csrw_mscratch     = 1'b0;
 
-	if (e_accept & e_op.csrw) begin
+	if (e_valid_i & e_op.undead & ~m_kill & e_pc_ok & e_op.csrw) begin
 	   unique case (ncsr)
 	     CSR_MTVEC:		csrw_mtvec	  = |MTVEC_WMASK;
 	     CSR_MEPC:          csrw_mepc	  = 1'b1;
