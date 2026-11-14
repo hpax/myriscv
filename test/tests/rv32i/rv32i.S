@@ -114,6 +114,13 @@ __start:
 	bltu a1,a0,.Lfail
 #endif
 #if MYRISCV_WITH_regcsr
+	csrw	mscratch,zero
+	beq	zero,zero,1f
+	csrrwi	zero,mscratch,31
+1:
+	csrr	a1,mscratch
+	assert_eq a1,0
+
 	/* The test framework enables WITH_mscratch regardless of default */
 	li a0,0x13579bdf
 	csrrw a1,mscratch,a0
