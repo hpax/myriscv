@@ -204,6 +204,10 @@ module dcache_real
                           lookup_tag == lookup_addr_tag);
    wire                 cbo_match = lookup_car ? lookup_data[35] :
                          lookup_match;
+   // A live request without a D-stage lookup holds dbus stable while the
+   // synchronous RAM read below prepares a replacement lookup record.
+   wire                 replay_lookup = state == S_IDLE && dbus_valid &&
+                                        dbus_cacheable && !lookup_valid;
 
    logic                start_writeback;
    logic                start_fill;
@@ -268,7 +272,9 @@ module dcache_real
 
    always @(*) begin
       ram_read_row = lookup_row;
-      if (!lookup_hold_i) begin
+      if (replay_lookup) begin
+         ram_read_row = dbus_row;
+      end else if (!lookup_hold_i) begin
          if (lookup_valid_i)
            ram_read_row = lookup_a_i[size_bits-1:2];
          else if (dbus_valid && dbus_cacheable && state == S_IDLE)
@@ -297,11 +303,12 @@ module dcache_real
       );
 
    always @(posedge clk) begin
-      if (lookup_hold_i) begin
-         lookup_valid <= lookup_valid;
-         lookup_cbo <= lookup_cbo;
-         lookup_wrq <= lookup_wrq;
-         read_bypass <= read_bypass;
+      if (replay_lookup) begin
+         lookup_a <= dbus_a;
+         lookup_valid <= rst_n;
+         lookup_cbo <= dbus_cbo;
+         lookup_wrq <= dbus_wrq;
+         read_bypass <= cache_write && cache_write_row == dbus_row;
       end else if (lookup_valid_i) begin
          lookup_a <= lookup_a_i;
          lookup_valid <= rst_n;
@@ -309,12 +316,17 @@ module dcache_real
          lookup_wrq <= lookup_wrq_i;
          read_bypass <= cache_write &&
                         cache_write_row == lookup_a_i[size_bits-1:2];
-      end else if (dbus_valid && dbus_cacheable && state == S_IDLE) begin
-         lookup_a <= dbus_a;
-         lookup_valid <= rst_n;
-         lookup_cbo <= dbus_cbo;
-         lookup_wrq <= dbus_wrq;
-         read_bypass <= cache_write && cache_write_row == dbus_row;
+      end else if (dbus_valid && dbus_cacheable && state == S_IDLE &&
+                   lookup_valid) begin
+         lookup_valid <= 1'b0;
+         lookup_cbo <= CBO_NONE;
+         lookup_wrq <= 1'b0;
+         read_bypass <= 1'b0;
+      end else if (lookup_hold_i) begin
+         lookup_valid <= lookup_valid;
+         lookup_cbo <= lookup_cbo;
+         lookup_wrq <= lookup_wrq;
+         read_bypass <= read_bypass;
       end else begin
          lookup_valid <= 1'b0;
          lookup_cbo <= CBO_NONE;
@@ -346,7 +358,7 @@ module dcache_real
 
         case (state)
           S_IDLE:
-            if (lookup_valid) begin
+            if (dbus_valid && lookup_valid) begin
                if (lookup_cbo_valid) begin
                   if (start_writeback) begin
                      pending <= lookup_cbo == CBO_CLEAN ?

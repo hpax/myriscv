@@ -9,6 +9,14 @@ __start:
 	sw a1,0(a0)
 	fence rw,rw
 
+	/* A branch-squashed store must not mutate a speculative cache lookup. */
+	li a1,0x55667788
+	beq zero,zero,1f
+	sw a1,0(a0)
+1:
+	lw a2,0(a0)
+	assert_eq a2,0x11223344
+
 #if MYRISCV_WITH_Zalrsc
 	lr.w a2,(a0)
 	assert_eq a2,0x11223344
