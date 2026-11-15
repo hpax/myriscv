@@ -490,15 +490,15 @@ Register contexts:
 
 		add.xu	- funct3 == 000, funct7 == 0000000
 		sub.xu	- funct3 == 000, funct7 == 0100000
-			  rs1 is forced to the user context.
-
-		add.ux	- funct3 == 010, funct7 == 0000000
-		sub.ux	- funct3 == 010, funct7 == 0100000
-			  rd is forced to the user context.
+			  rs1 is forced to the user context
 
 		add.xc	- funct3 == 000, funct7 == 10ccccc
 		sub.xc	- funct3 == 000, funct7 == 11ccccc
 			  rs1 is forced to the context in insn[29:25].
+
+		add.ux	- funct3 == 010, funct7 == 0000000
+		sub.ux	- funct3 == 010, funct7 == 0100000
+			  rd is forced to the user context.
 
 		add.cx	- funct3 == 010, funct7 == 10ccccc
 		sub.cx	- funct3 == 010, funct7 == 11ccccc

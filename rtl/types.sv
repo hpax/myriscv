@@ -228,6 +228,7 @@ typedef enum logic [4:0] {
 	ALUSRC_REV,
 	ALUSRC_ZICOND,
         ALUSRC_PACK,
+        ALUSRC_DDA,
         ALUSRC_SHIFT
 } alusrc_t;
 

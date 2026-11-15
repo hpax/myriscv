@@ -219,12 +219,17 @@ module alu_decode #(`CONFIG)
 	       end
 	       3'b110: begin		// CNEG
 		  unique casez (funct7)
-		    6'b0?00000: begin
+		    7'b0?0_0000: begin
 		       if (WITH_Xpaicneg) begin
 			  ctl.unit   = ALUSRC_ADD;
 			  ctl.invert = funct7[5];
 			  ctl.cinv   = 1'b1;
 			  ctl.zsrc1  = 1'b1;
+		       end
+		    end
+		    7'b000_0001: begin
+		       if (WITH_Xpabdda) begin
+			  ctl.unit   = ALUSRC_DDA;
 		       end
 		    end
 		    default: begin
@@ -591,6 +596,34 @@ module pack
 endmodule
 
 //
+// dda ("double dabble adjust")
+//
+// Produce 4'd3 for any nybble containing 4'd5 or higher; this can be
+// used for efficient conversion of binary to decimal for printing.
+//
+// A much more powerful version could combine it with an add and an
+// input to produce ((src1 + dda(src1)) << 1) + (src2[31:28] >= 4'd5).
+// Note that on valid input the (src1 + dda(src1)) can never cause
+// carry between nybbles, so a full carry chain is optional.
+//
+// However, the basic dda step is *extremely* FPGA-friendly, needing
+// only one 4-LUT per nybble (plus data path MUXes, of course).
+//
+module dda
+  (
+   input logic  [31:0] d,
+   output logic [31:0] q
+);
+
+   genvar i;
+   generate
+      for (i = 0; i < 32; i += 4) begin : dd
+	 assign q[i+3:i] = { 2'b00, {2{d[i+3:i] >= 4'd5}} };
+      end
+   endgenerate
+endmodule
+
+//
 // This merges multiple computational blocks.
 // This does not include the bypass logic.
 // This doesn't include the multiplier, as the multiplier
@@ -735,7 +768,7 @@ module alu #(`CONFIG)
      end
 
    //
-   // orc and reverse operations
+   // Weird ops: orc, reverse, pack, dda
    //
    wire [31:0]		  orc_out;
    orc orc (
@@ -758,6 +791,12 @@ module alu #(`CONFIG)
       .q    (pack_out)
    );
 
+   wire [31:0] dda_out;
+   dda dda (
+      .d (src1),
+      .q (dda_out)
+   );
+
    //
    // Output MUX
    //
@@ -775,6 +814,7 @@ module alu #(`CONFIG)
 	  ALUSRC_REV:                       dst = rev_out;
 	  ALUSRC_ZICOND: if (WITH_Zicond)   dst = zicond_out;
 	  ALUSRC_PACK:   if (WITH_Xpabpack) dst = pack_out;
+	  ALUSRC_DDA:    if (WITH_Xpabdda)  dst = dda_out;
 	  default:                          dst = 'bx;
 	endcase // unique case (alusrc)
      end

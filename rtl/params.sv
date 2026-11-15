@@ -28,6 +28,7 @@ parameter bit WITH_Xpabshsub		   = 1'b1; // shXsub
 parameter bit WITH_Xpabshaddpc             = 1'b0; // shXaddpc
 parameter bit WITH_Xpabpack                = 1'b1; // pack, packh, packb
 parameter bit WITH_Xpaijt                  = 1'b0; // Jump table
+parameter bit WITH_Xpabdda                 = 1'b1; // Double dabble adjust
 parameter bit WITH_Xpaitrap                = 1'b1; // Conditional TRAP
 parameter bit WITH_Xpacecall               = 1'b1; // c.ecall
 parameter bit WITH_Zkr			   = 1'b1; // seed CSR (needs external bit source)
