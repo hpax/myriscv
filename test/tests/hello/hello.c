@@ -1,7 +1,7 @@
-#include <console.h>
+#include "test.h"
 
 int main(void)
 {
-    puts("Hello, World!\n");
+    tty_puts("Hello, World!\n");
     return 0;
 }
