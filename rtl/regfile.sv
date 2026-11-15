@@ -87,12 +87,18 @@ module regfile #(`CONFIG)
 	 rs2_dq <= r[ix2];
       end
       if (clken & rd_wren) begin
-	 if (rd.r == 5'd0 && |rd_wbe)
-	   $display("ERROR: writing to register %d:0 at t=%0t",
-		    rd.c, $time);
-	 if ($isunknown(rd_data & wr_mask))
-	   $display("ERROR: writing x or z to register %d:%d at t=%0t",
-		    rd.c, rd.r, $time);
+ `ifndef SYNTHESIS
+	 // These should never ever happen
+	 if (rd.r == 5'd0 && |rd_wbe) begin
+	    $display("(%d) ERROR: writing to zero register %d:0 wbe=%b val=%x",
+		     $time/CLOCK, rd.c, rd_wbe, rd_data);
+	    $stop;
+	 end else if ($isunknown(rd_data & wr_mask)) begin
+	    $display("(%d) ERROR: writing x or z to register %d:%d wbe=%b val=%x",
+		    $time/CLOCK, rd.c, rd.r, rd_wbe, rd_data);
+	    $stop;
+	 end
+ `endif
 	 if (rd_wbe[0]) r[ixd][0] <= rd_data[7:0];
 	 if (rd_wbe[1]) r[ixd][1] <= rd_data[15:8];
 	 if (rd_wbe[2]) r[ixd][2] <= rd_data[23:16];

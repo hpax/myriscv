@@ -190,3 +190,11 @@ parameter bit REGFILE_CONTEXT_LSB	   = 1'b0;
 
 // Filename for TCM initialization file, if applicable
 parameter string TCM_INIT_FILE		   = "";
+
+// For simulation only: scaling factor to convert simulation ticks
+// to clock cycles for $display purposes
+parameter int    CLOCK                     = 1000;
+
+// For simulation only: print a trace of PC as it crosses through the
+// E stage.
+parameter bit    TRACE_PC                  = 1'b0;

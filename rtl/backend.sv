@@ -233,6 +233,7 @@ module backend #(`CONFIG)
      .rd_wbe   ( m_dout_be )
       );
 
+   // W stage
    reg [31:0]	      w_din;
    always @(posedge clk)
      if (w_clken)
@@ -658,6 +659,30 @@ module backend #(`CONFIG)
 	// instruction and we are not told to stall execution.
 	e_pc <= e_restartpc;
      end
+
+   // For simulation only: make it possible to print every instruction
+   // that passes the E stage (and thus is bound to complete)
+`ifndef SYNTHESIS
+   bit trace_pc = TRACE_PC;
+   always @(negedge rst_n or posedge clk) begin
+      if (trace_pc) begin
+	 if (~rst_n) begin
+	   $display("(%d) E: RESET  %x",
+		    $time/CLOCK, RESET_PC & PC_MASK);
+	 end else if (e_kill) begin
+	    if (e_op.undead)
+	      $display("(%d) E: KILL  %x -> %x  %p",
+		       $time/CLOCK, e_op.pc, e_restartpc, e_op.itype);
+	    else
+	      $display("(%d) E: KILL  **dead** -> %x  %p",
+		       $time/CLOCK, e_restartpc, e_op.itype);
+	 end else if (e_accept & ~e_stall) begin
+	   $display("(%d) E: OK    %x -> %x  %p",
+		    $time/CLOCK, e_op.pc, e_restartpc, e_op.itype);
+	 end
+      end
+   end
+`endif
 
    assign e_pc_ok = e_op.pc == e_pc;
 

@@ -77,7 +77,9 @@ module test #(
    myriscv #(
      .NUM_IRQS		(NUM_IRQS),
      .ram_size_bits	(ram_size_bits),
-     .WITH_mscratch     (1'b1)	// For CSR ISA testing
+     .WITH_mscratch     (1'b1),		// For CSR ISA testing
+     .CLOCK             (CLOCK),	// clock scaling factor for $displays
+     .TRACE_PC          (1'b1)		// Enable/disable tracing for this run
    ) cpu (
      .rst_n	( rst_n ),
      .clk	( clk ),
@@ -143,7 +145,7 @@ module test #(
 
    wire [31:0] busaddr = { io_addr[31:2], 2'b00 };
 
-   bit  need_nl = 1'b0;
+   string      conout  = "";
 
    always @(posedge clk)
      begin
@@ -225,19 +227,17 @@ module test #(
 	   end
 
 	   if (putc) begin
-	      if (!need_nl) begin
-		 // Print a console output prefix at the beginning of the line
-		 $write("(%d) >> ", $time/CLOCK);
+	      if (chr == 8'd10) begin
+		 $display("(%d) console: %s", $time/CLOCK, conout);
+		 conout = "";
+	      end else begin
+		 conout = $sformatf("%s%c", conout, chr);
 	      end
-	      $write("%c", chr);
-	      need_nl = chr != 8'd10;
 	   end else begin
-	      if (need_nl) begin
-		 $display("");
-		 need_nl = 1'b0;
-	      end
-
 	      if (quit) begin
+		 if (conout != "") begin
+		    $display("(%d) console: %s", $time/CLOCK, conout);
+		 end
 		 $display("(%d) %s: test terminating", $time/CLOCK, dstr);
 		 $finish;
 	      end else begin
