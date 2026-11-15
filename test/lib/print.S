@@ -70,7 +70,7 @@ _print_dec:
 	la a2,decimal_table+4
 	/* Handle the top digit specially to avoid overflow */
 	lw a4,-4(a2)
-	add a3,a2,%lo(.L_dt_size-4)	/* End of non-unit digit table */
+	addi a3,a2,32			/* End of non-unit digit table */
 
 	bltu a0,a4,.L_skip_leading
 
