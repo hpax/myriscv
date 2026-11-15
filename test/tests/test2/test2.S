@@ -13,7 +13,7 @@ test1:
 	add a0,a0,1
 	beqz a1,2f
 1:
-	sb a1,%lo(TTY)(zero)
+	putcr a1
 	lbu a1,(a0)
 	add a0,a0,1
 	bnez a1,1b
@@ -29,7 +29,7 @@ test1a:
 	add a0,a0,1
 	beqz a1,2f
 1:
-	sb a1,%lo(TTY)(zero)
+	putcr a1
 	lbu a1,(a0)
 	add a0,a0,1
 	bnez a1,1b
@@ -43,7 +43,7 @@ test2:
 	beqz a1,2f
 1:
 	add a0,a0,1
-	sb a1,%lo(TTY)(zero)
+	putcr a1
 	lbu a1,(a0)
 	bnez a1,1b
 
@@ -65,7 +65,7 @@ unalign_test:
 	lw a0,4(s0)
 	jal _print_hex
 	li a0,':'
-	sb a0,%lo(TTY)(zero)
+	putcr a0
 	lw a0,(s0)
 	jal _print_hex
 

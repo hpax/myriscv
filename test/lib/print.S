@@ -8,7 +8,7 @@ _print_str:
 	add a0,a0,1
 	beqz t0,2f
 1:
-	sb t0,%lo(TTY)(zero)
+	putcr t0
 	lbu t0,(a0)
 	add a0,a0,1
 	bnez t0,1b

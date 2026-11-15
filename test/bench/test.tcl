@@ -44,7 +44,7 @@ add wave /test/cpu/backend/e_kill
 add wave /test/cpu/backend/e_accept
 add wave /test/cpu/backend/e_pc
 add wave /test/cpu/backend/e_op.pc
-wave zoom range 15ns 30ns
+wave zoom range 10ns 20ns
 view structure
 view signals
-run 30 us
+run 50 us

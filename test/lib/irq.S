@@ -56,9 +56,7 @@ _irq_common:
 	call _print_hex
 	crlf
 
-2:
-	sw s11,%lo(STOP)(zero)
-	j 2b
+	finishr s11
 
 	.weakref _irq_0, _irq_common
 	.weakref _irq_1, _irq_common
