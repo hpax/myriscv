@@ -2,6 +2,8 @@
 // Top level for benchmarking with Quartus
 //
 
+`include "../rtl/params.vh"
+
 module pll (
 	    input  rst_n_i,
 	    input  clk_i,
@@ -15,7 +17,7 @@ module pll (
 	    .clk0_duty_cycle ( 50 ),		// 50%
 	    .clk0_multiply_by ( 21 ),
 	    .clk0_phase_shift( "0" )
-   ) pll (	    
+   ) pll (
 	    .areset (~rst_n_i),
 	    .inclk  (clk_i),
 	    .clk    (clk_o),
@@ -26,10 +28,8 @@ module pll (
    );
 endmodule
 
-module benchmark #(
-  parameter num_irqs = 31,
-  parameter mem_bits = 26
-) (
+module benchmark #(`CONFIG)
+(
 	    input	  rst_n,
 	    input	  clk,
 	    output [30:2] io_addr,
@@ -39,10 +39,10 @@ module benchmark #(
 	    output [3:0]  io_wbe,
 	    input	  io_ready,
 	    input [31:0]  io_rdata,
-	    input [num_irqs:1]  irq_in,
-	    output [$clog2(num_irqs+1)-1:0]  irq_intack,
+	    input [NUM_IRQS:1]  irq_in,
+	    output [$clog2(NUM_IRQS+1)-1:0]  irq_intack,
 
-	    output [mem_bits-1:0] mem_addr,
+	    output [ram_size_bits-1:0] mem_addr,
 	    output [31:0] mem_wdata,
 	    output	  mem_valid,
 	    output	  mem_wrq,
@@ -51,7 +51,7 @@ module benchmark #(
 	    input [31:0]  mem_rdata,
 	    input	  mem_cpu,
 	    input	  mem_wr,
-	    input [mem_bits-1:0]  mem_addr_i
+	    input [ram_size_bits-1:0]  mem_addr_i
 	    );
 
    wire		   prst_n;
@@ -61,7 +61,7 @@ module benchmark #(
    pll pll (.rst_n_i(rst_n), .clk_i(clk), .rst_n_o(prst_n), .clk_o(pclk));
 
    // Register irq inputs
-   reg [num_irqs:1]   irq;
+   reg [NUM_IRQS:1]   irq;
 
    always @(negedge prst_n or posedge pclk)
      if (~prst_n)
@@ -72,7 +72,7 @@ module benchmark #(
    wire [31:0]	   cpu_io_addr;
    assign io_addr = cpu_io_addr[30:2];
 
-   myriscv #(.NUM_IRQS(num_irqs), .ram_size_bits(mem_bits)) cpu (
+   myriscv #(`CFG) cpu (
 	     .rst_n		(prst_n),
 	     .clk		(pclk),
 	     .clken		(1'b1),
