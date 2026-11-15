@@ -284,6 +284,10 @@ module predict_branch #(`CONFIG)
 	     if (take)
 	       pred_pc = bj_pc;
 	  end
+	  JT: if (WITH_Xpaijt) begin    // Predict argument = 0 for simplicity
+	     take    = 1'b1;
+	     pred_pc = bj_pc;
+	  end
 	  LUI: begin
 	     lui_addr = { i[31:12], 12'b0 } & PC_MASK;
 	  end
