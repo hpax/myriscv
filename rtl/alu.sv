@@ -186,7 +186,7 @@ module alu_decode #(`CONFIG)
 
 	  INSN_XALU: begin
 	     unique casez (funct3)
-	       3'b00?, 3'b011: begin
+	       3'b000, 3'b01?: begin
 		  if (!STRICT_UNDEFINED || funct7[6] || !funct7[4:0]) begin
 		     ctl.unit	= ALUSRC_ADD;
 		     ctl.invert = funct7[5];
