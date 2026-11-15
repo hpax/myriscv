@@ -34,7 +34,6 @@ parameter bit WITH_Zkr			   = 1'b1; // seed CSR (needs external bit source)
 parameter bit WITH_Zalrsc		   = 1'b1; // LR/SC instructions
 parameter bit WITH_Ziccrse		   = 1'b1; // LR/SC guarantee forward progress
 parameter bit WITH_Zilx                    = 1'b1; // indexed loads
-parameter bit WITH_indcsr		   = 1'b0; // Indirect CSR access
 parameter bit WITH_wfi			   = 1'b1; // Enhanced WFI instruction
 parameter bit WITH_mstatus		   = 1'b0; // mstatus CSR as a window into CIE
 parameter bit WITH_sys_context		   = 1'b1; // sys_context CSR

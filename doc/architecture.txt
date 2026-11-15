@@ -271,17 +271,6 @@ Private instruction set extensions:
 		packb is encoded the same as the pack and packh
 		instructions, but with funct3 == 110.
 
-	WITH_indcsr:
-		Indirect CSR access.
-
-		Functionally implemented as using custom CSR numbers
-		0xbe0-0xbff to indicate that actual register number
-		should be accessed via x0..x31. This can also be seen as
-		rs2 = register number, funct7 = 1011111.
-
-		XXX: this support may be discontinued if a CSR
-		register file is motivated.
-
 	WITH_Xpacecall:
 		Additional RVC encoding:
 			c.ecall	- opcode 0x8002
@@ -443,7 +432,6 @@ Nonstandard CSR numbers: (Xpasmy)
 	0x7f1		(reserved)
 	0x7f2		CIE
 	0x7f3		(reserved)
-	0xbe1-0xbff	Used for indirect CSR access (x1-x31)
 	0xff4		SYS_CONTEXT
 	0xff5		NCONTEXTS
 

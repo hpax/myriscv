@@ -39,14 +39,6 @@ module decode_comb #(`CONFIG)
    wire signed [31:0] j_imm = $signed({i[31], i[19:12], i[20], i[30:21], 1'b0});
    wire signed [31:0] u_imm = $signed({i[31:12], 12'b0});
 
-   function automatic logic csr_is_indirect(logic [6:0] funct7);
-      logic indirect;
-      indirect = 1'b0;
-      if (WITH_indcsr)
-	indirect      = funct7 == 7'b1011_111; // Equivalent to CSR 0xBE0-0xBFF
-      csr_is_indirect = indirect;
-   endfunction
-
    always @(*)
      begin
 	logic can_pred;
@@ -246,7 +238,6 @@ module decode_comb #(`CONFIG)
 		  op.csrr      = |op.rd.r;
 		  op.csrw      = 1'b1;
 		  op.rs1_valid = ~op.funct3[2];
-		  op.rs2_valid = csr_is_indirect(op.funct7);
 	       end
 	       10'b???????_?1?: begin	// CSRR[SC][I]
 		  op.itype     = INSN_CSR;
@@ -254,7 +245,6 @@ module decode_comb #(`CONFIG)
 		  op.csrr      = 1'b1;
 		  op.csrw      = |op.rs1.r;
 		  op.rs1_valid = ~op.funct3[2];
-		  op.rs2_valid = csr_is_indirect(op.funct7);
 	       end
 	       10'b0000000_000: begin		// ECALL, EBREAK
 		  if (!STRICT_UNDEFINED ||
