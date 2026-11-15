@@ -1,6 +1,6 @@
 #
 # Runs before any Quartus flow
 #
-set cmd "make -C ../rtl || true"
+set cmd "make prereq || true"
 post_message -type info "Command: $cmd"
 qexec "$cmd"

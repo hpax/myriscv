@@ -24,11 +24,18 @@ QASM		= $(QU)_asm $(QOPT)
 QPOW		= $(QU)_pow $(QOPT)
 
 outdir		= output_files
+depsdir		= deps
 
 PERL		= perl
 PYTHON		= python
 SED		= sed
 GZIP		= gzip
+
+# Make prerequisites in these directories, but don't "make clean" in them
+PREREQDIRS      = ../rtl
+
+# Iterate down into these directories, including for cleaning
+SUBDIRS         =
 
 PREREQFILES = $(foreach rev,$(ALLREVS),$(foreach coffmt,jic pof, \
 		$(outdir)/$(rev).$(coffmt).cof))
@@ -44,14 +51,21 @@ allout   = $(foreach o,$(alltarg),$(outdir)/$(1).$(o))
 
 all: $(ALLREVS:=.targets)
 
--include $(ALLREVS:=.deps)
+-include $(depsdir)/*.d
+Makefile: $(patsubst %,$(depsdir)/%.d,$(ALLREVS))
+
+$(depsdir):
+	mkdir -p $(depsdir)
+
+$(depsdir)/%.d: %.qsf qsf$(depsdir).pl | $(depsdir)
+	$(PERL) qsf$(depsdir).pl '$*' '$@' '$<'
 
 .PHONY: $(ALLREVS)
-$(ALLREVS): prereq
+$(ALLREVS):
 	$(MAKE) $@.targets
 
 .PHONY: %.targets
-%.targets:
+%.targets: prereq
 	$(MAKE) $(call allout,$*)
 
 .PHONY: %.update
@@ -77,7 +91,7 @@ $(outdir)/%/variant.stamp: mif/%.mif \
 	$(MAKE) -C var/$* $(ALLREVS:=.vtargets)
 	echo '$(BUILDDATE)' > $@
 
-$(outdir)/%.map.rpt: %.qsf
+$(outdir)/%.map.rpt: %.qsf $(depsdir)/%.d
 	$(QMAP) $(PROJECT) -c $*
 
 $(outdir)/%.fit.rpt: $(outdir)/%.map.rpt
@@ -136,7 +150,7 @@ $(outdir):
 
 .PHONY: prereq
 prereq: $(outdir)
-	for d in $(SUBDIRS); do $(MAKE) -C $$d; done
+	for d in $(PREREQDIRS) $(SUBDIRS); do $(MAKE) -C $$d; done
 	$(MAKE) $(PREREQFILES)
 
 # Clean out SignalTap
@@ -159,9 +173,6 @@ program-%: $(outdir)/%.sof
 flash-%: $(outdir)/%.jic
 	$(QPGM) -c '$(JTAG_CABLE)' -m JTAG -i -o 'pvbi;$(outdir)/$*.jic'
 
-%.deps: %.qsf scripts/qsfdeps.pl
-	$(PERL) scripts/qsfdeps.pl $* $@ $<
-
 clean:
 	for d in $(SUBDIRS); do $(MAKE) -C $$d clean; done
 	rm -rf db incremental_db var simulation/modelsim \
@@ -174,6 +185,4 @@ clean:
 
 spotless: clean
 	for d in $(SUBDIRS); do $(MAKE) -C $$d spotless; done
-	rm -rf $(outdir) *.deps *~ \#*~
-
-deps: Makefile
+	rm -rf $(outdir) $(depsdir) *~ \#*~
