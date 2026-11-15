@@ -723,7 +723,7 @@ module backend #(`CONFIG)
 	     INSN_MRET: begin
 		// XXX: MRET should be fully predictable now
 		e_restart            = 1'b1;
-		e_next_pc            = mepc;
+		e_next_pc            = mepc & PC_MASK;
 		e_restart_mcontext.m = e_restart_mcontext.u;
 	     end
 	     INSN_FENCEI: begin
@@ -752,7 +752,7 @@ module backend #(`CONFIG)
 	   end
 
 	   if (e_trap) begin
-	      e_mepc               = e_op.pc;
+	      e_mepc               = e_op.pc | (~e_op.i16);
 	      e_restartpc          = mtvec_addr;
 	      e_restart_mcontext.m = CTX_MACHINE;
 	   end else begin
@@ -769,7 +769,7 @@ module backend #(`CONFIG)
 	   e_restart     = 1'b1;
 	end
 
-	e_mepc      &= PC_MASK;
+	e_mepc      &= PC_MASK | 1;
 	e_restartpc &= PC_MASK;
 
 	e_kill = e_restart | e_trap | e_mispredict | e_fencei;
@@ -811,7 +811,7 @@ module backend #(`CONFIG)
 	m_restart_mcontext <= e_restart_mcontext;
 	if (e_accept)
 	  m_restart_retstack <= e_op.retstack;
-	m_mepc		   <= e_mepc & PC_MASK;
+	m_mepc		   <= e_mepc & (PC_MASK | 1);
 	m_mcause	   <= e_mcause;
      end
 
@@ -845,9 +845,9 @@ module backend #(`CONFIG)
 	  mtvec <= wmask(e_csr_wval, mtvec_reset, mtvec_wmask);
 
 	if (m_xcpt)
-	  mepc  <= m_mepc;
+	  mepc  <= m_mepc & (PC_MASK | 1);
 	else if (csrw_mepc)
-	  mepc  <= e_csr_wval & PC_MASK;
+	  mepc  <= e_csr_wval & (PC_MASK | 1);
 
 	if (m_xcpt)
 	  mcause <= m_mcause;

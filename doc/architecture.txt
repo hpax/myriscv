@@ -447,6 +447,22 @@ Nonstandard CSR numbers: (Xpasmy)
 	0xff4		SYS_CONTEXT
 	0xff5		NCONTEXTS
 
+Bit 0 of MEPC:
+
+	For traps, bit 0 of MEPC is set if the trapping instruction is
+	a 32-bit instruction and clear if it is a 16-bit
+	instruction. This means that the addresses of both the current
+	and next instruction can be simply calculated as:
+
+	curr_pc = mepc & ~1;
+	next_pc = (mepc + 3) & ~1;
+
+	Bit 0 is ignored by MRET, as for all other control transfers.
+
+	Bit 0 is always clear after interrupts, as the next
+	instruction after the interrupted one will not necessarily
+	have been fetched yet.
+
 Register contexts:
 
 	The main intended target of this CPU is FPGAs, and FPGAs tend
@@ -458,10 +474,12 @@ Register contexts:
 
 	One register context (machine context, context 0) is used for
 	interrupts/exceptions; the CPU will automatically switch to
-	this context, and return when executing MEPC.
+	this context, and return when executing MRET.
 
-	There are no scratch register CSRs; however, software can
-	reserve register contexts for scratch if needed.
+	There is typically no need for scratch register CSRs (although
+	mscratch can be enabled if desired, mainly as a test feature);
+	however, software can reserve register contexts for scratch if
+	needed.
 
 	The "user_context" CSR contains the current user context; the
 	operating system can set this to quickly switch
