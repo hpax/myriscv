@@ -89,11 +89,11 @@ module predict_branch #(`CONFIG)
       add_pc  = (pc + offset) & PC_MASK;
    endfunction
 
-   wire [31:0]	 i 		 = f2_insn;
+   wire [31:0]	 i		 = f2_insn;
 
-   wire signed [11:0] i_imm 	 = i[31:20];
-   wire signed [12:0] b_imm 	 = { i[31], i[7], i[30:25], i[11:8], 1'b0 };
-   wire signed [20:0] j_imm 	 = { i[31], i[19:12], i[20], i[30:21], 1'b0 };
+   wire signed [11:0] i_imm	 = i[31:20];
+   wire signed [12:0] b_imm	 = { i[31], i[7], i[30:25], i[11:8], 1'b0 };
+   wire signed [20:0] j_imm	 = { i[31], i[19:12], i[20], i[30:21], 1'b0 };
    wire signed [11:0]	 cj_imm;
    assign cj_imm[0]   = 1'b0;
    assign cj_imm[5]   = i[2];
