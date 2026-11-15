@@ -113,7 +113,6 @@ __start:
 	rdcycle a1
 	bltu a1,a0,.Lfail
 #endif
-#if MYRISCV_WITH_regcsr
 	csrw	mscratch,zero
 	beq	zero,zero,1f
 	csrrwi	zero,mscratch,31
@@ -131,7 +130,6 @@ __start:
 	assert_eq a1,0x13579bdf
 	csrr a1,mscratch
 	assert_eq a1,0x13579bff
-#endif
 
 	finish TEST_PASS
 .Lfail:
