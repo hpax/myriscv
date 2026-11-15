@@ -124,7 +124,7 @@ parameter bit	     FORWARD_MUL	   = 1'b1;
 // This allows a c.nop inserted for padding to be
 // fused with a previous c.xxx instruction into a
 // pseudo-32-bit instruction.
-parameter bit	     FUSE_CNOP		   = 1'b0;
+parameter bit	     FUSE_CNOP		   = 1'b1;
 
 //
 // The base addresses and the size bits do not need to agree,
