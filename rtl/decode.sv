@@ -266,7 +266,7 @@ module decode_comb #(`CONFIG)
 		      (!op.rs2.r == 5'b00010 && !op.rs1.r && !op.rd.r))
 		    op.itype = INSN_MRET;
 	       end
-	       10'b0001000_000: if (WITH_waitfor) begin	// WFI
+	       10'b0001000_000: if (WITH_wfi) begin	// WFI
 		  if (!STRICT_UNDEFINED || op.rs2.r == 5'b00101) begin
 		     op.itype	  = INSN_WAIT;
 		     op.rs1_valid = 1'b1;

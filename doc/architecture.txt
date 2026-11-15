@@ -637,8 +637,8 @@ CSRs:
 	The same is true for writes to undefined CSR bits.
 	No traps are implemented for any CSR operations.
 
-WITH_waitfor:
-	Wait for External Event
+WITH_wfi:
+	Enhanced Wait For Interrupt
 
 	wfi rd, rs1
 

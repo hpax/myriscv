@@ -873,7 +873,7 @@ module backend #(`CONFIG)
       e_dout = 32'bx;
       unique case (e_op.itype)
 	INSN_WAIT:
-	  if (WITH_waitfor)
+	  if (WITH_wfi)
 	    e_dout = d_irqs;
 	INSN_ALU, INSN_XALU:
 	  e_dout = e_alu_out;
