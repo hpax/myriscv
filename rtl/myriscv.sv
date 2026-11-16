@@ -88,6 +88,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    logic		     dbus_ready_mem;
    logic		     dbus_ready_io;
    logic		     dbus_busy;
+   logic		     dbus_busy_mem;
    logic		     dbus_busy_io;
    wire [31:0]		     dcache_lookup_a;
    wire			     dcache_lookup_valid;
@@ -388,7 +389,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      end
 
    assign dbus_busy_io = io_busy;
-   assign dbus_busy = dmem_busy | dbus_busy_io;
+   assign dbus_busy = dbus_busy_mem | dbus_busy_io;
 
    // Fetch unit (F stage)
    wire	       f_restart;

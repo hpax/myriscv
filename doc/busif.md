@@ -165,6 +165,8 @@ The following special cases apply to specific buses.
 
   - `busy`: asserted if an operation has been posted but is not yet
     globally observable (by icache, dcache, and DMA).
+    - A target may assert `ready` to complete a CBO request while keeping
+      `busy` asserted until its cache maintenance is globally observable.
 
 #### `imem` special cases
 

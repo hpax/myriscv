@@ -189,6 +189,9 @@ module decode_comb #(`CONFIG)
 		     op.itype	  = INSN_CBO;
 		  op.imm	  = s_imm;
 		  op.rs1_valid = 1'b1;
+		  op.addr.rs1       = 1'b1;
+		  op.addr.rs1_shift = 2'b0;
+		  op.addr.rs2       = 1'b0;
 	       end
 	       default: begin
 		  op.itype = INSN_ERR;

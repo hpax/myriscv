@@ -49,22 +49,25 @@ module ldst #(`CONFIG) (
 
    // Hold output address while busy; also increments for the second word.
    reg [31:0]		      latched_a;
+   reg			      dbus_valid_q;
+   reg			      upper_word_q;
 
-   // Should we use latched data?
-   wire			      use_latched = busy;
+   // A registered request owns the bus through its response cycle.
+   wire			      use_latched = dbus_valid_q;
 
    // Each of the load byte MUXes can take data from any byte,
    // or set it to 0 or the MSB of another byte.
    reg [3:0]		      ld_ext;
    reg			      ld_uns;
    reg [3:0][1:0]	      ld_src;
+   logic		      misaligned_comb;
 
-   reg			      dbus_valid_q;
    reg			      memop_st_q;
    cbo_t		      memop_cbo_q;
 
-   assign dbus_a	= use_latched ? latched_a + {upper_word, 2'b00} : addr;
-   assign dbus_valid	= rst_n & (valid | busy);
+   assign dbus_a	= use_latched ?
+			  latched_a + {upper_word_q, 2'b00} : addr;
+   assign dbus_valid	= rst_n & (valid | dbus_valid_q);
    assign dbus_wrq      = use_latched ? memop_st_q : memop_st;
    assign dbus_cbo      = use_latched ? memop_cbo_q : memop_cbo;
 
@@ -72,25 +75,27 @@ module ldst #(`CONFIG) (
    // fragment of the following store. The pipeline holds the following
    // store in E while the first one completes, so its lower fragment is
    // available here before the upper fragment is accepted.
-   wire write_combine = use_latched && upper_word && memop_st_q &&
+   wire write_combine = use_latched && upper_word_q && memop_st_q &&
 			valid && memop_st && !cbo_valid(memop_cbo) &&
 			(latched_a[31:2] + 1'b1 == addr[31:2]) &&
 			({ latched_a[31:2] + 1'b1, 2'b00 } < uc_base);
-
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
 	dbus_valid_q	  <= 1'b0;
 	memop_st_q	  <= 1'b0;
 	memop_cbo_q       <= CBO_NONE;
      end else if (clken) begin
-	dbus_valid_q     <= dbus_valid;
+	if (dbus_valid_q)
+	  dbus_valid_q   <= ~dbus_ready | upper_word;
+	else
+	  dbus_valid_q   <= dbus_valid &
+			    (~dbus_ready | !cbo_valid(memop_cbo));
 	if (~busy) begin
 	   memop_st_q     <= memop_st;
 	   memop_cbo_q    <= memop_cbo;
 	end
      end
 
-   logic		      misaligned_comb;
    reg			      misaligned_q;
    always @(*)
      if (cbo_valid(memop_cbo))
@@ -109,13 +114,12 @@ module ldst #(`CONFIG) (
      else if (clken & ~busy)
        misaligned_q <= misaligned_comb;
 
-   reg	upper_word_q;
-
    // Note: busy contains dbus_valid_q, because it is asserted by the M
    // stage, but valid is asserted in the E stage.
    assign dout_valid = dbus_valid_q & dbus_ready;
-   assign busy	     = dbus_valid_q & (~dbus_ready |
-		       (misaligned_q & ~upper_word_q));
+   assign busy	     = (dbus_valid_q & (~dbus_ready |
+			(misaligned_q & ~upper_word_q))) |
+		       (dbus_valid_q & dbus_ready & valid);
    assign upper_word = dout_valid ? misaligned_q & ~upper_word_q : upper_word_q;
 
    always @(negedge rst_n or posedge clk)
@@ -200,7 +204,7 @@ module ldst #(`CONFIG) (
 
    always @(*)
      if (use_latched) begin
-	dbus_wbe   = latched_wbe[upper_word];
+	dbus_wbe   = latched_wbe[upper_word_q];
 	dbus_wdata = latched_wdata;
 	if (write_combine) begin
 	   dbus_wbe |= bytemask[0];

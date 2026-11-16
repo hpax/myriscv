@@ -244,13 +244,17 @@ module dcache_real
    end
 
    always @(*) begin
-      dbus_rdata = state == S_DONE ? done_rdata : lookup_data[31:0];
+      dbus_rdata = state == S_DONE ? done_rdata :
+                   state == S_FILL ? dmem_rdata : lookup_data[31:0];
 
       if (state == S_DONE)
         dbus_ready = 1'b1;
+      else if (state == S_FILL)
+        dbus_ready = pending_wrq && dmem_ready;
       else if (state == S_IDLE)
-        dbus_ready = lookup_valid && !start_writeback && !start_fill &&
-                     (!lookup_cbo_valid ? lookup_match : 1'b1);
+        dbus_ready = lookup_valid &&
+                     (lookup_cbo_valid ||
+                      (!start_writeback && !start_fill && lookup_match));
       else
         dbus_ready = 1'b0;
 
@@ -426,7 +430,7 @@ module dcache_real
                     cache_write_tag <= pending_evict_tag;
                     cache_write_data <= { 2'b10, 2'b00,
                                           pending_evict_data };
-                    state <= S_DONE;
+                    state <= S_IDLE;
                  end
                  P_CBO_FLUSH: begin
                     cache_write <= 1'b1;
@@ -434,7 +438,7 @@ module dcache_real
                     cache_write_tag <= pending_evict_tag;
                     cache_write_data <= { 2'b00, 2'b00,
                                           pending_evict_data };
-                    state <= S_DONE;
+                    state <= S_IDLE;
                  end
                  P_CAR_WRITE: begin
                     cache_write <= 1'b1;
@@ -460,7 +464,7 @@ module dcache_real
                    merge_bytes(dmem_rdata, pending_wdata, pending_wbe) :
                    dmem_rdata };
                done_rdata <= dmem_rdata;
-               state <= S_DONE;
+               state <= pending_wrq ? S_IDLE : S_DONE;
             end
 
           S_DONE:
