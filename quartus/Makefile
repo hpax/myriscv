@@ -108,7 +108,7 @@ $(outdir)/%.pow.rpt: $(outdir)/%.sta.rpt | $(outdir)/%.sof
 
 # Summary of LE count and fMAX extracted from reports
 $(outdir)/%.txt: gettotal.pl $(outdir)/%.fit.rpt $(outdir)/%.sta.rpt
-	$(PERL) $^ > $@
+	$(PERL) $^ $@ $*
 
 $(foreach rev,$(ALLREVS),$(outdir)/$(rev).%.cof): %.cof.xml $(outdir)
 	$(SED) \

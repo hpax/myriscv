@@ -5,7 +5,7 @@
 
 use strict;
 
-my($fit_rpt, $sta_rpt) = @ARGV;
+my($fit_rpt, $sta_rpt, $output, $name) = @ARGV;
 
 my $le;
 my $mhz;
@@ -45,4 +45,11 @@ if (!defined($mhz)) {
     die "$0: $sta_rpt: No Slow 1200mV 85C Model Fmax Summary found\n";
 }
 
-printf "%d LE, %.2f MHz\n", $le, $mhz;
+open(my $out, '>', $output) or die "$0: $output: $!\n";
+printf $out "%d LE, %.2f MHz\n", $le, $mhz;
+close($out);
+
+if ($name ne '') {
+    $name =~ s/^(.)/\U$1/;
+    printf "$name: %d LE, %.2f MHz\n", $le, $mhz;
+}
