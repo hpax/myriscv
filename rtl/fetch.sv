@@ -379,6 +379,7 @@ module fetch #(`CONFIG)
 
    logic [31:0]	     f2_insn;
    logic	     f2_valid;
+   logic	     f1_advance;
    logic	     f2_advance;
    logic	     f2_have_16;
    logic	     f2_have_32;
