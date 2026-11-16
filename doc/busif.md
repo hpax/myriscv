@@ -62,11 +62,17 @@ Bit- and byte-ordering are both littleendian.
 - **Signals from the initiator:**
 
   - `valid`: indicates that the defined output signals are valid and
-    stable and constitute a transaction request. When `valid` = `0`, all
-    other signals are *undefined* and *must* be ignored by the
-    target. Once `valid` has been asserted, the other defined signals
-    *must* be held stable until the target indicates that the
-    transaction is complete (`valid` = `ready` = `1`).
+    stable and constitute a transaction request. When `valid` = `0`,
+    all other signals are *undefined* and *must* be ignored by the
+    target. Once `valid` has been asserted, all defined signals
+    (including `valid` itself) *must* be held stable until the target
+    indicates that the transaction is complete (`ready` = `1`).
+	- After a clock edge with `ready` = `1`, the transaction is
+	  complete, and if `valid` is still asserted at the next clock edge
+      it starts a new transaction. The initiator is *not* required to
+	  pulse `valid` to `0` to initiate a new transaction.
+	- Thus, if the initiator does not wish to initiate a new
+      transaction, it *must* combinatorially deassert `valid`.
 
   - `a`: the requested transaction address. The target *may* ignore
     bits `[1:0]`; they are provided solely for the benefit of I/O
@@ -89,25 +95,43 @@ Bit- and byte-ordering are both littleendian.
     `ready` = `1` terminates a transaction, and the initiator is
     allowed to begin another request in the very next cycle by keeping
     `valid` asserted, otherwise it *must* combinatorially deassert
-    `valid`. There is no requirement to pulse `ready` to `0`
-	if the target can fulfill the new request immediately, and a
-    target that can always fulfill a request in a single cycle is
-    allowed to tie `ready` to `1`.
+    `valid`.
+	- There is no requirement to pulse `ready` to `0` if the target
+	  can fulfill the new request immediately, and a target that can
+	  always fulfill a request in a single cycle is
+      allowed to tie `ready` to `1`.
 
   - `rdata`: the data read. *Undefined* if `ready` = `0` or if the
     transaction being terminated is not a read request (a write or CBO
     request.)
 
   - `busy`: asserted if an operation has been posted but is not yet
-    globally observable (by icache, dcache, and DMA). A `fence`
-    operation holds the pipeline until all buses have deasserted
-    `busy`. A `fence.i` operation will additionally restart the
-    pipeline from the fetch stage after completion.
-    - A target may assert `ready` to acknowledge a store or CBO request
-      while keeping `busy` asserted until its pending operations are
+    globally observable (by icache, dcache, DMA, and I/O devices.)
+    - Buses that only support read transactions (`ibus`, `imem`)
+      inherently do not support posted transactions (since the
+      acknowledgement carries the read data return) and thus have no
+      `busy` signal (equivalent to `busy` being hard-wired to `0`.)
+	- The target *must* assert `busy` no later than the same cycle in
+      which it asserts `ready` upon accepting the posted transaction,
+      and keep it asserted until *all* transactions have completed
+      downstream.
+	- The initiator *must not* expect that the number of assertions or
+      deassertions of `busy` is related to the number of transactions
+      submitted.
+    - A target *may* assert `ready` to acknowledge a store or CBO request
+      while keeping `busy` asserted until all its pending operations are
       all globally observable.
-	- Not applicable to buses that only support read transactions
-      (`ibus`, `imem`.)
+    - The initiator *may* request new transactions by asserting
+      `valid`, and the target *may* accept any number of transactions
+	  before deasserting `busy`.
+	- The target *may* assert `busy` spontaneously at any time, even
+      when not in response to an initiator-requested transaction.
+	- If `valid` = `busy` = `0`, the bus, including all its downstream
+      transactors, is considered quiescent.
+	- A `fence` operation holds the pipeline until all buses are
+      quiescent.
+	- A `fence.i` operation will additionally restart the
+	  pipeline from the fetch stage after completion.
 
 #### Alignment
 
