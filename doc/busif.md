@@ -40,15 +40,12 @@ optional:
 - The `imem` and `dmem` buses are initiated by icache and dcache with
   the memory as the target, via the `mem` bus arbiter.
 
-  - It is currently *undecided* if the `dmem` bus will carry I/O
-    traffic to be split off in a latter stage or if the splitting off
-    of I/O traffic will happen at an earlier point.
-
 - The `mem` bus is a pass-through of the imem and dmem buses when
   targeting memory (RAM), controlled by the memory bus arbiter (in
   `myriscv.sv`).
 
-- The `io` bus is a pass-through of the dbus when targeting I/O.
+- The `io` bus is a registered pass-through of the `dbus` when targeting
+  I/O.
 
 ## Bus specification
 
@@ -88,13 +85,29 @@ Bit- and byte-ordering are both littleendian.
 
   - `ready`: the requested transaction in complete and the output
     signals are valid and stable. When `ready` = `0` all other signals are
-    *undefined* and *must* be ignored by the initiator. A cycle with
-    `valid` = `ready` = `1` terminates a transaction, and the initiator is
+    *undefined* and *must* be ignored by the initiator. A clock edge with
+    `ready` = `1` terminates a transaction, and the initiator is
     allowed to begin another request in the very next cycle by keeping
-    valid asserted. Similarly, there is no requirement to pulse `ready`
-    low if the target can fulfill the new request immediately.
+    `valid` asserted, otherwise it *must* combinatorially deassert
+    `valid`. There is no requirement to pulse `ready` to `0`
+	if the target can fulfill the new request immediately, and a
+    target that can always fulfill a request in a single cycle is
+    allowed to tie `ready` to `1`.
 
-  - `rdata`: the data read. *Undefined* if `wrq` = `1`.
+  - `rdata`: the data read. *Undefined* if `ready` = `0` or if the
+    transaction being terminated is not a read request (a write or CBO
+    request.)
+
+  - `busy`: asserted if an operation has been posted but is not yet
+    globally observable (by icache, dcache, and DMA). A `fence`
+    operation holds the pipeline until all buses have deasserted
+    `busy`. A `fence.i` operation will additionally restart the
+    pipeline from the fetch stage after completion.
+    - A target may assert `ready` to acknowledge a store or CBO request
+      while keeping `busy` asserted until its pending operations are
+      all globally observable.
+	- Not applicable to buses that only support read transactions
+      (`ibus`, `imem`.)
 
 #### Alignment
 
@@ -141,7 +154,8 @@ The following special cases apply to specific buses.
   `ready` until the transaction reflecting the *current* value of `a`
   is complete.
 
-  - This is transparently handled by the icache.
+  - This is transparently handled by the icache and TCM and does *not*
+    apply to the `imem` bus.
 
 #### `dbus` special cases
 
@@ -159,14 +173,10 @@ The following special cases apply to specific buses.
   - `cbo`: cache block operation. If nonzero (not `CBO_NONE`), the
     transaction is a cache block operation (`CBO_INVAL`, `CBO_CLEAN`,
     `CBO_FLUSH`). No data is returned from a cache block operation
-    (`rdata` is *undefined*).
+    (`rdata` is *undefined*) and they are allowed to be posted like
+    write transactions.
 
 - **Additional signals from target**
-
-  - `busy`: asserted if an operation has been posted but is not yet
-    globally observable (by icache, dcache, and DMA).
-    - A target may assert `ready` to complete a CBO request while keeping
-      `busy` asserted until its cache maintenance is globally observable.
 
 #### `imem` special cases
 
@@ -184,10 +194,3 @@ The following special cases apply to specific buses.
     geographically specified by `a_in`. Support for geographical
     icache invalidation is *optional* if the icache is guaranteed to
     start out invalidated on power on or after reset.
-
-#### `dmem` special cases
-
-- **Additional signals from target**
-
-  - `busy`: asserted if an operation has been posted but is not yet
-    globally observable (by icache, dcache, and DMA).
