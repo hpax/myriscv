@@ -67,7 +67,8 @@ module ldst #(`CONFIG) (
 
    assign dbus_a	= use_latched ?
 			  latched_a + {upper_word_q, 2'b00} : addr;
-   assign dbus_valid	= rst_n & (valid | dbus_valid_q);
+   assign dbus_valid	= rst_n &
+			  (dbus_valid_q ? (~dbus_ready | upper_word) : valid);
    assign dbus_wrq      = use_latched ? memop_st_q : memop_st;
    assign dbus_cbo      = use_latched ? memop_cbo_q : memop_cbo;
 
