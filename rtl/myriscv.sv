@@ -90,6 +90,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    logic		     dbus_busy;
    logic		     dbus_busy_mem;
    logic		     dbus_busy_io;
+   logic		     dbus_is_cbo;
    wire [31:0]		     dcache_lookup_a;
    wire			     dcache_lookup_valid;
    wire			     dcache_lookup_hold;
@@ -105,6 +106,11 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    logic		     ibus_err_sel;
    logic		     ibus_tcm_sel;
    logic		     ibus_mem_sel;
+
+   //
+   // Common control signal
+   //
+   assign dbus_is_cbo = cbo_valid(dbus_cbo);
 
    //
    // Memory map decode
@@ -213,7 +219,8 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	   .imem_rdata (mem_rdata),
 
 	   .imem_a_i   (mem_addr_i),
-	   .imem_inval (mem_wr)
+	   .imem_inval (mem_wr),
+	   .imem_inval_geo (1'b0)
 	   );
 
 	 logic [ram_size_bits-1:0] dmem_a;
@@ -299,31 +306,39 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
       end
    endgenerate
 
+   reg io_pending;
+
+   assign io_valid = io_pending & ~io_ready;
+
    // I/O bus
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	io_addr      <= 'bx;
-	io_wdata     <= 'bx;
-	io_valid     <= 1'b0;
-	io_wrq	     <= 1'b0;
-	io_wbe	     <= 'b0;
+	dbus_ready_io    <= 1'b0;
+	io_addr          <= 'bx;
+	io_wdata	 <= 'bx;
+	io_pending	 <= 1'b0;
+	io_wrq		 <= 1'b0;
+	io_wbe		 <= 'b0;
      end else if (clken) begin
-	dbus_ready_io <= 1'b0;
+	dbus_ready_io    <= 1'b0;
 
-	if (~io_valid & dbus_io_sel & ~cbo_valid(dbus_cbo)) begin
+	if (~io_pending & dbus_io_sel) begin
 	   io_addr       <= dbus_a;
 	   io_wdata      <= dbus_wdata;
-	   io_valid      <= 1'b1;
+	   io_pending    <= ~dbus_is_cbo; // No CBO to I/O space
 	   io_wrq        <= dbus_wrq;
 	   io_wbe	 <= dbus_wbe;
-	end else if (io_valid & io_ready) begin
+	   dbus_ready_io <= dbus_is_cbo;  // Ack CBO immediately
+	end else if (io_pending & io_ready) begin
 	   dbus_ready_io <= 1'b1;
 	   dbus_rdata_io <= io_rdata;
-	   io_valid	 <= 1'b0;
+	   io_pending	 <= 1'b0;
 	   io_wrq	 <= 1'b0;
 	   io_wbe	 <= 'b0;
 	end
      end
+
+   assign dbus_busy_io = io_pending;
 
    reg dbus_io_sel_q;
    reg dbus_mem_sel_q;
@@ -370,7 +385,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	  3'b001:  dbus_ready = dbus_ready_tcm;
 	  3'b010:  dbus_ready = dbus_ready_mem;
 	  3'b100:  dbus_ready = dbus_ready_io;
-	  default: dbus_ready = 32'bx;
+	  default: dbus_ready = 1'bx;
 	endcase
 
 	unique case ({ibus_mem_sel_q, ibus_tcm_sel_q})
@@ -388,7 +403,6 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	endcase
      end
 
-   assign dbus_busy_io = io_busy;
    assign dbus_busy = dbus_busy_mem | dbus_busy_io;
 
    // Fetch unit (F stage)

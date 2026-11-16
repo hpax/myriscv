@@ -667,7 +667,7 @@ module backend #(`CONFIG)
    always @(negedge rst_n or posedge clk) begin
       if (trace_pc) begin
 	 if (~rst_n) begin
-	   $display("(%d) E: RESET  %x",
+	   $display("(%d) E: RESET %x",
 		    $time/CLOCK, RESET_PC & PC_MASK);
 	 end else if (e_kill) begin
 	    if (e_op.undead)
