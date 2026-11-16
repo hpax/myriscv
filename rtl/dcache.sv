@@ -208,6 +208,28 @@ module dcache_real
    // synchronous RAM read below prepares a replacement lookup record.
    wire                 replay_lookup = state == S_IDLE && dbus_valid &&
                                         dbus_cacheable && !lookup_valid;
+   logic                replay_valid;
+   logic [31:0]         replay_wdata;
+   logic [3:0]          replay_wbe;
+   wire                 request_valid = dbus_valid || replay_valid;
+   wire [31:0]          request_wdata = replay_valid ?
+                                         replay_wdata : dbus_wdata;
+   wire [3:0]           request_wbe = replay_valid ?
+                                       replay_wbe : dbus_wbe;
+
+   // A replay owns the request even if ready withdraws the live valid.
+   always @(negedge rst_n or posedge clk)
+     if (!rst_n) begin
+        replay_valid <= 1'b0;
+        replay_wdata <= 'x;
+        replay_wbe <= 'x;
+     end else if (clken) begin
+        replay_valid <= replay_lookup;
+        if (replay_lookup) begin
+           replay_wdata <= dbus_wdata;
+           replay_wbe <= dbus_wbe;
+        end
+     end
 
    logic                start_writeback;
    logic                start_fill;
@@ -320,7 +342,7 @@ module dcache_real
          lookup_wrq <= lookup_wrq_i;
          read_bypass <= cache_write &&
                         cache_write_row == lookup_a_i[size_bits-1:2];
-      end else if (dbus_valid && dbus_cacheable && state == S_IDLE &&
+      end else if (request_valid && state == S_IDLE &&
                    lookup_valid) begin
          lookup_valid <= 1'b0;
          lookup_cbo <= CBO_NONE;
@@ -362,12 +384,12 @@ module dcache_real
 
         case (state)
           S_IDLE:
-            if (dbus_valid && lookup_valid) begin
+            if (request_valid && lookup_valid) begin
                if (lookup_cbo_valid) begin
                   if (start_writeback) begin
                      pending <= lookup_cbo == CBO_CLEAN ?
                                 P_CBO_CLEAN : P_CBO_FLUSH;
-                     pending_row <= dbus_row;
+                     pending_row <= lookup_row;
                      pending_evict_tag <= lookup_tag;
                      pending_evict_data <= lookup_data[31:0];
                      state <= S_WRITEBACK;
@@ -375,7 +397,7 @@ module dcache_real
                                (lookup_cbo == CBO_INVAL ||
                                 lookup_cbo == CBO_FLUSH)) begin
                      cache_write <= 1'b1;
-                     cache_write_row <= dbus_row;
+                     cache_write_row <= lookup_row;
                      cache_write_tag <= lookup_tag;
                      cache_write_data <= { 2'b00, 2'b00,
                                            lookup_data[31:0] };
@@ -383,39 +405,39 @@ module dcache_real
                end else if (lookup_car && lookup_write) begin
                   if (start_writeback) begin
                      pending <= P_CAR_WRITE;
-                     pending_row <= dbus_row;
-                     pending_wdata <= dbus_wdata;
-                     pending_wbe <= dbus_wbe;
+                     pending_row <= lookup_row;
+                     pending_wdata <= request_wdata;
+                     pending_wbe <= request_wbe;
                      pending_evict_tag <= lookup_tag;
                      pending_evict_data <= lookup_data[31:0];
                      state <= S_WRITEBACK;
                   end else begin
                      cache_write <= 1'b1;
-                     cache_write_row <= dbus_row;
+                     cache_write_row <= lookup_row;
                      cache_write_tag <= lookup_tag;
                      cache_write_data <=
                        { 2'b00, 2'b00,
-                         merge_bytes(lookup_data[31:0], dbus_wdata,
-                                     dbus_wbe) };
+                         merge_bytes(lookup_data[31:0], request_wdata,
+                                     request_wbe) };
                   end
                end else if (!lookup_match) begin
                   pending <= P_MISS;
-                  pending_row <= dbus_row;
-                  pending_tag <= dbus_tag;
-                  pending_wdata <= dbus_wdata;
-                  pending_wbe <= dbus_wbe;
+                  pending_row <= lookup_row;
+                  pending_tag <= lookup_addr_tag;
+                  pending_wdata <= request_wdata;
+                  pending_wbe <= request_wbe;
                   pending_wrq <= lookup_write;
                   pending_evict_tag <= lookup_tag;
                   pending_evict_data <= lookup_data[31:0];
                   state <= start_writeback ? S_WRITEBACK : S_FILL;
                end else if (lookup_write) begin
                   cache_write <= 1'b1;
-                  cache_write_row <= dbus_row;
+                  cache_write_row <= lookup_row;
                   cache_write_tag <= lookup_tag;
                   cache_write_data <=
                     { 2'b11, 2'b00,
-                      merge_bytes(lookup_data[31:0], dbus_wdata,
-                                  dbus_wbe) };
+                      merge_bytes(lookup_data[31:0], request_wdata,
+                                  request_wbe) };
                end
             end
 
@@ -468,8 +490,7 @@ module dcache_real
             end
 
           S_DONE:
-            if (dbus_valid)
-              state <= S_IDLE;
+            state <= S_IDLE;
         endcase
      end
 endmodule
