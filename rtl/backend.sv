@@ -812,12 +812,13 @@ module backend #(`CONFIG)
 	end
 
 	if (e_take_irq) begin
-	   e_restartpc    = mtvec_addr;
+	   e_mepc		= e_next_pc;
+	   e_mcause		= MCAUSE_IRQ | e_irq_vector;
+	   e_restartpc		= mtvec_addr;
 	   if (do_vector_interrupts)
-	     e_restartpc += e_irq_vector << IRQ_VECTOR_BITS;
-	   e_mepc	 = e_next_pc;
-	   e_mcause	 = MCAUSE_IRQ | e_irq_vector;
-	   e_restart	 = 1'b1;
+	     e_restartpc       += e_irq_vector << IRQ_VECTOR_BITS;
+	   e_restart_mcontext.m = CTX_MACHINE;
+	   e_restart		= 1'b1;
 	end
 
 	e_mepc      &= PC_MASK | 1;
