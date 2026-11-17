@@ -1,3 +1,5 @@
+<!-- Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com> -->
+
 # Bus specification
 
 ## Address ranges
@@ -46,6 +48,63 @@ optional:
 
 - The `io` bus is a registered pass-through of the `dbus` when targeting
   I/O.
+
+### SystemVerilog representation
+
+`rtl/busif.sv` defines the shared `bus_if` interface. Its `address_bits`
+parameter defaults to 32; data remains 32 bits with four byte enables.
+Members use the signal names below, without a bus-name prefix:
+`dbus.valid`, `imem.a`, etc.
+
+The `initiator` and `target` modports carry reads, writes, CBOs, and
+posted-operation status. `read_initiator` and `read_target` expose only
+`a`, `valid`, `rdata`, and `ready`. `cache_initiator` adds incoming
+invalidation signals to a read bus. `memory_initiator` and `memory_target`
+carry writes and memory transaction snooping, but not CBOs. `monitor`
+provides read-only access to all signals.
+
+Optional capabilities default to disabled. Enable a capability on the
+interface instance before driving its signals:
+
+| Parameter | Signals enabled | Disabled values |
+| --- | --- | --- |
+| `writeable` | `wrq`, `wdata`, `wbe` | All zero (read-only) |
+| `cache_ops` | `cbo` | `CBO_NONE` |
+| `posted` | `busy` | Zero |
+| `snoop` | `a_in`, `inval` | Zero |
+| `geographical` | `inval_geo` | Zero |
+| `dma` | `cpu` | One (CPU-only memory) |
+
+For example:
+
+```systemverilog
+bus_if ibus();
+bus_if #(.writeable(1'b1), .cache_ops(1'b1), .posted(1'b1)) dbus();
+bus_if #(.address_bits(ram_size_bits), .writeable(1'b1),
+         .snoop(1'b1)) mem();
+```
+
+Disabled fields need no connection or driver in either endpoint. Optional
+controls have `tri0` pull defaults (`cpu` uses `tri1`); data and snoop
+addresses use `tri`. Disabled capabilities additionally have explicit
+constant drivers because Quartus does not synthesize interface pull
+defaults reliably. Enabled fields must have a driver for synthesis, and
+disabled fields must not be driven by an endpoint. Procedural producers
+use local variables and continuous assignments to drive these nets.
+Geographical invalidation also uses `a_in`; enable `snoop` when supplying
+geographical addresses.
+
+The FPGA benchmark wrapper retains scalar physical pins. Its former
+`mem_addr_i`, `mem_wr`, and `mem_cpu` sidebands map to `mem.a_in`,
+`mem.inval`, and `mem.cpu`, respectively. A CPU-only memory controller
+leaves `dma` disabled, supplies the accepted transaction address on
+`a_in`, and pulses `inval` on each memory write. These sidebands remain
+independent of CPU requests so other memory agents can invalidate icache
+entries. D-stage cache lookup bypasses are pipeline connections, not
+standard transaction buses.
+
+Run the interface default/override regression with
+`make -C test/bench check-busif`.
 
 ## Bus specification
 
