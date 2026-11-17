@@ -581,6 +581,8 @@ module backend #(`CONFIG)
    //
    logic [IRQ_BITS-1:0] e_irq_vector;
    logic		e_irq;
+
+   wire			e_take_irq = e_acceptable & ~e_trap & e_irq & e_irq_ok;
    logic [NUM_IRQS-1:0]	irq_wakeup; // WFI wakeup mask
 
    // Note that e_irq_vector must be zero if !e_irq
@@ -785,7 +787,7 @@ module backend #(`CONFIG)
 	   end
 	end
 
-	if (~e_trap & e_irq & e_irq_ok) begin
+	if (e_take_irq) begin
 	   e_restartpc    = mtvec_addr;
 	   if (do_vector_interrupts)
 	     e_restartpc += e_irq_vector << IRQ_VECTOR_BITS;
@@ -831,7 +833,7 @@ module backend #(`CONFIG)
 	m_kill		   <= e_kill;
 	m_fencei	   <= e_fencei;
 	m_trap		   <= e_trap;
-	m_xcpt		   <= e_trap | (e_irq & e_irq_ok);
+	m_xcpt		   <= e_trap | e_take_irq;
 	m_restartpc	   <= e_restartpc & PC_MASK;
 	m_restart_mcontext <= e_restart_mcontext;
 	if (e_accept)
@@ -844,7 +846,7 @@ module backend #(`CONFIG)
    always @(*) begin
       e_intack      = 'b0;
       d_irqs_clear  = 'b0;
-      if (~e_trap & e_irq & e_irq_ok) begin
+      if (e_take_irq) begin
 	 e_intack     = e_irq_vector;
 	 d_irqs_clear = 1'b1 << e_irq_vector;
       end else if (csrw_mip) begin
