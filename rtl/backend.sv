@@ -787,8 +787,20 @@ module backend #(`CONFIG)
 		e_next_pc            = mepc & PC_MASK;
 		e_restart_mcontext.m = e_restart_mcontext.u;
 	     end
-	     INSN_FENCEI: begin
-		e_fencei             = 1'b1;
+	     INSN_FENCE: begin
+		// If this is FENCE.I (e_op.funct3[0] == 1'b1) then
+		// a pipeline kill is *mandatory* regardless of
+		// the state of any buses.
+		//
+		// If this is FENCE, no pipeline kill is necessary.
+		// For now, do the second-simplest of hack by treating
+		// it either as a NOP (if nothing at all is busy) or
+		// the same as FENCE.I, pipeline kill and all.
+		//
+		// The very simplest thing of course would be to treat
+		// the two instructions identically, and always kill the
+		// pipeline.
+		e_fencei = e_op.funct3[0] | dbus.busy | m_busy | m_valid_o;
 	     end
 	     default: begin
 		if (csrw_user_context) begin

@@ -174,12 +174,8 @@ module decode_comb #(`CONFIG)
 	  MISC_MEM: begin
 	     op.imm = 32'bx;
 	     unique casez (op.funct3)
-	       3'b000: begin	// FENCE/PAUSE
-		  // Treat a NOP (addi)
-		  op.itype  = INSN_ALU;
-	       end
-	       3'b001: begin	// FENCE.I (Zifencei)
-		  op.itype = INSN_FENCEI;
+	       3'b00?: begin	// FENCE, PAUSE, FENCEI
+		  op.itype  = INSN_FENCE;
 	       end
 	       3'b010: begin	// Cache block operations
 		  // Treat this as a store-format instruction (which means

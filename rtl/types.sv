@@ -20,7 +20,7 @@ typedef enum logic [3:0] {
 	INSN_JAL    = 4'b1010,	// JAL, JALR
 	INSN_BR     = 4'b1011,  // Conditional branch
 	INSN_MRET   = 4'b1100,	// MRET, SRET
-	INSN_FENCEI = 4'b1101,	// Completion fence
+	INSN_FENCE  = 4'b1101,	// Completion fence
 	INSN_ECALL  = 4'b1110,	// ECALL, EBREAK
 	INSN_ERR    = 4'b1111,	// Invalid instruction (unconditional trap)
 	INSN_X	    = 4'bxxxx
