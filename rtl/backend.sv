@@ -776,7 +776,8 @@ module backend #(`CONFIG)
 	   end
 
 	   if (e_trap) begin
-	      e_mepc               = e_op.pc | (~e_op.i16);
+	      e_mepc               = e_op.pc;
+	      e_mepc[0]            = ~e_op.i16;
 	      e_restartpc          = mtvec_addr;
 	      e_restart_mcontext.m = CTX_MACHINE;
 	   end else begin
