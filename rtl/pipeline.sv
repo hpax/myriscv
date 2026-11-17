@@ -56,7 +56,8 @@ module pipe_ctl #(`CONFIG)
    always @(*)
      d_me_hazard = d_valid_o &
 		   (regeq(e_op.rd_m, e_op.rd, d_op.rs1_valid, d_op.rs1) |
-		    regeq(e_op.rd_m, e_op.rd, d_op.rs2_valid, d_op.rs2));
+		    regeq(e_op.rd_m, e_op.rd, d_op.rs2_valid, d_op.rs2) |
+		    (m_busy & (d_rs1_m | d_rs2_m)));
 
    // Bypass control: pick the source for the next execution of the
    // E stage.
@@ -123,13 +124,13 @@ module pipe_ctl #(`CONFIG)
 	  // stage if the latter should ignore the instruction due to
 	  // it being a trap. e_valid_o will be deasserted after the
 	  // kill proper.
-	  if (!e_valid_o) begin
+	  if (m_busy | (m_stall & m_valid_i)) begin
+	     // Leave unchanged
+	  end else if (!e_valid_o) begin
 	     m_valid_i	 <= 1'b0;
 	     m_op	 <= e_op;
 	     m_op.undead <= 1'b0;
 	     m_op.rd_m   <= 1'b0;
-	  end else if (m_busy | (m_stall & m_valid_i)) begin
-	     // Leave unchanged
 	  end else begin
 	     m_valid_i <= e_valid_o;
 	     m_op      <= e_op;

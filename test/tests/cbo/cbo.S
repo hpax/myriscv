@@ -21,8 +21,6 @@ __start:
 	cbo.flush (s1)
 	fence.i
 	lw t1,4(s0)
-	nop
-	nop
 	bne t0,t1,.Lfail
 
 	/* Invalidate must discard dirty data without overwriting memory. */
@@ -31,8 +29,6 @@ __start:
 	cbo.inval (s1)
 	fence.i
 	lw t1,4(s0)
-	nop
-	nop
 	bne t0,t1,.Lfail
 	finish TEST_PASS
 
