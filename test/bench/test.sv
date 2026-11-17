@@ -66,7 +66,8 @@ module test #(
      begin
 	clk       <= 1'b1;
 	rst_n	  <= 1'b0;
-	#(10*CLOCK) rst_n <= 1'b1;
+	repeat (10) @(negedge clk);
+	rst_n <= 1'b1;
      end
 
    always #(CLOCK >> 1) clk <= ~clk;
