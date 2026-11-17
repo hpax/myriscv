@@ -357,7 +357,14 @@ module backend #(`CONFIG)
    endgenerate
 
    // Early address computation for dcache
+   //
+   // This limits the number of bits computed in the D stage to the
+   // bits up to car_bit + 1 (for carry out.)
    assign dcache_lookup_hold = d_src_hold;
+
+   logic [31:0] d_addr;
+   logic [31:0] d_addr1;
+   logic [31:0] d_addr2;
 
    always_comb begin
       dcache_lookup_valid    = d_advance & insn_mem(d_op.itype);
@@ -380,22 +387,39 @@ module backend #(`CONFIG)
 	end
       endcase
 
-      dcache_lookup_a = (d_op.addr.rs1 ? d_srs1 << d_op.addr.rs1_shift : 'b0) +
-			(d_op.addr.rs2 ? d_srs2 : d_op.imm);
+      // Compute only the bits needed by the dcache in this cycle;
+      // the remaining bits get computed in the E stage.
+      d_addr1	      = d_op.addr.rs1 ? d_srs1 << d_op.addr.rs1_shift : 'b0;
+      d_addr2	      = d_op.addr.rs2 ? d_srs2 : d_op.imm;
+      d_addr	      = d_addr1[car_bit:0] + d_addr2[car_bit:0];
+      dcache_lookup_a = d_addr;
    end
 
    //
    // AGU adder; reuse the value already calculated for dcache_lookup_a
-   // XXX: does this make sense for WITH_Zilx?
+   // but don't compute the higher bits in the D stage (except from
+   // the carry-out of the low part calculation.)
    //
-   logic [31:0]	e_addr;
+   logic [31:0]	d_addr_q;
+   logic [31:0]	d_addr1_q;
+   logic [31:0]	d_addr2_q;
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	e_addr <= 'bx;
+	d_addr_q  <= 'bx;
+	d_addr1_q <= 'bx;
+	d_addr2_q <= 'bx;
      end else if (clken) begin
-	if (!d_src_hold)
-	  e_addr <= dcache_lookup_a;
+	if (!d_src_hold) begin
+	   d_addr_q  <= d_addr;
+	   d_addr1_q <= { d_addr1[31:car_bit+1], {car_bit+1{1'b0}} };
+	   d_addr2_q <= { d_addr2[31:car_bit+1], {car_bit+1{1'b0}} };
+	end
      end
+
+   logic [31:0] e_addr;
+   always_comb begin
+      e_addr = d_addr_q + d_addr1_q + d_addr2_q;
+   end
 
    // ALU
    aluctl_t e_aluctl;
@@ -796,7 +820,7 @@ module backend #(`CONFIG)
 	     e_restartpc += e_irq_vector << IRQ_VECTOR_BITS;
 	   e_mepc	 = e_next_pc;
 	   e_mcause	 = MCAUSE_IRQ | e_irq_vector;
-	   e_restart     = 1'b1;
+	   e_restart	 = 1'b1;
 	end
 
 	e_mepc      &= PC_MASK | 1;
