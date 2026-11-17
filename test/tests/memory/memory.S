@@ -40,6 +40,35 @@ __start:
 	lw a3,8(a0)
 	assert_eq a3,0x00000055
 
+	/* Exercise split stores and loads on cold and then hot cache lines. */
+	li a0,0x40000000
+	li a1,0x11223344
+	sw a1,0(a0)
+	sw zero,4(a0)
+	sw zero,8(a0)
+	cbo.flush (a0)
+	addi a0,a0,4
+	cbo.flush (a0)
+	addi a0,a0,4
+	cbo.flush (a0)
+	addi a0,a0,-8
+	li s0,2
+1:
+	li a1,0x11223344
+	li a2,0x55667788
+	sw a1,1(a0)
+	sw a2,5(a0)
+	lw a3,1(a0)
+	assert_eq a3,0x11223344
+	lw a3,5(a0)
+	assert_eq a3,0x55667788
+	lw a3,3(a0)
+	assert_eq a3,0x77881122
+	lw a3,4(a0)
+	assert_eq a3,0x66778811
+	addi s0,s0,-1
+	bnez s0,1b
+
 	/* memcpy() preserves guards around an unaligned 37-byte copy. */
 	la a0,copy_dst
 	addi a0,a0,1

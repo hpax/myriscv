@@ -245,9 +245,9 @@ module ldst #(`CONFIG) (
 	    4'b01_10: ld_src <= 8'b11_11_11_10;
 	    4'b01_11: ld_src <= 8'b00_00_00_11;
 	    4'b10_00: ld_src <= 8'b11_10_01_00;
-	    4'b10_01: ld_src <= 8'b10_01_00_11;
+	    4'b10_01: ld_src <= 8'b00_11_10_01;
 	    4'b10_10: ld_src <= 8'b01_00_11_10;
-	    4'b10_11: ld_src <= 8'b00_11_10_01;
+	    4'b10_11: ld_src <= 8'b10_01_00_11;
 	    default:  ld_src <= 8'bx; // Invalid
 	  endcase // unique casez ({size, addr[1:0]})
        end // else: !if(~rst_n)
