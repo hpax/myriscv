@@ -14,14 +14,14 @@ QUARTUS_DIR := ../../quartus
 IP_SRCS := $(addprefix $(QUARTUS_DIR)/, \
 	altmult18.v altmult14.v altmult18x15x2.v)
 RTL_SRCS := $(addprefix $(RTL_DIR)/, \
-	riscv.sv types.sv functions.sv counter.sv tcm.sv shifter.sv rv32c.sv \
+	riscv.sv types.sv functions.sv busif.sv counter.sv tcm.sv shifter.sv rv32c.sv \
 	regfile.sv pipeline.sv myriscv.sv mult.sv ldst.sv fetch.sv \
 	backend.sv decode.sv alu.sv rng.sv icache.sv dcache.sv)
-BENCH_SRCS := test.sv extmem.sv
+BENCH_SRCS := test.sv extmem.sv busif_test.sv
 WORK      := work
 STAMP     := $(WORK)/.build-stamp
 
-.PHONY: all run clean FORCE
+.PHONY: all run check-busif clean FORCE
 
 all: $(STAMP)
 
@@ -54,6 +54,10 @@ run: $(STAMP)
 		$(if $(TCM_INIT_FILE),+tcm_init=$(TCM_INIT_FILE)) \
 		$(if $(MEM_INIT_FILE),+mem_init=$(MEM_INIT_FILE)) \
 		$(VSIMOPT)
+
+check-busif: $(STAMP)
+	$(VSIM) -c -onfinish exit -L work busif_test \
+		-do busif_test.tcl
 
 clean:
 	-$(QUESTA_ENV) vdel -lib $(WORK) -all

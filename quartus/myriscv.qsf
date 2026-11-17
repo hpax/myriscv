@@ -113,6 +113,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/functions.sv
 set_global_assignment -name SYSTEMVERILOG_FILE top.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/counter.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/types.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/busif.sv
 set_global_assignment -name VERILOG_INCLUDE_FILE ../rtl/config.vh
 set_global_assignment -name VERILOG_INCLUDE_FILE ../rtl/myriscv.vh
 set_global_assignment -name VERILOG_INCLUDE_FILE ../rtl/params.vh
