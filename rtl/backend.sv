@@ -400,22 +400,22 @@ module backend #(`CONFIG)
    // but don't compute the higher bits in the D stage (except from
    // the carry-out of the low part calculation.)
    //
-   logic [31:0]	d_addr1_q;
-   logic [31:0]	d_addr2_q;
+   logic [31:0]	e_addr1;
+   logic [31:0]	e_addr2;
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	d_addr1_q <= 'bx;
-	d_addr2_q <= 'bx;
+	e_addr1 <= 'bx;
+	e_addr2 <= 'bx;
      end else if (clken) begin
 	if (!d_src_hold) begin
-	   d_addr1_q <= d_addr1;
-	   d_addr2_q <= d_addr2;
+	   e_addr1 <= d_addr1;
+	   e_addr2 <= d_addr2;
 	end
      end
 
    logic [31:0] e_addr;
    always_comb begin
-      e_addr = d_addr1_q + d_addr2_q;
+      e_addr = e_addr1 + e_addr2;
    end
 
    // ALU

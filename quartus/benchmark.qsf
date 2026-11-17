@@ -5,3 +5,4 @@
 #   set_global_assignment -name SOURCE_TCL_SCRIPT_FILE myriscv.qsf
 #
 set_global_assignment -name SOURCE_TCL_SCRIPT_FILE myriscv.qsf
+set_global_assignment -name TOP_LEVEL_ENTITY benchmark
