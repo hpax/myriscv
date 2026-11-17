@@ -1,3 +1,4 @@
+// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 //
 // icache.sv
 //
@@ -24,24 +25,21 @@ module icache
    input		     clk,
    input		     clken,
 
-   input [31:0]		     ibus_a,
-   input		     ibus_valid,
-   output reg [31:0]	     ibus_rdata,
-   output		     ibus_ready,
+   bus_if.read_target	     ibus,
 
    //
-   // imem_a_i reflects the address on the actual memory bus.
+   // imem.a_in reflects the address on the actual memory bus.
    //
-   // If imem_inval is high, this address will be invalidated if
-   // present in the icache (tag match). If imem_ready is high, this
-   // data is loaded from imem_rdata and the tag is updated.
+   // If imem.inval is high, this address will be invalidated if
+   // present in the icache (tag match). If imem.ready is high, this
+   // data is loaded from imem.rdata and the tag is updated.
    //
    // This is intended to allow the icache to be coherent with memory,
    // by invalidating any address written to DRAM, either after
    // flushing from the dcache or via DMA.
    //
-   // If imem_inval_geo is high, the invalidation is geographical: the
-   // line part of the imem_a_i address represents a line in the
+   // If imem.inval_geo is high, the invalidation is geographical: the
+   // line part of the imem.a_in address represents a line in the
    // cache; the tag bits are architecturally reserved to indicate a
    // cache way if multiple ways are ever implemented. This can be
    // used to invalidate the entire icache by looping over the size
@@ -50,19 +48,12 @@ module icache
    // zero on reset, or if the underlying address space has changed in
    // some fundamental way.
    //
-   // Important: imem_a_i must equal imem_a when imem_ready is high!
-   // This is done by simply having imem_a_i trace the address bus on
-   // the actual RAM interface and strobe imem_rdata or imem_inval
+   // Important: imem.a_in must equal imem.a when imem.ready is high!
+   // This is done by simply having imem.a_in trace the address bus on
+   // the actual RAM interface and strobe imem.rdata or imem.inval
    // accordingly. (XXX: Is this actually necessary?)
    //
-   input [ram_size_bits-1:0]	     imem_a_i,
-   input		     imem_inval,
-   input		     imem_inval_geo,
-
-   output reg [ram_size_bits-1:0] imem_a,
-   output reg		     imem_valid,
-   input		     imem_ready,
-   input [31:0]		     imem_rdata);
+   bus_if.cache_initiator     imem);
 
    localparam		  tag_bits = ram_size_bits - row_bits - line_bits;
    localparam		  rows = 1 << row_bits;
@@ -72,15 +63,15 @@ module icache
    reg [linesize-1:0]	  data_mem [0:rows-1];
    reg			  valid_mem[0:rows-1];
 
-   wire [row_bits-1:0]	  ibus_row = ibus_a[row_bits+line_bits-1:line_bits];
-   wire [tag_bits-1:0]	  ibus_tag = ibus_a[ram_size_bits-1:ram_size_bits-tag_bits];
+   wire [row_bits-1:0]	  ibus_row = ibus.a[row_bits+line_bits-1:line_bits];
+   wire [tag_bits-1:0]	  ibus_tag = ibus.a[ram_size_bits-1:ram_size_bits-tag_bits];
    logic [tag_bits-1:0]	  ibus_tag_cmp;
 
-   wire [row_bits-1:0]	  imem_row = imem_a_i[row_bits+line_bits-1:line_bits];
-   wire [tag_bits-1:0]	  imem_tag = imem_a_i[ram_size_bits-1:ram_size_bits-tag_bits];
+   wire [row_bits-1:0]	  imem_row = imem.a_in[row_bits+line_bits-1:line_bits];
+   wire [tag_bits-1:0]	  imem_tag = imem.a_in[ram_size_bits-1:ram_size_bits-tag_bits];
    logic [tag_bits-1:0]	  imem_tag_cmp;
 
-   wire			  have_data = imem_valid & imem_ready;
+   wire			  have_data = imem.valid & imem.ready;
 
    // If this is not inherently true then the icache will need to be
    // explicitly flushed through write operations before leaving
@@ -100,9 +91,9 @@ module icache
 
    // Data memory array
    always @(posedge clk) begin
-      ibus_rdata <= data_mem[ibus_row];
+      ibus.rdata <= data_mem[ibus_row];
       if (have_data)
-	data_mem[imem_row] <= imem_rdata;
+	data_mem[imem_row] <= imem.rdata;
    end
 
    reg [tag_bits-1:0] cvalid_tag;
@@ -118,8 +109,8 @@ module icache
    always @(posedge clk) begin
       cvalid_tag   <= imem_tag;
       cvalid_row   <= imem_row;
-      imem_inval_q     <= imem_inval;	// Invalidate on tag match
-      imem_inval_geo_q <= imem_inval_geo;	// Invalidate geographically
+      imem_inval_q     <= imem.inval;	// Invalidate on tag match
+      imem_inval_geo_q <= imem.inval_geo;	// Invalidate geographically
       have_data_q  <= have_data;
    end
 
@@ -143,25 +134,25 @@ module icache
    // CAR addressing always matches
    wire		      ibus_match = ibus_car_q |
 		      (cvalid_ibus & (ibus_tag_q == ibus_tag_cmp));
-   assign ibus_ready = ibus_valid_q & ibus_match;
+   assign ibus.ready = ibus_valid_q & ibus_match;
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
 	ibus_valid_q <= 1'b0;
 	ibus_tag_q   <= 'bx;
 	ibus_car_q   <= 1'b0;
-	imem_valid   <= 1'b0;
-	imem_a	     <= 'bx;
+	imem.valid   <= 1'b0;
+	imem.a	     <= 'bx;
      end else if (clken) begin
-	ibus_valid_q <= ibus_valid;
+	ibus_valid_q <= ibus.valid;
 	ibus_tag_q   <= ibus_tag;
-	ibus_car_q   <= ibus_a[car_bit];
+	ibus_car_q   <= ibus.a[car_bit];
 
-	if (imem_valid) begin
-	   imem_valid <= ~imem_ready;
+	if (imem.valid) begin
+	   imem.valid <= ~imem.ready;
 	end else if (ibus_valid_q & ~ibus_match) begin
-	   imem_valid <= 1'b1;
-	   imem_a     <= { ibus_tag, ibus_row, {line_bits{1'b0}} };
+	   imem.valid <= 1'b1;
+	   imem.a     <= { ibus_tag, ibus_row, {line_bits{1'b0}} };
 	end
      end
 endmodule

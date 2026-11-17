@@ -100,15 +100,7 @@ module dcache_real
     input                         clk,
     input                         clken,
 
-    input [31:0]                  dbus_a,
-    input [31:0]                  dbus_wdata,
-    input [3:0]                   dbus_wbe,
-    input cbo_t                   dbus_cbo,
-    input                         dbus_valid,
-    input                         dbus_wrq,
-    output logic [31:0]           dbus_rdata,
-    output logic                  dbus_ready,
-    output logic                  dbus_busy,
+    bus_if.target                 dbus,
 
     // D-to-M cache lookup bypass. This is issued by the D stage for an
     // operation advancing to E; its result is consumed when that operation
@@ -119,15 +111,17 @@ module dcache_real
     input cbo_t                   lookup_cbo_i,
     input                         lookup_wrq_i,
 
-    output logic [ram_size_bits-1:0] dmem_a,
-    output logic [31:0]           dmem_wdata,
-    output logic                  dmem_valid,
-    output logic                  dmem_wrq,
-    output logic [3:0]            dmem_wbe,
-    input [31:0]                  dmem_rdata,
-    input                         dmem_ready,
-    input                         dmem_busy
+    bus_if.initiator              dmem
     );
+
+   logic                         dbus_busy;
+   logic [31:0]                  dmem_wdata;
+   logic                         dmem_wrq;
+   logic [3:0]                   dmem_wbe;
+   assign dbus.busy = dbus_busy;
+   assign dmem.wdata = dmem_wdata;
+   assign dmem.wrq = dmem_wrq;
+   assign dmem.wbe = dmem_wbe;
 
    localparam int row_bits = size_bits - 2;
    localparam int tag_bits = ram_size_bits - size_bits;
@@ -179,11 +173,11 @@ module dcache_real
    logic [31:0]         pending_evict_data;
    logic [31:0]         done_rdata;
 
-   wire [row_bits-1:0]  dbus_row = dbus_a[size_bits-1:2];
+   wire [row_bits-1:0]  dbus_row = dbus.a[size_bits-1:2];
    wire [tag_bits-1:0]  dbus_tag =
-                         dbus_a[ram_size_bits-1:size_bits];
-   wire                 dbus_cacheable = dbus_a >= ram_base &&
-                         dbus_a < io_base;
+                         dbus.a[ram_size_bits-1:size_bits];
+   wire                 dbus_cacheable = dbus.a >= ram_base &&
+                         dbus.a < io_base;
    wire [row_bits-1:0]  lookup_row =
                          lookup_a[size_bits-1:2];
    wire                 lookup_car = lookup_a[car_bit];
@@ -206,16 +200,16 @@ module dcache_real
                          lookup_match;
    // A live request without a D-stage lookup holds dbus stable while the
    // synchronous RAM read below prepares a replacement lookup record.
-   wire                 replay_lookup = state == S_IDLE && dbus_valid &&
+   wire                 replay_lookup = state == S_IDLE && dbus.valid &&
                                         dbus_cacheable && !lookup_valid;
    logic                replay_valid;
    logic [31:0]         replay_wdata;
    logic [3:0]          replay_wbe;
-   wire                 request_valid = dbus_valid || replay_valid;
+   wire                 request_valid = dbus.valid || replay_valid;
    wire [31:0]          request_wdata = replay_valid ?
-                                         replay_wdata : dbus_wdata;
+                                         replay_wdata : dbus.wdata;
    wire [3:0]           request_wbe = replay_valid ?
-                                       replay_wbe : dbus_wbe;
+                                       replay_wbe : dbus.wbe;
 
    // A replay owns the request even if ready withdraws the live valid.
    always @(negedge rst_n or posedge clk)
@@ -226,8 +220,8 @@ module dcache_real
      end else if (clken) begin
         replay_valid <= replay_lookup;
         if (replay_lookup) begin
-           replay_wdata <= dbus_wdata;
-           replay_wbe <= dbus_wbe;
+           replay_wdata <= dbus.wdata;
+           replay_wbe <= dbus.wbe;
         end
      end
 
@@ -266,29 +260,29 @@ module dcache_real
    end
 
    always @(*) begin
-      dbus_rdata = state == S_DONE ? done_rdata :
-                   state == S_FILL ? dmem_rdata : lookup_data[31:0];
+      dbus.rdata = state == S_DONE ? done_rdata :
+                   state == S_FILL ? dmem.rdata : lookup_data[31:0];
 
       if (state == S_DONE)
-        dbus_ready = 1'b1;
+        dbus.ready = 1'b1;
       else if (state == S_FILL)
-        dbus_ready = pending_wrq && dmem_ready;
+        dbus.ready = pending_wrq && dmem.ready;
       else if (state == S_IDLE)
-        dbus_ready = lookup_valid &&
+        dbus.ready = lookup_valid &&
                      (lookup_cbo_valid ||
                       (!start_writeback && !start_fill && lookup_match));
       else
-        dbus_ready = 1'b0;
+        dbus.ready = 1'b0;
 
-      dmem_valid = state == S_WRITEBACK || state == S_FILL;
+      dmem.valid = state == S_WRITEBACK || state == S_FILL;
       dmem_wrq = state == S_WRITEBACK;
       dmem_wbe = state == S_WRITEBACK ? 4'b1111 : 4'b0000;
       dmem_wdata = pending_evict_data;
-      dmem_a = state == S_WRITEBACK ?
+      dmem.a = state == S_WRITEBACK ?
                { pending_evict_tag, pending_row, 2'b00 } :
                { pending_tag, pending_row, 2'b00 };
 
-      dbus_busy = state == S_WRITEBACK || state == S_FILL || dmem_busy;
+      dbus_busy = state == S_WRITEBACK || state == S_FILL || dmem.busy;
    end
 
    initial begin
@@ -303,13 +297,13 @@ module dcache_real
       end else if (!lookup_hold_i) begin
          if (lookup_valid_i)
            ram_read_row = lookup_a_i[size_bits-1:2];
-         else if (dbus_valid && dbus_cacheable && state == S_IDLE)
+         else if (dbus.valid && dbus_cacheable && state == S_IDLE)
            ram_read_row = dbus_row;
       end
    end
 
    // The cache arrays are true synchronous memories. The D-stage lookup
-   // avoids a half-cycle path from the RAM outputs to dbus_ready.
+   // avoids a half-cycle path from the RAM outputs to dbus.ready.
    dcache_ram #(.width(tag_bits), .address_bits(row_bits)) tag_mem (
       .clk   (clk),
       .raddr (ram_read_row),
@@ -330,10 +324,10 @@ module dcache_real
 
    always @(posedge clk) begin
       if (replay_lookup) begin
-         lookup_a <= dbus_a;
+         lookup_a <= dbus.a;
          lookup_valid <= rst_n;
-         lookup_cbo <= dbus_cbo;
-         lookup_wrq <= dbus_wrq;
+         lookup_cbo <= dbus.cbo;
+         lookup_wrq <= dbus.wrq;
          read_bypass <= cache_write && cache_write_row == dbus_row;
       end else if (lookup_valid_i) begin
          lookup_a <= lookup_a_i;
@@ -442,7 +436,7 @@ module dcache_real
             end
 
           S_WRITEBACK:
-            if (dmem_ready) begin
+            if (dmem.ready) begin
                case (pending)
                  P_MISS:
                    state <= S_FILL;
@@ -476,16 +470,16 @@ module dcache_real
             end
 
           S_FILL:
-            if (dmem_ready) begin
+            if (dmem.ready) begin
                cache_write <= 1'b1;
                cache_write_row <= pending_row;
                cache_write_tag <= pending_tag;
                cache_write_data <=
                  { 1'b1, pending_wrq, 2'b00,
                    pending_wrq ?
-                   merge_bytes(dmem_rdata, pending_wdata, pending_wbe) :
-                   dmem_rdata };
-               done_rdata <= dmem_rdata;
+                   merge_bytes(dmem.rdata, pending_wdata, pending_wbe) :
+                   dmem.rdata };
+               done_rdata <= dmem.rdata;
                state <= pending_wrq ? S_IDLE : S_DONE;
             end
 
@@ -501,15 +495,7 @@ module dcache #(`CONFIG)
    input		      clk,
    input		      clken,
 
-   input [31:0]		      dbus_a,
-   input [31:0]		      dbus_wdata,
-   input [3:0]		      dbus_wbe,
-   input		      cbo_t dbus_cbo,
-   input		      dbus_valid,
-   input		      dbus_wrq,
-   output [31:0]	      dbus_rdata,
-   output		      dbus_ready,
-   output		      dbus_busy, // Operation in progress, for fence
+   bus_if.target	      dbus,
 
    input [31:0]		      lookup_a_i,
    input		      lookup_valid_i,
@@ -517,14 +503,7 @@ module dcache #(`CONFIG)
    input cbo_t		      lookup_cbo_i,
    input		      lookup_wrq_i,
 
-   output [ram_size_bits-1:0] dmem_a,
-   output [31:0]	      dmem_wdata,
-   output		      dmem_valid,
-   output		      dmem_wrq,
-   output [3:0]		      dmem_wbe,
-   input [31:0]		      dmem_rdata,
-   input		      dmem_ready,
-   input		      dmem_busy
+   bus_if.initiator	      dmem
 );
 
    generate
@@ -534,14 +513,14 @@ module dcache #(`CONFIG)
 	 // Null dcache stub (simply passes the dbus through to the dmem bus)
 	 // CBO operations are dropped simply ignored
 
-	 assign dmem_a     = dbus_a[ram_size_bits-1:0];
-	 assign dmem_wdata = dbus_wdata;
-	 assign dmem_valid = dbus_valid & ~cbo_valid(dbus_cbo);
-	 assign dmem_wrq   = dbus_wrq;
-	 assign dmem_wbe   = dbus_wbe;
-	 assign dbus_rdata = dmem_rdata;
-	 assign dbus_ready = dmem_ready | cbo_valid(dbus_cbo);
-	 assign dbus_busy  = dmem_busy;
+	 assign dmem.a     = dbus.a[ram_size_bits-1:0];
+	 assign dmem.wdata = dbus.wdata;
+	 assign dmem.valid = dbus.valid & ~cbo_valid(dbus.cbo);
+	 assign dmem.wrq   = dbus.wrq;
+	 assign dmem.wbe   = dbus.wbe;
+	 assign dbus.rdata = dmem.rdata;
+	 assign dbus.ready = dmem.ready | cbo_valid(dbus.cbo);
+	 assign dbus.busy  = dmem.busy;
       end
    endgenerate
 endmodule

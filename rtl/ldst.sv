@@ -34,15 +34,13 @@ module ldst #(`CONFIG) (
 		// input or waiting for data.
 		output		  busy,
 
-		output [31:0]	  dbus_a,
-		output		  dbus_valid,
-		output		  cbo_t dbus_cbo,  // Cache block operation
-		output		  dbus_wrq,
-		output reg [3:0]  dbus_wbe,
-		output reg [31:0] dbus_wdata,
-		input [31:0]	  dbus_rdata,
-		input		  dbus_ready
+		bus_if.initiator dbus
 		);
+
+   logic [3:0]		      store_wbe;
+   logic [31:0]		      store_data;
+   assign dbus.wbe = store_wbe;
+   assign dbus.wdata = store_data;
 
    // Select the next request beat in the current response cycle.
    reg			      upper_word;
@@ -65,12 +63,12 @@ module ldst #(`CONFIG) (
    reg			      memop_st_q;
    cbo_t		      memop_cbo_q;
 
-   assign dbus_a	= use_latched ?
+   assign dbus.a	= use_latched ?
 			  latched_a + {upper_word, 2'b00} : addr;
-   assign dbus_valid	= rst_n &
-			  (dbus_valid_q ? (~dbus_ready | upper_word) : valid);
-   assign dbus_wrq      = use_latched ? memop_st_q : memop_st;
-   assign dbus_cbo      = use_latched ? memop_cbo_q : memop_cbo;
+   assign dbus.valid	= rst_n &
+			  (dbus_valid_q ? (~dbus.ready | upper_word) : valid);
+   assign dbus.wrq      = use_latched ? memop_st_q : memop_st;
+   assign dbus.cbo      = use_latched ? memop_cbo_q : memop_cbo;
 
    // Combine the upper fragment of a misaligned store with the lower
    // fragment of the following store. The pipeline holds the following
@@ -87,10 +85,10 @@ module ldst #(`CONFIG) (
 	memop_cbo_q       <= CBO_NONE;
      end else if (clken) begin
 	if (dbus_valid_q)
-	  dbus_valid_q   <= ~dbus_ready | upper_word;
+	  dbus_valid_q   <= ~dbus.ready | upper_word;
 	else
-	  dbus_valid_q   <= dbus_valid &
-			    (~dbus_ready | !cbo_valid(memop_cbo));
+	  dbus_valid_q   <= dbus.valid &
+			    (~dbus.ready | !cbo_valid(memop_cbo));
 	if (~busy) begin
 	   memop_st_q     <= memop_st;
 	   memop_cbo_q    <= memop_cbo;
@@ -104,8 +102,8 @@ module ldst #(`CONFIG) (
      else
        unique case (size)
 	 2'b00: misaligned_comb = 1'b0;				// Byte
-	 2'b01: misaligned_comb = (dbus_a[1:0] == 2'b11);	// Halfword
-	 2'b10: misaligned_comb = (dbus_a[1:0] != 2'b00);	// Word
+	 2'b01: misaligned_comb = (dbus.a[1:0] == 2'b11);	// Halfword
+	 2'b10: misaligned_comb = (dbus.a[1:0] != 2'b00);	// Word
 	 default: misaligned_comb = 1'bx;			// Invalid
        endcase
 
@@ -117,10 +115,10 @@ module ldst #(`CONFIG) (
 
    // Note: busy contains dbus_valid_q, because it is asserted by the M
    // stage, but valid is asserted in the E stage.
-   assign dout_valid = dbus_valid_q & dbus_ready;
-   assign busy	     = (dbus_valid_q & (~dbus_ready |
+   assign dout_valid = dbus_valid_q & dbus.ready;
+   assign busy	     = (dbus_valid_q & (~dbus.ready |
 			(misaligned_q & ~upper_word_q))) |
-		       (dbus_valid_q & dbus_ready & valid);
+		       (dbus_valid_q & dbus.ready & valid);
    assign upper_word = dout_valid ? misaligned_q & ~upper_word_q : upper_word_q;
 
    always @(negedge rst_n or posedge clk)
@@ -205,17 +203,17 @@ module ldst #(`CONFIG) (
 
    always @(*)
      if (use_latched) begin
-	dbus_wbe   = latched_wbe[upper_word];
-	dbus_wdata = latched_wdata;
+	store_wbe   = latched_wbe[upper_word];
+	store_data = latched_wdata;
 	if (write_combine) begin
-	   dbus_wbe |= bytemask[0];
+	   store_wbe |= bytemask[0];
 	   for (int i = 0; i < 4; i++)
 	     if (bytemask[0][i])
-	       dbus_wdata[i*8 +: 8] = wdata_comb[i*8 +: 8];
+	       store_data[i*8 +: 8] = wdata_comb[i*8 +: 8];
 	end
      end else begin
-	dbus_wbe   = bytemask[0];
-	dbus_wdata = wdata_comb;
+	store_wbe   = bytemask[0];
+	store_data = wdata_comb;
      end
 
    // Load input MUX setup
@@ -258,10 +256,10 @@ module ldst #(`CONFIG) (
 	logic [7:0] din[0:3];	// Input bytes
 	logic [7:0] dperm[0:3];	// Permuted bytes
 
-	din[0] = dbus_rdata[7:0];
-	din[1] = dbus_rdata[15:8];
-	din[2] = dbus_rdata[23:16];
-	din[3] = dbus_rdata[31:24];
+	din[0] = dbus.rdata[7:0];
+	din[1] = dbus.rdata[15:8];
+	din[2] = dbus.rdata[23:16];
+	din[3] = dbus.rdata[31:24];
 
 	dperm[0] = din[ld_src[0]];
 	dperm[1] = din[ld_src[1]];

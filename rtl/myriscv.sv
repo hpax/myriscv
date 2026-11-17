@@ -1,95 +1,58 @@
+// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
+
 `include "myriscv.vh"
 
-module myriscv #(`CONFIG) (rst_n, clk, clken,
-	     ctr_time, ctr_cycle, ctr_instret,
-  mem_addr, mem_wdata, mem_valid, mem_wrq, mem_wbe,
-  mem_ready, mem_rdata, mem_wr, mem_cpu, mem_addr_i, mem_busy,
-  io_addr, io_wdata, io_valid, io_wrq, io_wbe, io_ready, io_rdata, io_busy,
-  irq, irq_edge, irq_intable, irq_waitable, irq_intack, buserr,
-  rng_data, rng_stb, rng_incr, rng_bist, rng_dead, rng_full
-  );
+module myriscv #(`CONFIG) (
+   input		     rst_n,
+   input		     clk,
+   input		     clken,
 
-   input		     rst_n;
-   input		     clk;
-   input		     clken;
+   inout tri0 [63:0]	     ctr_time,
+   output [63:0]	     ctr_cycle,
+   output [63:0]	     ctr_instret,
 
-   inout tri0 [63:0]	     ctr_time;
-   output [63:0]	     ctr_cycle;
-   output [63:0]	     ctr_instret;
+   bus_if.memory_initiator    mem,
+   bus_if.initiator	     io,
 
-   output reg [31:0]	     io_addr;
-   output reg [31:0]	     io_wdata;
-   output reg		     io_valid;
-   output reg		     io_wrq;
-   output reg [3:0]	     io_wbe;
-   input		     io_ready;
-   input [31:0]		     io_rdata;
-   input tri0		     io_busy;
+   // irq_edge selects edge-triggered inputs. irq_intable and
+   // irq_waitable can disable inputs at compile time.
+   input tri0 [NUM_IRQS:0]    irq,
+   input tri0 [NUM_IRQS:0]    irq_edge,
+   input tri1 [NUM_IRQS:0]    irq_intable,
+   input tri1 [NUM_IRQS:0]    irq_waitable,
+   output [IRQ_BITS-1:0]      irq_intack,
+   output reg		     buserr,
 
-   output reg [ram_size_bits-1:0]	     mem_addr;
-   output reg [31:0]	     mem_wdata;
-   output reg		     mem_valid;
-   output reg		     mem_wrq;
-   output reg [3:0]	     mem_wbe;
-   input		     mem_ready;
-   input [31:0]		     mem_rdata;
-   input tri0		     mem_busy;
+   input tri0		     rng_data,
+   input tri1		     rng_stb,
+   input tri0		     rng_incr,
+   input tri1		     rng_bist,
+   input tri0		     rng_dead,
+   output		     rng_full
+   );
 
-   // These signals are used for cache invalidation and to simplify
-   // the cache design. If the memory controller does not support any
-   // other agents than the CPU, wire mem_cpu to 1'b1, mem_addr_i to
-   // mem_addr, and mem_wr to a one-cycle strobe of mem_valid & mem_wrq.
-   input [ram_size_bits-1:0] mem_addr_i; // Address of memory bus transaction
-   input		     mem_wr;	 // Write to memory strobe
-   input		     mem_cpu;	 // Transaction on behalf of CPU
+   bus_if ibus();
+   bus_if #(.writeable(1'b1), .cache_ops(1'b1), .posted(1'b1)) dbus();
+   bus_if ibus_tcm();
+   bus_if #(.writeable(1'b1)) dbus_tcm();
+   bus_if ibus_mem();
+   bus_if #(.writeable(1'b1), .cache_ops(1'b1), .posted(1'b1)) dbus_mem();
 
-   // irq is the expected IRQ input.
-   // Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
-   //
-   // irq_intable and irq_waitable are intended to be used to
-   // compile-time disables.
-   //
-   // irq_edge is set to make an input edge-triggered.
-   input tri0 [NUM_IRQS:0]   irq;
-   input tri0 [NUM_IRQS:0]   irq_edge;
-   input tri1 [NUM_IRQS:0]   irq_intable;
-   input tri1 [NUM_IRQS:0]   irq_waitable;
+   logic [31:0]		     io_wdata;
+   logic		     io_wrq;
+   logic [3:0]		     io_wbe;
+   logic [31:0]		     mem_wdata;
+   logic		     mem_wrq;
+   logic [3:0]		     mem_wbe;
+   assign io.wdata = io_wdata;
+   assign io.wrq = io_wrq;
+   assign io.wbe = io_wbe;
+   assign mem.wdata = mem_wdata;
+   assign mem.wrq = mem_wrq;
+   assign mem.wbe = mem_wbe;
 
-   output [IRQ_BITS-1:0]     irq_intack;
-
-   output reg		     buserr;
-
-   input tri0		     rng_data;
-   input tri1		     rng_stb;
-   input tri0		     rng_incr;
-   input tri1		     rng_bist;
-   input tri0		     rng_dead;
-   output		     rng_full;
-
-   wire [31:0]		     ibus_a;
-   wire			     ibus_valid;
-   logic [31:0]		     ibus_rdata;
-   wire [31:0]		     ibus_rdata_tcm;
-   logic		     ibus_ready;
-   logic		     ibus_ready_tcm;
-   logic		     ibus_ready_mem;
-
-   wire [31:0]		     dbus_a;
-   wire [31:0]		     dbus_wdata;
-   wire			     dbus_valid;
-   cbo_t		     dbus_cbo;
-   wire			     dbus_wrq;
-   wire [3:0]		     dbus_wbe;
-   logic [31:0]		     dbus_rdata;
-   wire [31:0]		     dbus_rdata_tcm;
-   reg  [31:0]		     dbus_rdata_io;
-   logic		     dbus_ready;
-   logic		     dbus_ready_tcm;
-   logic		     dbus_ready_mem;
-   logic		     dbus_ready_io;
-   logic		     dbus_busy;
-   logic		     dbus_busy_mem;
-   logic		     dbus_busy_io;
+   logic [31:0]		     io_rdata_q;
+   logic		     io_ready_q;
    logic		     dbus_is_cbo;
    wire [31:0]		     dcache_lookup_a;
    wire			     dcache_lookup_valid;
@@ -110,7 +73,23 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    //
    // Common control signal
    //
-   assign dbus_is_cbo = cbo_valid(dbus_cbo);
+   assign dbus_is_cbo = cbo_valid(dbus.cbo);
+
+   assign ibus_tcm.a = ibus.a;
+   assign ibus_tcm.valid = ibus_tcm_sel;
+   assign ibus_mem.a = ibus.a;
+   assign ibus_mem.valid = ibus_mem_sel;
+   assign dbus_tcm.a = dbus.a;
+   assign dbus_tcm.valid = dbus_tcm_sel;
+   assign dbus_tcm.wdata = dbus.wdata;
+   assign dbus_tcm.wrq = dbus.wrq;
+   assign dbus_tcm.wbe = dbus.wbe;
+   assign dbus_mem.a = dbus.a;
+   assign dbus_mem.valid = dbus.valid;
+   assign dbus_mem.wdata = dbus.wdata;
+   assign dbus_mem.wrq = dbus.wrq;
+   assign dbus_mem.wbe = dbus.wbe;
+   assign dbus_mem.cbo = dbus.cbo;
 
    //
    // Memory map decode
@@ -121,12 +100,12 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	dbus_tcm_sel = 1'b0;
 	dbus_mem_sel = 1'b0;
 	dbus_io_sel  = 1'b0;
-	if (dbus_valid) begin
-	   if (dbus_a < tcm_base)
+	if (dbus.valid) begin
+	   if (dbus.a < tcm_base)
 	     dbus_err_sel = 1'b1;
-	   else if (dbus_a < ram_base)
+	   else if (dbus.a < ram_base)
 	     dbus_tcm_sel = tcm_size_bits > 0;
-	   else if (dbus_a < io_base)
+	   else if (dbus.a < io_base)
 	     dbus_mem_sel = ram_size_bits > 0;
 	   else
 	     dbus_io_sel = 1'b1;
@@ -137,12 +116,12 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	ibus_mem_sel = 1'b0;
 	// Instruction fetches from I/O are not supported
 
-	if (ibus_valid) begin
-	   if (ibus_a < tcm_base)
+	if (ibus.valid) begin
+	   if (ibus.a < tcm_base)
 	     ibus_err_sel = 1'b1;
-	   else if (ibus_a < ram_base)
+	   else if (ibus.a < ram_base)
 	     ibus_tcm_sel = tcm_size_bits > 0;
-	   else if (ibus_a < io_base)
+	   else if (ibus.a < io_base)
 	     ibus_mem_sel = ram_size_bits > 0;
 	   else
 	     ibus_err_sel = 1'b1;
@@ -158,77 +137,56 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 
    generate
       if (tcm_size_bits) begin
-	 // Ignore dbus_cbo, it is safe to simply treat them as reads.
+	 // Ignore dbus.cbo, it is safe to simply treat them as reads.
 	 tcm #(`CFG) tcm (
 	   .rst_n	(rst_n),
 	   .clk		(clk),
 	   .clken	(clken),
-	   .ibus_a	(ibus_a),
-	   .ibus_valid	(ibus_tcm_sel),
-	   .ibus_rdata	(ibus_rdata_tcm),
-	   .ibus_ready	(ibus_ready_tcm),
-
-	   .dbus_a	(dbus_a),
-	   .dbus_valid	(dbus_tcm_sel),
-	   .dbus_wrq	(dbus_wrq),
-	   .dbus_wbe	(dbus_wbe),
-	   .dbus_wdata	(dbus_wdata),
-	   .dbus_rdata	(dbus_rdata_tcm),
-	   .dbus_ready	(dbus_ready_tcm)
+	   .ibus	(ibus_tcm),
+	   .dbus	(dbus_tcm)
 	   );
       end else begin
-	 assign dbus_rdata_tcm = 32'bx;
-	 assign dbus_ready_tcm = 1'b0;
-	 assign ibus_rdata_tcm = 32'bx;
-	 assign ibus_ready_tcm = 1'b0;
+	 assign dbus_tcm.rdata = 32'bx;
+	 assign dbus_tcm.ready = 1'b0;
+	 assign ibus_tcm.rdata = 32'bx;
+	 assign ibus_tcm.ready = 1'b0;
       end
    endgenerate
 
    // External memory and caches
 
-   logic [31:0] ibus_rdata_mem;
-   logic [31:0]	dbus_rdata_mem;
-   logic	dmem_busy;
-
    generate
       if (!ram_size_bits) begin
-	 assign ibus_rdata_mem = 32'bx;
-	 assign ibus_ready_mem = 1'b0;
-	 assign dbus_rdata_mem = 32'bx;
-	 assign dbus_ready_mem = 1'b0;
-	 assign dmem_busy      = 1'b0;
+	 assign ibus_mem.rdata = 32'bx;
+	 assign ibus_mem.ready = 1'b0;
+	 assign dbus_mem.rdata = 32'bx;
+	 assign dbus_mem.ready = 1'b0;
+	 assign dbus_mem.busy = 1'b0;
+	 assign mem.a = '0;
+	 assign mem.valid = 1'b0;
+	 assign mem_wdata = '0;
+	 assign mem_wrq = 1'b0;
+	 assign mem_wbe = '0;
       end else begin
 	 // Instruction cache
 
-	 logic [ram_size_bits-1:0] imem_a;
-	 logic			   imem_valid;
-	 logic			   imem_ready;
+	 bus_if #(.address_bits(ram_size_bits), .snoop(1'b1)) imem();
+	 bus_if #(.address_bits(ram_size_bits), .writeable(1'b1),
+		  .posted(1'b1)) dmem();
+
+	 assign imem.rdata = mem.rdata;
+	 assign imem.a_in = mem.a_in;
+	 assign imem.inval = mem.inval;
+	 assign dmem.rdata = mem.rdata;
+
 	 icache #(`CFG) icache (
 	   .rst_n (rst_n),
 	   .clk   (clk),
 	   .clken (clken),
 
-	   .ibus_a (ibus_a),
-	   .ibus_valid (ibus_mem_sel),
-	   .ibus_rdata (ibus_rdata_mem),
-	   .ibus_ready (ibus_ready_mem),
-
-	   .imem_a     (imem_a),
-	   .imem_valid (imem_valid),
-	   .imem_ready (imem_ready),
-	   .imem_rdata (mem_rdata),
-
-	   .imem_a_i   (mem_addr_i),
-	   .imem_inval (mem_wr),
-	   .imem_inval_geo (1'b0)
+	   .ibus (ibus_mem),
+	   .imem (imem)
 	   );
-
-	 logic [ram_size_bits-1:0] dmem_a;
-	 logic			   dmem_valid;
-	 logic			   dmem_ready;
-	 logic [31:0]		   dmem_wdata;
-	 logic			   dmem_wrq;
-	 logic [3:0]		   dmem_wbe;
 
 	 // Data cache
 	 dcache #(`CFG) dcache (
@@ -236,15 +194,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	    .clk   (clk),
 	    .clken (clken),
 
-	    .dbus_a     (dbus_a),
-	    .dbus_wdata (dbus_wdata),
-	    .dbus_wbe   (dbus_wbe),
-	    .dbus_rdata (dbus_rdata_mem),
-	    .dbus_cbo   (dbus_cbo),
-	    .dbus_valid (dbus_valid),
-	    .dbus_wrq   (dbus_wrq),
-	    .dbus_ready (dbus_ready_mem),
-	    .dbus_busy  (dbus_busy_mem),
+	    .dbus (dbus_mem),
 
 	    .lookup_a_i     (dcache_lookup_a),
 	    .lookup_valid_i (dcache_lookup_valid),
@@ -252,53 +202,44 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 	    .lookup_cbo_i   (dcache_lookup_cbo),
 	    .lookup_wrq_i   (dcache_lookup_wrq),
 
-	    .dmem_a     (dmem_a),
-	    .dmem_valid (dmem_valid),
-	    .dmem_wdata (dmem_wdata),
-	    .dmem_wrq   (dmem_wrq),
-	    .dmem_wbe   (dmem_wbe),
-	    .dmem_rdata (mem_rdata),
-	    .dmem_ready (dmem_ready),
-	    .dmem_busy  (dmem_busy)
+	    .dmem (dmem)
 	 );
 
 	 // Memory bus
 	 reg			  mem_is_dbus;
-	 always @(*) begin
-	    dmem_ready = mem_ready &  mem_is_dbus;
-	    imem_ready = mem_ready & ~mem_is_dbus;
-	    dmem_busy  = mem_busy  &  mem_is_dbus;
-	 end
+	 assign dmem.ready = mem.ready &  mem_is_dbus;
+	 assign imem.ready = mem.ready & ~mem_is_dbus;
+	 assign dmem.busy  = mem.busy  &  mem_is_dbus;
 
 	 always @(negedge rst_n or posedge clk)
 	   if (~rst_n) begin
-	      mem_valid      <= 1'b0;
+	      mem.valid      <= 1'b0;
 	      mem_wrq        <= 1'bx;
 	      mem_wbe	     <= 4'bx;
 	      mem_is_dbus    <= 1'bx;
-	      mem_addr	     <= 'bx;
+	      mem.a	     <= 'bx;
 	      mem_wdata      <= 32'bx;
 	   end else if (clken) begin
 	      // This adds a dead cycle between each transaction for
 	      // no really good reason; fix that later.
-	      if (~mem_valid & dmem_valid) begin
-		 mem_addr    <= dmem_a;
+	      if (~mem.valid & dmem.valid) begin
+		 mem.a    <= dmem.a;
 		 mem_is_dbus <= 1'b1;
-		 mem_valid   <= 1'b1;
-		 mem_wrq     <= dmem_wrq;
-		 mem_wdata   <= dmem_wdata;
-		 mem_wbe     <= dmem_wbe;
-	      end else if (~mem_valid & imem_valid) begin
-		 mem_addr    <= imem_a;
+		 mem.valid   <= 1'b1;
+		 mem_wrq     <= dmem.wrq;
+		 mem_wdata   <= dmem.wdata;
+		 mem_wbe     <= dmem.wbe;
+	      end else if (~mem.valid & imem.valid) begin
+		 mem.a    <= imem.a;
 		 mem_is_dbus <= 1'b0;
-		 mem_valid   <= 1'b1;
+		 mem.valid   <= 1'b1;
 		 mem_wrq     <= 1'b0;
 		 mem_wdata   <= 32'bx;
 		 mem_wbe     <= 4'bx;
-	      end else if (mem_valid & mem_ready) begin
-		 mem_addr    <= 'bx;
+	      end else if (mem.valid & mem.ready) begin
+		 mem.a    <= 'bx;
 		 mem_is_dbus <= 1'bx;
-		 mem_valid   <= 1'b0;
+		 mem.valid   <= 1'b0;
 		 mem_wrq     <= 1'bx;
 		 mem_wbe     <= 4'bx;
 	      end
@@ -308,37 +249,35 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
 
    reg io_pending;
 
-   assign io_valid = io_pending & ~io_ready;
+   assign io.valid = io_pending & ~io.ready;
 
    // I/O bus
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	dbus_ready_io    <= 1'b0;
-	io_addr          <= 'bx;
+	io_ready_q    <= 1'b0;
+	io.a          <= 'bx;
 	io_wdata	 <= 'bx;
 	io_pending	 <= 1'b0;
 	io_wrq		 <= 1'b0;
 	io_wbe		 <= 'b0;
      end else if (clken) begin
-	dbus_ready_io    <= 1'b0;
+	io_ready_q    <= 1'b0;
 
 	if (~io_pending & dbus_io_sel) begin
-	   io_addr       <= dbus_a;
-	   io_wdata      <= dbus_wdata;
+	   io.a       <= dbus.a;
+	   io_wdata      <= dbus.wdata;
 	   io_pending    <= ~dbus_is_cbo; // No CBO to I/O space
-	   io_wrq        <= dbus_wrq;
-	   io_wbe	 <= dbus_wbe;
-	   dbus_ready_io <= dbus_is_cbo;  // Ack CBO immediately
-	end else if (io_pending & io_ready) begin
-	   dbus_ready_io <= 1'b1;
-	   dbus_rdata_io <= io_rdata;
+	   io_wrq        <= dbus.wrq;
+	   io_wbe	 <= dbus.wbe;
+	   io_ready_q <= dbus_is_cbo;  // Ack CBO immediately
+	end else if (io_pending & io.ready) begin
+	   io_ready_q <= 1'b1;
+	   io_rdata_q <= io.rdata;
 	   io_pending	 <= 1'b0;
 	   io_wrq	 <= 1'b0;
 	   io_wbe	 <= 'b0;
 	end
      end
-
-   assign dbus_busy_io = io_pending;
 
    reg dbus_io_sel_q;
    reg dbus_mem_sel_q;
@@ -373,37 +312,37 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
    always @(*)
      begin
 	unique case ({dbus_io_sel_q, dbus_mem_sel_q, dbus_tcm_sel_q})
-	  3'b000:  dbus_rdata = INVALID_DATA;
-	  3'b001:  dbus_rdata = dbus_rdata_tcm;
-	  3'b010:  dbus_rdata = dbus_rdata_mem;
-	  3'b100:  dbus_rdata = dbus_rdata_io;
-	  default: dbus_rdata = 32'bx;
+	  3'b000:  dbus.rdata = INVALID_DATA;
+	  3'b001:  dbus.rdata = dbus_tcm.rdata;
+	  3'b010:  dbus.rdata = dbus_mem.rdata;
+	  3'b100:  dbus.rdata = io_rdata_q;
+	  default: dbus.rdata = 32'bx;
 	endcase
 
 	unique case ({dbus_io_sel_q, dbus_mem_sel_q, dbus_tcm_sel_q})
-	  3'b000:  dbus_ready = dbus_err_sel_q;
-	  3'b001:  dbus_ready = dbus_ready_tcm;
-	  3'b010:  dbus_ready = dbus_ready_mem;
-	  3'b100:  dbus_ready = dbus_ready_io;
-	  default: dbus_ready = 1'bx;
+	  3'b000:  dbus.ready = dbus_err_sel_q;
+	  3'b001:  dbus.ready = dbus_tcm.ready;
+	  3'b010:  dbus.ready = dbus_mem.ready;
+	  3'b100:  dbus.ready = io_ready_q;
+	  default: dbus.ready = 1'bx;
 	endcase
 
 	unique case ({ibus_mem_sel_q, ibus_tcm_sel_q})
-	  2'b00:   ibus_rdata = INVALID_DATA;
-	  2'b01:   ibus_rdata = ibus_rdata_tcm;
-	  2'b10:   ibus_rdata = ibus_rdata_mem;
-	  default: ibus_rdata = 32'bx;
+	  2'b00:   ibus.rdata = INVALID_DATA;
+	  2'b01:   ibus.rdata = ibus_tcm.rdata;
+	  2'b10:   ibus.rdata = ibus_mem.rdata;
+	  default: ibus.rdata = 32'bx;
 	endcase
 
 	unique case ({ibus_mem_sel_q, ibus_tcm_sel_q})
-	  2'b00:   ibus_ready = ibus_err_sel_q;
-	  2'b01:   ibus_ready = ibus_ready_tcm;
-	  2'b10:   ibus_ready = ibus_ready_mem;
-	  default: ibus_ready = 1'bx;
+	  2'b00:   ibus.ready = ibus_err_sel_q;
+	  2'b01:   ibus.ready = ibus_tcm.ready;
+	  2'b10:   ibus.ready = ibus_mem.ready;
+	  default: ibus.ready = 1'bx;
 	endcase
      end
 
-   assign dbus_busy = dbus_busy_mem | dbus_busy_io;
+   assign dbus.busy = dbus_mem.busy | io_pending;
 
    // Fetch unit (F stage)
    wire	       f_restart;
@@ -431,10 +370,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .restart_pc	(f_restartpc),
      .restart_mcontext  (f_restart_mcontext),
      .restart_retstack  (f_restart_retstack),
-     .ibus_a		(ibus_a),
-     .ibus_rdata	(ibus_rdata),
-     .ibus_valid	(ibus_valid),
-     .ibus_ready	(ibus_ready),
+     .ibus		(ibus),
 
      .f_stall		(f_stall),
 
@@ -588,15 +524,7 @@ module myriscv #(`CONFIG) (rst_n, clk, clken,
      .rng		(rng),
      .rng_full		(rng_full),
 
-     .dbus_a		(dbus_a),
-     .dbus_valid	(dbus_valid),
-     .dbus_cbo		(dbus_cbo),
-     .dbus_wrq		(dbus_wrq),
-     .dbus_wbe		(dbus_wbe),
-     .dbus_wdata	(dbus_wdata),
-     .dbus_rdata	(dbus_rdata),
-     .dbus_ready	(dbus_ready),
-     .dbus_busy         (dbus_busy)
+     .dbus		(dbus)
      );
 
    assign f_restartpc        = m_restartpc;

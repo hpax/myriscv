@@ -1,3 +1,4 @@
+// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 //
 // Top level for benchmarking with Quartus
 //
@@ -69,8 +70,28 @@ module benchmark #(`CONFIG)
      else
        irq <= irq_in;
 
-   wire [31:0]	   cpu_io_addr;
-   assign io_addr = cpu_io_addr[30:2];
+   bus_if #(.writeable(1'b1)) io();
+   bus_if #(.address_bits(ram_size_bits), .writeable(1'b1),
+	    .snoop(1'b1), .dma(1'b1)) mem();
+
+   assign io_addr = io.a[30:2];
+   assign io_wdata = io.wdata;
+   assign io_valid = io.valid;
+   assign io_wrq = io.wrq;
+   assign io_wbe = io.wbe;
+   assign io.ready = io_ready;
+   assign io.rdata = io_rdata;
+
+   assign mem_addr = mem.a;
+   assign mem_wdata = mem.wdata;
+   assign mem_valid = mem.valid;
+   assign mem_wrq = mem.wrq;
+   assign mem_wbe = mem.wbe;
+   assign mem.ready = mem_ready;
+   assign mem.rdata = mem_rdata;
+   assign mem.cpu = mem_cpu;
+   assign mem.inval = mem_wr;
+   assign mem.a_in = mem_addr_i;
 
    myriscv #(`CFG) cpu (
 	     .rst_n		(prst_n),
@@ -79,23 +100,8 @@ module benchmark #(`CONFIG)
 	     .ctr_time		( ),
 	     .ctr_cycle		( ),
 	     .ctr_instret	( ),
-	     .io_addr		(cpu_io_addr),
-	     .io_wdata		(io_wdata),
-	     .io_valid		(io_valid),
-	     .io_wrq		(io_wrq),
-	     .io_wbe		(io_wbe),
-	     .io_ready		(io_ready),
-	     .io_rdata		(io_rdata),
-     .mem_addr (mem_addr),
-     .mem_wdata (mem_wdata),
-     .mem_valid (mem_valid),
-     .mem_wrq (mem_wrq),
-     .mem_wbe (mem_wbe),
-     .mem_ready (mem_ready),
-     .mem_rdata (mem_rdata),
-     .mem_wr (mem_wr),
-     .mem_cpu (mem_cpu),
-     .mem_addr_i (mem_addr_i),
+	     .io		(io),
+	     .mem		(mem),
 
      .irq		({irq, 1'b0}),
      .irq_intable	({{31{1'b1}}, 1'b0}),

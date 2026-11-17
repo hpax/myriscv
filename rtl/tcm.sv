@@ -1,3 +1,4 @@
+// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 //
 // tcm.sv
 //
@@ -15,25 +16,15 @@ module tcm #(`CONFIG)
     input	      clk,
     input	      clken,
 
-    input [31:0]      ibus_a,
-    input	      ibus_valid,
-    output reg [31:0] ibus_rdata,
-    output reg	      ibus_ready,
-
-    input [31:0]      dbus_a,
-    input [31:0]      dbus_wdata,
-    input	      dbus_valid,
-    input	      dbus_wrq,
-    input [3:0]	      dbus_wbe,
-    output reg [31:0] dbus_rdata,
-    output reg	      dbus_ready
+    bus_if.read_target ibus,
+    bus_if.target      dbus
     );
 
    // Convert from byte address to word address and strip unused bits
-   wire [tcm_size_bits-1:2]	 ia = ibus_a[tcm_size_bits-1:2];
-   wire [tcm_size_bits-1:2]	 da = dbus_a[tcm_size_bits-1:2];
+   wire [tcm_size_bits-1:2]	 ia = ibus.a[tcm_size_bits-1:2];
+   wire [tcm_size_bits-1:2]	 da = dbus.a[tcm_size_bits-1:2];
 
-   wire			 wren = rst_n & dbus_valid & dbus_wrq;
+   wire			 wren = rst_n & dbus.valid & dbus.wrq;
 
    localparam		 nwords = 1 << (tcm_size_bits-2);
    reg [3:0][7:0]	 mem[0:nwords-1];
@@ -60,24 +51,24 @@ module tcm #(`CONFIG)
    // XXX: clken on the reads breaks something; figure that out
    // later...
    always @(posedge clk) begin
-      ibus_rdata <= mem[ia];
-      dbus_rdata <= mem[da];
+      ibus.rdata <= mem[ia];
+      dbus.rdata <= mem[da];
 
       if (clken & wren) begin
-	 if (dbus_wbe[0]) mem[da][0] <= dbus_wdata[7:0];
-	 if (dbus_wbe[1]) mem[da][1] <= dbus_wdata[15:8];
-	 if (dbus_wbe[2]) mem[da][2] <= dbus_wdata[23:16];
-	 if (dbus_wbe[3]) mem[da][3] <= dbus_wdata[31:24];
+	 if (dbus.wbe[0]) mem[da][0] <= dbus.wdata[7:0];
+	 if (dbus.wbe[1]) mem[da][1] <= dbus.wdata[15:8];
+	 if (dbus.wbe[2]) mem[da][2] <= dbus.wdata[23:16];
+	 if (dbus.wbe[3]) mem[da][3] <= dbus.wdata[31:24];
       end
    end // always @ (posedge clk)
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	ibus_ready <= 1'b0;
-	dbus_ready <= 1'b0;
+	ibus.ready <= 1'b0;
+	dbus.ready <= 1'b0;
      end else if (clken) begin
-	ibus_ready <= ibus_valid;
-	dbus_ready <= dbus_valid;
+	ibus.ready <= ibus.valid;
+	dbus.ready <= dbus.valid;
      end
 endmodule
 
@@ -91,40 +82,30 @@ module tcm #(`CONFIG)
     input		 clk,
     input		 clken,
 
-    input [sizebits-1:0] ibus_a,
-    input		 ibus_valid,
-    output reg [31:0]	 ibus_rdata,
-    output reg		 ibus_ready,
-
-    input [sizebits-1:0] dbus_a,
-    input [31:0]	 dbus_wdata,
-    input		 dbus_valid,
-    input		 dbus_wrq,
-    input [3:0]		 dbus_wbe,
-    output reg [31:0]	 dbus_rdata,
-    output reg		 dbus_ready
+    bus_if.read_target ibus,
+    bus_if.target      dbus
     );
 
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	ibus_ready <= 1'b0;
-	dbus_ready <= 1'b0;
+	ibus.ready <= 1'b0;
+	dbus.ready <= 1'b0;
      end else if (clken) begin
-	ibus_ready <= ibus_valid;
-	dbus_ready <= dbus_valid;
+	ibus.ready <= ibus.valid;
+	dbus.ready <= dbus.valid;
      end
 
    tcm_alt tcm_alt (
-     .address_a	( dbus_a[sizebits-1:2] ),
-     .address_b ( ibus_a[sizebits-1:2] ),
-     .byteena_a ( dbus_wbe ),
+     .address_a	( dbus.a[sizebits-1:2] ),
+     .address_b ( ibus.a[sizebits-1:2] ),
+     .byteena_a ( dbus.wbe ),
      .clock     ( clk ),
-     .data_a    ( dbus_wdata ),
+     .data_a    ( dbus.wdata ),
      .data_b    ( 32'bx ),
-     .wren_a    ( dbus_valid & dbus_wrq ),
+     .wren_a    ( dbus.valid & dbus.wrq ),
      .wren_b    ( 1'b0 ),
-     .q_a       ( dbus_rdata ),
-     .q_b	( ibus_rdata )
+     .q_a       ( dbus.rdata ),
+     .q_b	( ibus.rdata )
      );
 endmodule
 `endif

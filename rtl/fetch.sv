@@ -1,7 +1,8 @@
+// Copyright (C) 2026 H. Peter Anvin <hpa@zytor.com>
 //
 // Fetch unit. The fetch stage is, in some respects, two stages:
-// F1 - produces the fetch PC and presents it on ibus_a;
-// F2 - accepts the data from ibus_rdata, and forwards it to the D stage,
+// F1 - produces the fetch PC and presents it on ibus.a;
+// F2 - accepts the data from ibus.rdata, and forwards it to the D stage,
 //      as well as provides the input data to the PC computation of
 //      the F1 stage.
 //
@@ -331,10 +332,7 @@ module fetch #(`CONFIG)
    input [31:0]	     restart_pc,		  // PC to restart from
    input	     retstack_t restart_retstack, // Retstack ptr on restart
    input	     mcontext_t restart_mcontext, // Machine context to restart from
-   output reg [31:0] ibus_a,
-   input [31:0]	     ibus_rdata,
-   output reg	     ibus_valid,
-   input	     ibus_ready,
+   bus_if.read_initiator ibus,
 
    input	     f_stall,
 
@@ -415,13 +413,13 @@ module fetch #(`CONFIG)
    // If there is no output yet, no need to stall
    wire		     f_stalled = f_stall & d_valid_i;
 
-   // f2_have_data is true if ibus_rdata contains usable data
+   // f2_have_data is true if ibus.rdata contains usable data
    reg		     ibus_valid_q;
-   wire		     f2_have_data = ibus_valid_q & ibus_ready & ~f_stalled;
+   wire		     f2_have_data = ibus_valid_q & ibus.ready & ~f_stalled;
 
    // This benefits simulation by catching data read from the
    // bus while not ready.
-   wire [31:0]	     iword = ibus_ready ? ibus_rdata : 32'bx;
+   wire [31:0]	     iword = ibus.ready ? ibus.rdata : 32'bx;
 
    // Do we have a usable instruction for the D stage?
    always @(*)
@@ -450,21 +448,21 @@ module fetch #(`CONFIG)
      end
 
    // Are we actually reading?
-   assign ibus_valid = rst_n & ~restart;
+   assign ibus.valid = rst_n & ~restart;
 
    reg [31:0] ibus_a_q;
 
-   // Advance ibus_a if and only if the input was accepted.
+   // Advance ibus.a if and only if the input was accepted.
    // Unless this is a predicted branch, always advance to the next
    // *fetch datum*, not necessarily the next *instruction*.
    assign f1_advance = f2_have_data & ~(pref_valid & f2_is_16);
 
    always @(*)
      if (br_take && f2_advance) begin
-	ibus_a = next_pc & PC_MASK;
-	ibus_a[1:0] = 2'b00;	// Meaningless bits
+	ibus.a = next_pc & PC_MASK;
+	ibus.a[1:0] = 2'b00;	// Meaningless bits
      end else begin
-	ibus_a = add_pc(ibus_a_q, {f1_advance, 2'b00});
+	ibus.a = add_pc(ibus_a_q, {f1_advance, 2'b00});
      end
 
    // Early register file decode; this should be possible to do
@@ -515,8 +513,8 @@ module fetch #(`CONFIG)
 	    end
 	  else
 	    begin
-	       ibus_valid_q	<= ibus_valid;
-	       ibus_a_q         <= ibus_a;
+	       ibus_valid_q	<= ibus.valid;
+	       ibus_a_q         <= ibus.a;
 
 	       if (f2_have_data) begin
 		  pref_16    <= iword[31:16];
