@@ -391,7 +391,7 @@ module backend #(`CONFIG)
       // the remaining bits get computed in the E stage.
       d_addr1	      = d_op.addr.rs1 ? d_srs1 << d_op.addr.rs1_shift : 'b0;
       d_addr2	      = d_op.addr.rs2 ? d_srs2 : d_op.imm;
-      d_addr	      = d_addr1[car_bit:0] + d_addr2[car_bit:0];
+      d_addr	      = d_addr1 + d_addr2;
       dcache_lookup_a = d_addr;
    end
 
@@ -400,25 +400,22 @@ module backend #(`CONFIG)
    // but don't compute the higher bits in the D stage (except from
    // the carry-out of the low part calculation.)
    //
-   logic [31:0]	d_addr_q;
    logic [31:0]	d_addr1_q;
    logic [31:0]	d_addr2_q;
    always @(negedge rst_n or posedge clk)
      if (~rst_n) begin
-	d_addr_q  <= 'bx;
 	d_addr1_q <= 'bx;
 	d_addr2_q <= 'bx;
      end else if (clken) begin
 	if (!d_src_hold) begin
-	   d_addr_q  <= d_addr;
-	   d_addr1_q <= { d_addr1[31:car_bit+1], {car_bit+1{1'b0}} };
-	   d_addr2_q <= { d_addr2[31:car_bit+1], {car_bit+1{1'b0}} };
+	   d_addr1_q <= d_addr1;
+	   d_addr2_q <= d_addr2;
 	end
      end
 
    logic [31:0] e_addr;
    always_comb begin
-      e_addr = d_addr_q + d_addr1_q + d_addr2_q;
+      e_addr = d_addr1_q + d_addr2_q;
    end
 
    // ALU
