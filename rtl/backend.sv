@@ -672,12 +672,23 @@ module backend #(`CONFIG)
 	   $display("(%d) E: RESET %x",
 		    $time/CLOCK, RESET_PC & PC_MASK);
 	 end else if (e_kill) begin
-	    if (e_op.undead)
-	      $display("(%d) E: KILL  %x -> %x  %p",
-		       $time/CLOCK, e_op.pc, e_restartpc, e_op.itype);
+	    string why;
+	    if (e_trap)
+	      why = "TRAP";
+	    else if (e_take_irq)
+	      why = "IRQ";
+	    else if (e_mispredict)
+	      why = "MISS";
+	    else if (e_fencei)
+	      why = "FE.I";
 	    else
-	      $display("(%d) E: KILL  **dead** -> %x  %p",
-		       $time/CLOCK, e_restartpc, e_op.itype);
+	      why = "KILL";
+	    if (e_op.undead)
+	      $display("(%d) E: %s  %x -> %x  %p",
+		       $time/CLOCK, why, e_op.pc, e_restartpc, e_op.itype);
+	    else
+	      $display("(%d) E: %s  **dead** -> %x  %p",
+		       $time/CLOCK, why, e_restartpc, e_op.itype);
 	 end else if (e_accept & ~e_stall) begin
 	   $display("(%d) E: OK    %x -> %x  %p",
 		    $time/CLOCK, e_op.pc, e_restartpc, e_op.itype);
