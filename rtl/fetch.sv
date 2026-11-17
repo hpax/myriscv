@@ -460,7 +460,7 @@ module fetch #(`CONFIG)
    assign f1_advance = f2_have_data & ~(pref_valid & f2_is_16);
 
    always @(*)
-     if (br_take) begin
+     if (br_take && f2_advance) begin
 	ibus_a = next_pc & PC_MASK;
 	ibus_a[1:0] = 2'b00;	// Meaningless bits
      end else begin
@@ -522,7 +522,7 @@ module fetch #(`CONFIG)
 		  pref_16    <= iword[31:16];
 		  pref_valid <= f1_advance;
 	       end
-	       if (br_take)
+	       if (br_take && f2_advance)
 		 pref_valid  <= 1'b0;
 
 	       if (~f_stalled)
