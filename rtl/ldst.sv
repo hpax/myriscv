@@ -44,7 +44,7 @@ module ldst #(`CONFIG) (
 		input		  dbus_ready
 		);
 
-   // Handling the upper word of a misaligned operation?
+   // Select the next request beat in the current response cycle.
    reg			      upper_word;
 
    // Hold output address while busy; also increments for the second word.
@@ -66,7 +66,7 @@ module ldst #(`CONFIG) (
    cbo_t		      memop_cbo_q;
 
    assign dbus_a	= use_latched ?
-			  latched_a + {upper_word_q, 2'b00} : addr;
+			  latched_a + {upper_word, 2'b00} : addr;
    assign dbus_valid	= rst_n &
 			  (dbus_valid_q ? (~dbus_ready | upper_word) : valid);
    assign dbus_wrq      = use_latched ? memop_st_q : memop_st;
@@ -76,7 +76,7 @@ module ldst #(`CONFIG) (
    // fragment of the following store. The pipeline holds the following
    // store in E while the first one completes, so its lower fragment is
    // available here before the upper fragment is accepted.
-   wire write_combine = use_latched && upper_word_q && memop_st_q &&
+   wire write_combine = use_latched && upper_word && memop_st_q &&
 			valid && memop_st && !cbo_valid(memop_cbo) &&
 			(latched_a[31:2] + 1'b1 == addr[31:2]) &&
 			({ latched_a[31:2] + 1'b1, 2'b00 } < uc_base);
@@ -205,7 +205,7 @@ module ldst #(`CONFIG) (
 
    always @(*)
      if (use_latched) begin
-	dbus_wbe   = latched_wbe[upper_word_q];
+	dbus_wbe   = latched_wbe[upper_word];
 	dbus_wdata = latched_wdata;
 	if (write_combine) begin
 	   dbus_wbe |= bytemask[0];
