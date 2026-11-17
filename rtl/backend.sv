@@ -684,9 +684,11 @@ module backend #(`CONFIG)
 	 if (~rst_n) begin
 	   $display("(%d) E: RESET %x",
 		    $time/CLOCK, RESET_PC & PC_MASK);
-	 end else if (e_kill) begin
+	 end else begin
 	    string why;
-	    if (e_trap)
+	    if (~e_kill)
+	      why = (e_accept & ~e_stall) ? "OK" : "";
+	    else if (e_trap)
 	      why = "TRAP";
 	    else if (e_take_irq)
 	      why = "IRQ";
@@ -694,17 +696,26 @@ module backend #(`CONFIG)
 	      why = "MISS";
 	    else if (e_fencei)
 	      why = "FE.I";
+	    else if (e_accept && e_op.itype == INSN_MRET)
+	      why = "MRET";
+	    else if (e_accept && csrw_user_context)
+	      why = "UCTX";
+	    else if (e_accept && e_op.itype == INSN_XALU &&
+		     e_op.funct3 == 3'b011)
+	      why = "ADD.S";
 	    else
 	      why = "KILL";
-	    if (e_op.undead)
-	      $display("(%d) E: %s  %x -> %x  %p",
-		       $time/CLOCK, why, e_op.pc, e_restartpc, e_op.itype);
-	    else
-	      $display("(%d) E: %s  **dead** -> %x  %p",
-		       $time/CLOCK, why, e_restartpc, e_op.itype);
-	 end else if (e_accept & ~e_stall) begin
-	   $display("(%d) E: OK    %x -> %x  %p",
-		    $time/CLOCK, e_op.pc, e_restartpc, e_op.itype);
+	    if (why != "") begin
+	       string pc_str;
+	       if (e_op.undead)
+		 pc_str = $sformatf("%x", e_op.pc);
+	       else
+		 pc_str = "--dead--";
+
+	       $display("(%d) E: %-5s %s [%0d] -> %x  %p",
+			$time/CLOCK, why, pc_str, e_op.mcontext.m,
+			e_restartpc, e_op.itype);
+	    end
 	 end
       end
    end
