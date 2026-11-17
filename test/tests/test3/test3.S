@@ -135,7 +135,7 @@ mult_test:
 	crlf
 
 	/* Funny instructions */
-	add.xu sp,sp,16
+	add.xu a0,sp,16
 	sh2sub a0,a1,a2
 	baeqz a0,a1,1f
 	nop
