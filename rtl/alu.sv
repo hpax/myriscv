@@ -230,7 +230,7 @@ module alu_decode #(`CONFIG)
 		    7'b000_01??: begin
 		       if (WITH_Xpabdds) begin
 			  ctl.unit  = ALUSRC_DDS;
-			  ctl.bitop = funct3[1:0];
+			  ctl.bitop = funct7[1:0];
 		       end
 		    end
 		    default: begin
@@ -615,11 +615,13 @@ module dds
       logic [3:0][3:0] dq;
       logic [3:0][7:0] qq;
 
+      dd = src1;
+
       for (int i = 0; i < 4; i++)
 	dq[i] = dd[3-i][3:0] + (dd[3-i][3:0] >= 4'd5 ? 4'd3 : 4'd0);
 
       dq  <<= 1'b1;
-      dq[0] = ctl[0] ? (src2[3:0] >= 4'd5) : src2[31];
+      dq[0][0] = ctl[0] ? (src2[3:0] >= 4'd5) : src2[31];
 
       for (int i = 0; i < 4; i++) begin
 	 logic nz;
