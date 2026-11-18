@@ -271,6 +271,51 @@ Private instruction set extensions:
 		packb is encoded the same as the pack and packh
 		instructions, but with funct3 == 110.
 
+	WITH_Xpabdds:
+		"Double Dabble Shift"
+		Bitwise conversion of binary to ASCII
+
+			dds.[bd] rd, rs1, rs2
+
+		.b - shift in binary bit rs2[31]
+		.d - shift in the top bit of decimal digit rs2[7:0]
+		     (that is, shift in a binary 1 if that digit
+		     is '5' or higher.)
+
+		After 16 iterations, four ASCII digits are generated,
+		in reverse register order (most significant digit in
+		register bits [7:0]) so they will be in bigendian
+		(ASCII) order once written to memory.
+
+		The upper 4 bits of each byte is generated as:
+
+		- if bit 4 is set on input, the byte is set to '0' (0x30).
+		- otherwise, bit 5 is left alone and the rest are
+		  cleared, allowing for zero or space padding.
+
+		The bit 4 behavior ensures that once a digit has been
+		set to anything other than '0' (0x31-0x39) it will
+		remain a printable digit.
+
+		To get null padding, initialize registers to zero;
+		space padding, initialize to "    ", and zero padding,
+		initialize to "0000". For the least significant digit,
+		initializing it to "0" rather than the padding value
+		will ensure that at least one digit is printed. Note
+		that the least significant digit is in the *upper*
+		part of the register, so a typical initialization
+		value would be 0x30000000 or 0x30202020.
+
+		Encoding:
+
+		instr[6:0]	= 0101011 (CUSTOM1)
+		instr[11:7]	= rd
+		instr[14:12]	= 110
+		instr[19:15]	= rs1
+		instr[24:20]	= rs2
+		instr[25]	= .d flag
+		instr[31:26]	= 000010
+
 	WITH_Xpacecall:
 		Additional RVC encoding:
 			c.ecall	- opcode 0x8002
