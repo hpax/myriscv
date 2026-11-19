@@ -314,7 +314,7 @@ Private instruction set extensions:
 		instr[19:15]	= rs1
 		instr[24:20]	= rs2
 		instr[25]	= .d flag
-		instr[31:26]	= 000010
+		instr[31:26]	= 000100
 
 	WITH_Xpacecall:
 		Additional RVC encoding:

@@ -227,7 +227,7 @@ module alu_decode #(`CONFIG)
 			  ctl.zsrc1  = 1'b1;
 		       end
 		    end
-		    7'b000_01??: begin
+		    7'b000_10??: begin
 		       if (WITH_Xpabdds) begin
 			  ctl.unit  = ALUSRC_DDS;
 			  ctl.bitop = funct7[1:0];
