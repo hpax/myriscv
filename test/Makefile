@@ -101,6 +101,8 @@ clean:
 		| xargs -rt rm -f
 	$(MAKE) -C $(BENCH) clean
 
+CFLAGS_lib/utoa.c += -fno-unroll-loops
+
 tests.d: $(TESTDIRS)
 	( for d in $(TESTDIRS); do \
 		e="$$d/$$(basename $$d).elf" ; \

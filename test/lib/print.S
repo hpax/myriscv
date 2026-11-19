@@ -55,13 +55,15 @@ _print_dec:
 	beqz	a0, 4f
 
 	add	sp, sp, -32
-	sw	a1, 16(sp)
-	sw	a2, 20(sp)
-	sw	a3, 24(sp)
-	sw	a4, 28(sp)
+	sw	a1, 12(sp)
+	sw	a2, 16(sp)
+	sw	a3, 20(sp)
+	sw	a4, 24(sp)
+	// sw	a5, 28(sp)
 
 	li	a4, 32
 	clz	a1, a0
+	and	a1, a1, ~3
 	sll	a0, a0, a1
 	sub	a4, a4, a1
 
@@ -73,9 +75,18 @@ _print_dec:
 1:
 	dds.d	a3, a3, a2
 	dds.d	a2, a2, a1
-	dds.b	a1, a1, a0
-	sll	a0, a0, 1
-	add	a4, a4, -1
+	dds.b	a1, a1, a0, 0
+	dds.d	a3, a3, a2
+	dds.d	a2, a2, a1
+	dds.b	a1, a1, a0, 1
+	dds.d	a3, a3, a2
+	dds.d	a2, a2, a1
+	dds.b	a1, a1, a0, 2
+	dds.d	a3, a3, a2
+	dds.d	a2, a2, a1
+	dds.b	a1, a1, a0, 3
+	sll	a0, a0, 4
+	add	a4, a4, -4
 	bnez	a4, 1b
 
 	sw	a3,     (sp)
@@ -102,10 +113,11 @@ _print_dec:
 	putcr	a0
 	blt	a4, a1, 2b
 
-	lw	a1, 16(sp)
-	lw	a2, 20(sp)
-	lw	a3, 24(sp)
-	lw	a4, 28(sp)
+	lw	a1, 12(sp)
+	lw	a2, 16(sp)
+	lw	a3, 20(sp)
+	lw	a4, 24(sp)
+	// lw	a5, 28(sp)
 	add	sp, sp, 32
 
 	ret

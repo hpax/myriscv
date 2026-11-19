@@ -49,14 +49,20 @@ unsigned int ___myriscv_dds_const(unsigned int __p, bool __i)
 }
 
 static inline __attribute__((__const__))
-unsigned int __myriscv_dds_b(unsigned int __p, unsigned int __i)
+unsigned int __myriscv_dds_b(unsigned int __p, unsigned int __i,
+			     unsigned int __s)
 {
     if (___use_xpaimy(__p, __i, 0)) {
 	unsigned int __v;
-	asm("dds.b %0, %z1, %z2" : "=r" (__v) : "Jr" (__p), "Jr" (__i));
+	if (!__builtin_constant_p(__s) || __s > 3U) {
+	    __i >>= __s;
+	    __s = 0;
+	}
+	asm("dds.b %0, %z1, %z2, %3"
+	    : "=r" (__v) : "Jr" (__p), "Jr" (__i), "i" (__s));
 	return __v;
     } else {
-	return ___myriscv_dds_const(__p, __i >> 31);
+	return ___myriscv_dds_const(__p, __i >> (31U - __s));
     }
 }
 
@@ -68,7 +74,7 @@ unsigned int __myriscv_dds_d(unsigned int __p, unsigned int __i)
 	asm("dds.d %0, %z1, %z2" : "=r" (__v) : "Jr" (__p), "Jr" (__i));
 	return __v;
     } else {
-	return ___myriscv_dds_const(__p, (__i & 15) >= 5);
+	return ___myriscv_dds_const(__p, (__i & 15) >= 5U);
     }
 }
 
