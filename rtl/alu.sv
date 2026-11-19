@@ -227,10 +227,10 @@ module alu_decode #(`CONFIG)
 			  ctl.zsrc1  = 1'b1;
 		       end
 		    end
-		    7'b000_10??: begin
+		    7'b000_1???: begin
 		       if (WITH_Xpabdds) begin
-			  ctl.unit  = ALUSRC_DDS;
-			  ctl.bitop = funct7[1:0];
+			  ctl.unit         = ALUSRC_DDS;
+			  ctl.shiftop.wimm = op.funct7[4:0];
 		       end
 		    end
 		    default: begin
@@ -606,7 +606,7 @@ module dds
   (
    input  logic [31:0] src1,
    input  logic [31:0] src2,
-   input  logic  [1:0] ctl,
+   input  logic  [2:0] ctl,
    output logic [31:0] q
 );
 
@@ -621,7 +621,7 @@ module dds
 	dq[i] = dd[3-i][3:0] + (dd[3-i][3:0] >= 4'd5 ? 4'd3 : 4'd0);
 
       dq  <<= 1'b1;
-      dq[0][0] = ctl[0] ? (src2[3:0] >= 4'd5) : src2[31];
+      dq[0][0] = ctl[2] ? (src2[3:0] >= 4'd5) : src2[31-ctl[1:0]];
 
       for (int i = 0; i < 4; i++) begin
 	 logic nz;
@@ -806,7 +806,7 @@ module alu #(`CONFIG)
    dds dds (
       .src1 (src1),
       .src2 (src2),
-      .ctl  (ctl.bitop),
+      .ctl  (ctl.shiftop.wimm[2:0]),
       .q    (dds_out)
    );
 

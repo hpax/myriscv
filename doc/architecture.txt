@@ -275,17 +275,20 @@ Private instruction set extensions:
 		"Double Dabble Shift"
 		Bitwise conversion of binary to ASCII
 
-			dds.[bd] rd, rs1, rs2
+			dds.b	rd, rs1, rs2, imm2
+			dds.d	rd, rs1, rs2
 
-		.b - shift in binary bit rs2[31]
-		.d - shift in the top bit of decimal digit rs2[7:0]
-		     (that is, shift in a binary 1 if that digit
-		     is '5' or higher.)
+		.b - shift in the topmost (sign bit) of rs2 << imm2
+		.d - shift in shift in a binary 1 if rs2[3:0] >= 5
+		     (i.e. that digit is '5' or higher.)
 
 		After 16 iterations, four ASCII digits are generated,
 		in reverse register order (most significant digit in
 		register bits [7:0]) so they will be in bigendian
 		(ASCII) order once written to memory.
+
+		The imm2 is intended to accelerate unrolled loops by
+		only requiring a separate shift every four iterations.
 
 		The upper 4 bits of each byte is generated as:
 
@@ -313,8 +316,9 @@ Private instruction set extensions:
 		instr[14:12]	= 110
 		instr[19:15]	= rs1
 		instr[24:20]	= rs2
-		instr[25]	= .d flag
-		instr[31:26]	= 000100
+		instr[26:25]    = imm2 (00 for dds.d)
+		instr[27]	= 0 for dds.b, 1 dds.d
+		instr[31:28]	= 0001
 
 	WITH_Xpacecall:
 		Additional RVC encoding:
