@@ -5,6 +5,7 @@ riscv_tuple	:= riscv32-myriscv-none-elf
 # -menable-experimental-extensions needed for the Zilx extension
 riscv_target_flags :=	-target riscv32-myriscv-none-elf -mcpu=myriscv \
 			-menable-experimental-extensions \
+			-mno-strict-align \
 			-O2 -glldb \
 			-ftls-model=local-exec \
 			-fno-math-errno -fno-trapping-math \

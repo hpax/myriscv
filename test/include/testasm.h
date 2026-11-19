@@ -62,7 +62,8 @@
 	.option norelax
 	sw \reg,%lo(STOP)(zero)
 	.option pop
-1:	wfi zero, zero
+	li a0,-1
+1:	wfi zero, a0
 	j 1b
 .endm
 .macro finish status=TEST_STOP

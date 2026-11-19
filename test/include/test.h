@@ -25,6 +25,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "myriscv.h"
+
 #define noreturn	__attribute__((__noreturn__))
 #define unreachable()	__builtin_unreachable()
 #define likely(x)	__builtin_expect(!!(x), 1)
