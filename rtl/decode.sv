@@ -143,15 +143,29 @@ module decode_comb #(`CONFIG)
 	  end
 
 	  BRANCH: begin
-	     if (!STRICT_UNDEFINED || WITH_Xpaicmpand ||
-		 op.funct3[2:1] != 2'b01)
+	     if (!STRICT_UNDEFINED ||
+		 ((WITH_Xpaicmpand || op.funct3[2:1] != 2'b01)))
 	       op.itype		= INSN_BR;
 	     op.rs1_valid	= 1'b1;
 	     op.rs2_valid	= 1'b1;
 	     op.imm		= b_imm;
 	     op.imm_pc		= 1'b1;
 	     op.addr.rs1	= 1'b0;
-	     op.addr.rs2        = 1'b0;
+	     op.addr.rs2	= 1'b0;
+	  end
+
+	  BRANCH_PT, BRANCH_PN: begin
+	     if (WITH_Xpaibph) begin
+		if (!STRICT_UNDEFINED ||
+		    ((WITH_Xpaicmpand || op.funct3[2:1] != 2'b01)))
+		  op.itype	= INSN_BR;
+		op.rs1_valid   = 1'b1;
+		op.rs2_valid   = 1'b1;
+		op.imm	       = b_imm;
+		op.imm_pc      = 1'b1;
+		op.addr.rs1    = 1'b0;
+		op.addr.rs2    = 1'b0;
+	     end
 	  end
 
 	  TRAPC_IMM, TRAPC: if (WITH_Xpaitrap) begin

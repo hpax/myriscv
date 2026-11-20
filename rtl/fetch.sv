@@ -206,13 +206,11 @@ module predict_branch #(`CONFIG)
 	       3'b?01: begin		// C.J(AL)
 		  take    = 1'b1;	// Unconditional
 		  is_call = ~i[15];	// C.JAL is always a call
-		  if (take)
-		    pred_pc = cbj_pc;
+		  pred_pc = cbj_pc;
 	       end
 	       3'b11?: begin		// C.BEQZ/C.BNEZ
-		  take   = cb_imm[8];	// Predict taken if backwards
-		  if (take)
-		    pred_pc = cbj_pc;
+		  take    = cb_imm[8];	// Predict taken if backwards
+		  pred_pc = cbj_pc;
 	       end
 	       default: begin
 		  // Default
@@ -281,10 +279,16 @@ module predict_branch #(`CONFIG)
 	     end
 	  end
 	  BRANCH: begin
-	     take   = b_imm[12];	// Predict taken if backwards
-	     if (take)
-	       pred_pc = bj_pc;
+	     // BRANCH: predict if taken backwards
+	     take    = b_imm[12];
+	     pred_pc = bj_pc;
 	  end
+	  BRANCH_PT: if (WITH_Xpaibph) begin
+	     // BRANCH_PT: always predict taken
+	     take    = 1'b1;
+	     pred_pc = bj_pc;
+	  end
+	  // BRANCH_PN: predict never taken - no special handling
 	  JT: if (WITH_Xpaijt) begin    // Predict argument = 0 for simplicity
 	     take    = 1'b1;
 	     pred_pc = bj_pc;
@@ -300,13 +304,8 @@ module predict_branch #(`CONFIG)
 	  end
 	endcase // unique casez (i[6:0])
 
-	next_pc = pred_pc;
-	br_take = take;
-
-	if (~f2_valid) begin
-	   next_pc = succ_pc;
-	   br_take = 1'b0;
-	end
+	br_take = take & f2_valid;
+	next_pc = (br_take ? pred_pc : succ_pc) & PC_MASK;
      end
 
    always @(posedge clk or negedge rst_n)

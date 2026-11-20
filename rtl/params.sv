@@ -20,6 +20,7 @@ parameter bit WITH_Xpabextn		   = 1'b1; // arbitrary sign/zero extend
 parameter bit WITH_Zmmul		   = 1'b1;
 parameter bit WITH_Zicond		   = 1'b1;
 parameter bit WITH_minmax		   = 1'b1;
+parameter bit WITH_Xpaibph                 = 1'b1; // branch predict hints
 parameter bit WITH_Xpaicmpand		   = 1'b1; // baeqz, banez
 parameter bit WITH_Xpaicneg                = 1'b1; // cneg, cnegi, cnegn
 parameter bit WITH_Xpaisetx		   = 1'b1; // addtional SET operations

@@ -56,7 +56,9 @@ Private instruction set extensions:
 	Xpabextr	- Bitfield extraction
 	Xpabextn	- Arbitrary width sign and zero extensions
 	Xpabpack	- pack, packh, packb
+	Xpabdds		- Double dabble shift
 	Xpaicneg	- Conditional negate
+	Xpaibph		- Branch prediction hints
 	Xpailai		- Load address immediate
 	Xpaitrap	- Conditional traps
 	Xpacecall	- c.ecall opcode
@@ -319,6 +321,19 @@ Private instruction set extensions:
 		instr[26:25]    = imm2 (00 for dds.d)
 		instr[27]	= 0 for dds.b, 1 dds.d
 		instr[31:28]	= 0001
+
+	WITH_Xpaibph:
+		Branch with prediction hints
+
+		BRANCH instructions variants with:
+		       .pt suffix   - always predict taken
+		       .pn suffix   - always predict not taken
+
+		Encoding:
+
+		instr[6:0]	= 1000011 (MADD) for .pt
+				  1000111 (MSUB) for .pn
+		instr[31:7]	= same as the corresponding BRANCH instruction
 
 	WITH_Xpacecall:
 		Additional RVC encoding:
