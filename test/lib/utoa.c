@@ -22,11 +22,14 @@
 #define UNROLL_BITS 1
 #endif
 
+#define noinline	__attribute__((__noinline__))
+#define doinline	__attribute__((__always_inline__))
+
 /*
  * Convert val (0 <= val < 10^4) to 4 big-endian ASCII digits in a uint32_t,
  * NUL-padded in the least-significant bytes with at least one digit ('0'..'9').
  */
-static uint32_t dds_chunk4_trim(uint32_t val)
+static doinline uint32_t dds_chunk4_trim(uint32_t val)
 {
     uint32_t d0 = 0x30000000u; /* "\0\0\00" (LSD in bits [31:24]) */
 
@@ -48,6 +51,15 @@ static uint32_t dds_chunk4_trim(uint32_t val)
 }
 
 /*
+ * Write a 4-byte dds word to a pointer.
+ */
+static doinline char *store4(char *dst, uint32_t w)
+{
+    *(uint32_t *)dst = w;
+    return dst + 4;
+}
+
+/*
  * Write a NUL-padded 4-byte dds word (guaranteed non-zero) to dst,
  * stripping leading NULs. Returns pointer past the written digits.
  */
@@ -57,14 +69,15 @@ static char *store_trimmed4(char *dst, uint32_t w)
     unsigned len  = 4 - (skip >> 3);       /* 1..4 ASCII digits */
 
     w >>= skip;
-    *(uint32_t *)dst = w;
+    store4(dst, w);
     return dst + len;
 }
 
 struct dword {
     uint32_t lo, hi;
 };
-static struct dword dds_chunk8(uint32_t val, struct dword w)
+/* noinline here saves a lot of space... */
+static noinline struct dword dds_chunk8(uint32_t val, struct dword w)
 {
     if (likely(val)) {
 	int lz = __builtin_clz(val) & ~UNROLL_MASK;
@@ -92,8 +105,7 @@ static struct dword dds_chunk8(uint32_t val, struct dword w)
  * (*hi_out, *lo_out). Because val >= 10^4, *hi_out is guaranteed non-zero
  * and all 4 bytes of *lo_out are guaranteed printable ('0'..'9').
  */
-static __attribute((__always_inline__))
-struct dword dds_chunk8_trim(uint32_t val)
+static doinline struct dword dds_chunk8_trim(uint32_t val)
 {
     struct dword w = { .lo = 0x30000000, .hi = 0 };
     return dds_chunk8(val, w);
@@ -103,8 +115,7 @@ struct dword dds_chunk8_trim(uint32_t val)
  * Convert val (0 <= val < 10^8) to 8 zero-padded big-endian ASCII digits
  * ("dddddddd") across (*hi_out, *lo_out).
  */
-static __attribute((__always_inline__)) inline
-struct dword dds_chunk8_zpad(uint32_t val)
+static doinline struct dword dds_chunk8_zpad(uint32_t val)
 {
     struct dword w = { .lo = 0x30303030, .hi = 0x30303030 };
     return dds_chunk8(val, w);
@@ -139,6 +150,7 @@ static uint64_t divmod_1e8_u64(uint64_t n, uint32_t *rem)
     return q;
 }
 #else
+/* Assume the compiler is competent enough */
 static uint64_t divmod_1e8_u64(uint64_t n, uint32_t *rem)
 {
     uint64_t q = n / UINT32_C(100000000);
@@ -153,7 +165,7 @@ static uint64_t divmod_1e8_u64(uint64_t n, uint32_t *rem)
  * the end of the number.
  * Returns pointer to the terminating '\0'.
  */
-char *utoa32_dds(uint32_t val, char *buf)
+char *utoa32_dds(char *buf, uint32_t val)
 {
     /* Fast path: 1..4 digits (single-register dds.b loop, <= 14 iters) */
     if (likely(val < UINT32_C(10000))) {
@@ -166,8 +178,7 @@ char *utoa32_dds(uint32_t val, char *buf)
     if (likely(val < UINT32_C(100000000))) {
 	struct dword w =  dds_chunk8_trim(val);
         buf = store_trimmed4(buf, w.hi);
-        buf += 4;
-        *(uint32_t *)buf = w.lo;
+	buf = store4(buf, w.lo);
         *buf = '\0';
         return buf;
     }
@@ -179,9 +190,8 @@ char *utoa32_dds(uint32_t val, char *buf)
     buf = store_trimmed4(buf, dds_chunk4_trim(q));
 
     struct dword w = dds_chunk8_zpad(r);
-    ((uint32_t *)buf)[0] = w.hi;
-    ((uint32_t *)buf)[4] = w.lo;
-    buf += 8;
+    buf = store4(buf, w.hi);
+    buf = store4(buf, w.lo);
     *buf = '\0';
     return buf;
 }
@@ -192,38 +202,47 @@ char *utoa32_dds(uint32_t val, char *buf)
  * the end of the number.
  * Returns pointer to the terminating '\0'.
  */
-char *utoa64_dds(uint64_t val, char *buf)
+#define RECURSE 2		/* 0, 1 or 2 levels */
+
+char *utoa64_dds(char *buf, uint64_t val)
 {
     /* Fast path: values fitting in 32 bits avoid 64-bit division entirely */
-    if (likely(!(val >> 32))) {
-        return utoa32_dds((uint32_t)val, buf);
-    }
+    if (likely(!(val >> 32)))
+        return utoa32_dds(buf, val);
 
     /* Split lowest 8 decimal digits: val = q1 * 10^8 + r0 */
     uint32_t r0;
     uint64_t q1 = divmod_1e8_u64(val, &r0);
 
-    if (likely(q1 < UINT64_C(100000000))) {
-        /* 10..16 digits total: format upper 2..8 digits via 32-bit path */
-        buf = utoa32_dds((uint32_t)q1, buf);
+#if RECURSE >= 2
+    /* Allow two levels of recursion */
+    buf = utoa64_dds(buf, q1);
+#else
+    if (likely(!(q1 >> 32))) {
+	/* Max (2^32-1) * 10^8, can use the 32-bit path for upper part */
+	buf = utoa32_dds(buf, q1);
     } else {
         /* 17..20 digits total: split middle 8 digits (q1 = q2 * 10^8 + r1) */
+#if RECURSE >= 1
+	/* For the really large numbers, one level of recursion */
+	buf = utoa64_dds(buf, q1);
+#else
         uint32_t r1;
         uint32_t q2 = divmod_1e8_u64(q1, &r1); /* 1 <= q2 <= 1844 (< 10^4) */
 
         buf = store_trimmed4(buf, dds_chunk4_trim(q2));
 
         struct dword w1 = dds_chunk8_zpad(r1);
-	((uint32_t *)buf)[0] = w1.hi;
-	((uint32_t *)buf)[1] = w1.lo;
-        buf += 8;
+	buf = store4(buf, w1.hi);
+	buf = store4(buf, w1.lo);
+#endif
     }
+#endif
 
     /* Append lowest 8 zero-padded digits */
     struct dword w0 = dds_chunk8_zpad(r0);
-    ((uint32_t *)buf)[0] = w0.hi;
-    ((uint32_t *)buf)[1] = w0.lo;
-    buf += 8;
+    buf = store4(buf, w0.hi);
+    buf = store4(buf, w0.lo);
     *buf = '\0';
     return buf;
 }
