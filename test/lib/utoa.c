@@ -77,7 +77,7 @@ struct dword {
     uint32_t lo, hi;
 };
 /* noinline here saves a lot of space... */
-static noinline struct dword dds_chunk8(uint32_t val, struct dword w)
+static noinline struct dword dds_chunk8(struct dword w, uint32_t val)
 {
     if (likely(val)) {
 	int lz = __builtin_clz(val) & ~UNROLL_MASK;
@@ -108,7 +108,7 @@ static noinline struct dword dds_chunk8(uint32_t val, struct dword w)
 static doinline struct dword dds_chunk8_trim(uint32_t val)
 {
     struct dword w = { .lo = 0x30000000, .hi = 0 };
-    return dds_chunk8(val, w);
+    return dds_chunk8(w, val);
 }
 
 /*
@@ -118,7 +118,7 @@ static doinline struct dword dds_chunk8_trim(uint32_t val)
 static doinline struct dword dds_chunk8_zpad(uint32_t val)
 {
     struct dword w = { .lo = 0x30303030, .hi = 0x30303030 };
-    return dds_chunk8(val, w);
+    return dds_chunk8(w, val);
 }
 
 #if 0
