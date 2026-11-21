@@ -78,4 +78,33 @@ unsigned int __myriscv_dds_d(unsigned int __p, unsigned int __i)
     }
 }
 
+static inline __attribute__((__const__)) unsigned int
+__myriscv_extru(unsigned int __v, unsigned int __s, unsigned int __w)
+{
+    if (___use_xpaimy(__v, __s, 0) && __builtin_constant_p(__w)) {
+	asm("extru %0, %1, %2, %3"
+	    : "=r" (__v)
+	    : "Jr" (__v), "Jr" (__s), "i" (__w));
+    } else {
+	__v >>= __s;
+	__w = 32 - __w;
+	__v = __v << __w >> __w;
+    }
+    return __v;
+}
+static inline __attribute__((__const__)) int
+__myriscv_extrs(int __v, unsigned int __s, unsigned int __w)
+{
+    if (___use_xpaimy(__v, __s, 0) && __builtin_constant_p(__w)) {
+	asm("extrs %0, %1, %2, %3"
+	    : "=r" (__v)
+	    : "Jr" (__v), "Jr" (__s), "i" (__w));
+    } else {
+	__v >>= __s;
+	__w = 32 - __w;
+	__v = __v << __w >> __w;
+    }
+    return __v;
+}
+
 #endif /* _MYRISCV_H */

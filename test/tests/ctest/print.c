@@ -31,7 +31,7 @@ static void _printxn(uint32_t v, int n)
     n <<= 2;
     do {
 	n -= 4;
-	unsigned int d = (v >> n) & 15;
+	unsigned int d = __myriscv_extru(v, n, 4);
 	putc(hexdigits[d]);
     } while (n);
 }
