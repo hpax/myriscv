@@ -6,7 +6,8 @@
 `timescale 1 ps / 1 ps
 
 module test #(
-  parameter int	NUM_IRQS = 31
+   parameter int NUM_IRQS = 31,
+   parameter bit TRACE_PC = 1'b0
    );
 
    localparam int IRQ_BITS = $clog2(NUM_IRQS+1);
@@ -65,7 +66,7 @@ module test #(
      .ram_size_bits	(ram_size_bits),
      .WITH_mscratch     (1'b1),		// For CSR ISA testing
      .CLOCK             (CLOCK),	// clock scaling factor for $displays
-     .TRACE_PC          (1'b1)		// Enable/disable tracing for this run
+     .TRACE_PC          (TRACE_PC)	// Enable/disable tracing for this run
    ) cpu (
      .rst_n	( rst_n ),
      .clk	( clk ),
