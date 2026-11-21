@@ -56,7 +56,8 @@ $(1): tests/$(1)/$(1).tcm.hex tests/$(1)/$(1).mem.hex
 run-$(1): $(1)
 	$(MAKE) -C $(BENCH) run TEST=$(1) \
 		TCM_INIT_FILE=$(abspath tests/$(1)/$(1).tcm.hex) \
-		MEM_INIT_FILE=$(abspath tests/$(1)/$(1).mem.hex)
+		MEM_INIT_FILE=$(abspath tests/$(1)/$(1).mem.hex) \
+	| tee tests/$(1)/$(1).log
 endef
 
 $(foreach test,$(TESTNAMES),$(eval $(call test-rule,$(test))))
