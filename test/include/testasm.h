@@ -3,8 +3,6 @@
 #ifndef _TESTASM_H
 #define _TESTASM_H 1
 
-	.option arch,+zifencei
-
 	// Warning: clobbers a0, t0, ra
 .macro print str:vararg
 	.pushsection .rodata.hot.str1.1, "aMS", @progbits, 1

@@ -46,10 +46,11 @@ static inline void tty_putc(unsigned char c)
 	TTY = c;
 }
 
+extern void _print_str(const char *s);
+
 static inline void tty_puts(const char *s)
 {
-    while (*s)
-	TTY = *s++;
+    _print_str(s);
 }
 
 static inline noreturn void stop(unsigned int status)
@@ -59,8 +60,13 @@ static inline noreturn void stop(unsigned int status)
     __builtin_unreachable();
 }
 
+char *utoa32_dds(char *buf, uint32_t val);
+char *utoa64_dds(char *buf, uint64_t val);
+
 noreturn void __assert_fail(const void *what, const void *file,
 			    const void *func, unsigned long line);
+
+#if 0
 
 #define assert(x)					     \
     do {						     \
@@ -68,6 +74,17 @@ noreturn void __assert_fail(const void *what, const void *file,
 	    __assert_fail(#x, __FILE__, __func__, __LINE__); \
     } while (0)
 
-#endif
+#else
 
-#endif
+#define assert(x)				\
+    do {					\
+	if (!__builtin_expect(!!(x), 1))	\
+	    __builtin_riscv_trapn(31);		\
+    } while (0)
+
+#endif	/* assert */
+
+#endif /* __ASSEMBLER__ */
+
+#endif /* _TEST_H */
+

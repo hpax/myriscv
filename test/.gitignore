@@ -7,6 +7,7 @@
 *.map
 *.lst
 *.a
+*.log
 bench/*.vvp
 bench/work/
 bench/transcript

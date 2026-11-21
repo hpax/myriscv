@@ -103,6 +103,7 @@ clean:
 	$(MAKE) -C $(BENCH) clean
 
 CFLAGS_lib/utoa.c += -fno-unroll-loops
+CFLAGS_tests/ctest/print.c += -fno-unroll-loops
 
 tests.d: $(TESTDIRS)
 	( for d in $(TESTDIRS); do \
