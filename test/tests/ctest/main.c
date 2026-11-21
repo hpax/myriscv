@@ -1,11 +1,5 @@
 #include "ctest.h"
 
-#define TTY  (*(volatile char *)(-1))
-#define STOP (*(volatile unsigned int *)(-16))
-
-extern char *utoa32_dds(char *buf, uint32_t val);
-extern char *utoa64_dds(char *buf, uint64_t val);
-
 int main(void)
 {
     puts("Hello, C world!\n");
@@ -14,7 +8,8 @@ int main(void)
 	uint32_t x = i;
 	uint32_t v = x;
 	for (int j = 0; j <= 10; j++) {
-	    printu32(NULL, v);
+	    printx32("0x", v);
+	    printu32(" = ", v);
 	    putc('\n');
 	    x *= 10;
 	    v += x;
@@ -25,7 +20,8 @@ int main(void)
 	uint64_t y = i;
 	uint64_t w = y;
 	for (int j = 0; j <= 20; j++) {
-	    printu64(NULL, w);
+	    printx64("0x", w);
+	    printu64(" = ", w);
 	    putc('\n');
 	    y *= 10;
 	    w += y;
